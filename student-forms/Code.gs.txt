@@ -1,0 +1,281 @@
+/**
+ * 학생 서류 받는 곳 — 학생 서류 제출 화면 + 출석부 웹앱 [서류함]과 선생님 구글 드라이브 사이의 다리
+ * (2026-10-28 교사 결정: 교사 교육청 구글 계정, 학생도 학교 구글 계정으로 로그인해서 제출)
+ *
+ * - 배포: 웹 앱 · 실행 사용자 '나'(USER_DEPLOYING) · 액세스 '모든 Google 계정 사용자'(ANYONE, 로그인 필요).
+ *   학생 학교 계정 도메인이 선생님과 다를 수 있어 '도메인 안'으로 좁히지 않는다.
+ * - 화면: ?p=s&b=1-3&k=반비밀값 → 학생 서류 제출 화면(Student.html, google.script.run으로 studentApi)
+ *         ?p=t&origin=출석부 주소 → [서류함] 연결 창(Teacher.html, 출석부 창과 postMessage, teacherApi)
+ * - 저장: 선생님 드라이브의 '학생 서류 제출 (출석부)' 폴더 하나에 서류 한 건 = JSON 파일 하나(칸 값·서명·사진).
+ *   목록용 요약(종류·반·번호·이름·날짜·상태)은 이 스크립트의 속성(ScriptProperties)에 둔다. 개발자 서버·외부 전송 없음.
+ * - 학생: 반 링크의 반 비밀값(k)과 학번·이름이 선생님 명단(반 비밀값으로 만든 16자리 값 목록)에 있어야 낸다.
+ *   학생이 볼 수 있는 것은 자기 요청의 종류·날짜와 자기 서류 상태뿐.
+ * - 처음 쓴 사람으로 고정(교사 결정 2026-10-28): 그 학번을 처음 연 구글 계정(같은 도메인이라 이메일이 보이면)
+ *   또는 그 기기(학생 화면이 만든 기기 값)에 묶는다. 이메일·기기 값은 이 스크립트만 아는 소금과 섞은 해시 16자리로만
+ *   저장하고 원문은 저장·기록하지 않는다. 다른 계정·기기면 아무것도 돌려주지 않고 막으며 번호·시각·횟수만 남긴다.
+ *   선생님이 [풀기]를 누르면 다음에 처음 여는 계정·기기로 다시 묶인다. 반 링크를 새로 만들어도 묶음은 그대로.
+ * - 교사: 목록·내려받기·잠그기·삭제·요청 만들기는 이 스크립트를 배포한 선생님 계정으로 로그인했을 때만
+ *   (접속한 계정 = 실행 계정). 비밀값 없음.
+ * - 삭제: 교사가 [삭제]하면 파일을 바로 완전 삭제(Drive 고급 서비스, 안 되면 내용 비우고 휴지통).
+ * - HTML 파일(Student.html은 tools/build-student-gas.js로 만듦)의 인라인 스크립트에는 슬래시 두 개를 쓰지 않는다.
+ */
+var FOLDER_NAME = '학생 서류 제출 (출석부)';
+var KINDS = { 'absence': '결석신고서', 'field-apply': '교외체험학습 신청서', 'field-report': '교외체험학습 결과보고서' };
+var REQ_KINDS = { 'absence': 1, 'field-report': 1 };
+var MAX_BODY = 15 * 1024 * 1024;
+var ALLOWED_ORIGINS = [
+  'https:' + '/' + '/zkxmdydy106-ai.github.io',
+  'http:' + '/' + '/localhost:8765',
+  'http:' + '/' + '/127.0.0.1:8765'
+];
+
+function doGet(e) {
+  var p = (e && e.parameter) || {};
+  if (p.p === 's') {
+    var t = HtmlService.createTemplateFromFile('Student');
+    var ok = /^\d-\d{1,2}$/.test(p.b || '') && /^[A-Za-z0-9_-]{16,64}$/.test(p.k || '');
+    t.cfg = JSON.stringify(ok ? { c: p.b, k: p.k } : null);
+    return t.evaluate().setTitle('서류 제출').addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  }
+  if (p.p === 't') {
+    var tt = HtmlService.createTemplateFromFile('Teacher');
+    tt.origin = ALLOWED_ORIGINS.indexOf(p.origin) >= 0 ? p.origin : '';
+    return tt.evaluate().setTitle('서류함 연결').addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  }
+  return ContentService.createTextOutput('학생 서류 받는 곳입니다. 학생은 선생님이 준 반 링크로, 선생님은 출석부 웹앱 [서류함]으로 씁니다.');
+}
+
+function fail_(code, msg) { var e = new Error(msg); e.code = code; throw e; }
+function safe_(fn) {
+  try {
+    var size = JSON.stringify(arguments[1] || {}).length;
+    if (size > MAX_BODY) return { ok: false, err: 'too-big', msg: '사진이 너무 커요. 사진 수를 줄여 다시 내 주세요.' };
+    return fn(arguments[1] || {});
+  } catch (err) { return { ok: false, err: err.code || 'fail', msg: String(err.message || err) }; }
+}
+
+/** 학생 화면(google.script.run): 요청·상태 보기, 제출 */
+function studentApi(b) {
+  return safe_(function (x) {
+    var a = String(x.a || '');
+    if (a === 'hello') return locked_(function () { return hello_(x); });
+    if (a === 'submit') return locked_(function () { return submit_(x); });
+    fail_('bad', '모르는 요청이에요.');
+  }, b);
+}
+
+/** [서류함] 연결 창(google.script.run): 선생님 계정만 */
+function teacherApi(b) {
+  return safe_(function (x) {
+    owner_();
+    var a = String(x.a || '');
+    if (a === 'ping') return { ok: true, email: Session.getEffectiveUser().getEmail() };
+    if (a === 'class') return locked_(function () { return setClass_(x); });
+    if (a === 'request') return locked_(function () { return request_(x); });
+    if (a === 'unrequest') return locked_(function () { props_().deleteProperty('rq:' + id_(x.id)); return { ok: true }; });
+    if (a === 'list') return list_();
+    if (a === 'get') return locked_(function () { return get_(x); });
+    if (a === 'lock') return locked_(function () { return lock_(x); });
+    if (a === 'delete') return locked_(function () { return del_(id_(x.id)); });
+    if (a === 'deleteAll') return locked_(function () { return deleteAll_(); });
+    if (a === 'unbind') return locked_(function () { return unbind_(x); });
+    fail_('bad', '모르는 요청이에요.');
+  }, b);
+}
+
+// 접속한 계정이 이 스크립트를 배포한(실행하는) 선생님 계정과 같아야 한다
+function owner_() {
+  var me = Session.getActiveUser().getEmail(), own = Session.getEffectiveUser().getEmail();
+  if (!me || me !== own) fail_('owner', '이 서류함을 만든 선생님 구글 계정으로 로그인해 주세요' + (me ? ' (지금: ' + me + ')' : '') + '. 다른 계정이 함께 로그인돼 있으면 로그아웃해 주세요.');
+}
+
+// ── 공용 ────────────────────────────────────────────────
+function props_() { return PropertiesService.getScriptProperties(); }
+function getJson_(key) { var v = props_().getProperty(key); if (!v) return null; try { return JSON.parse(v); } catch (err) { return null; } }
+function setJson_(key, o) { props_().setProperty(key, JSON.stringify(o)); }
+function locked_(fn) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try { return fn(); } finally { lock.releaseLock(); }
+}
+function hex_(s, n) {
+  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, s, Utilities.Charset.UTF_8);
+  var h = '';
+  for (var i = 0; i < bytes.length; i++) h += ('0' + ((bytes[i] + 256) % 256).toString(16)).slice(-2);
+  return n ? h.slice(0, n) : h;
+}
+function rand_(n) { var s = ''; while (s.length < n) s += Utilities.getUuid().replace(/-/g, ''); return s.slice(0, n); }
+function id_(v) { var s = String(v || ''); if (!/^[a-z0-9]{8,32}$/.test(s)) fail_('bad', '서류 번호가 이상해요.'); return s; }
+function cls_(v) { var s = String(v || ''); if (!/^\d-\d{1,2}$/.test(s)) fail_('bad', '반 이름이 이상해요.'); return s; }
+function iso_(v) { var s = String(v || ''); return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : ''; }
+function normName_(s) { return String(s || '').replace(/\s+/g, '').slice(0, 20); }
+function stuHash_(k, no, name) { return hex_(k + '|' + String(+no) + '|' + normName_(name), 16); }
+function now_() { return new Date().toISOString(); }
+
+// ── 반(학생 확인용 명단: 반 비밀값으로 만든 16자리 값만) ──────
+function setClass_(b) {
+  var c = cls_(b.c), k = String(b.k || '');
+  if (!/^[A-Za-z0-9_-]{16,64}$/.test(k)) fail_('bad', '반 비밀값 모양이 달라요.');
+  var r = (b.r || []).filter(function (h) { return /^[0-9a-f]{16}$/.test(h); }).slice(0, 80);
+  var x = b.sch || {};
+  var sch = { form: x.form === 'gg' ? 'gg' : 'common', name: String(x.name || '').slice(0, 30),
+    appr: (Array.isArray(x.appr) ? x.appr : []).map(function (a) { return String(a || '').trim().slice(0, 8); }).filter(function (a) { return a; }).slice(0, 7) };
+  setJson_('cl:' + c, { k: k, r: r, sch: sch, at: now_() }); /* 학교 이름·결재 칸: 학생 미리 보기가 교사 인쇄와 같은 모양이 되게 */
+  return { ok: true, n: r.length };
+}
+function student_(b) {
+  var c = cls_(b.c);
+  var cl = getJson_('cl:' + c);
+  if (!cl || cl.k !== String(b.k || '')) fail_('class', '반 링크가 바뀌었거나 맞지 않아요. 선생님께 새 링크를 받아 주세요.');
+  var no = String(+String(b.no || '').replace(/\D/g, '') || '');
+  var name = normName_(b.name);
+  if (!no || !name) fail_('who', '학번과 이름을 적어 주세요.');
+  var h = stuHash_(cl.k, no, name);
+  if (cl.r.indexOf(h) < 0) fail_('who', '학번·이름이 선생님 명단과 달라요. 다시 확인해 주세요.');
+  var s = { c: c, no: no, name: name, h: h, sch: cl.sch || null };
+  s.first = bind_(s, b); /* 부르는 쪽(hello·submit)이 잠금 안에서 부른다 */
+  return s;
+}
+
+// ── 처음 쓴 사람으로 고정: 반·번호마다 계정(이메일 해시) 또는 기기(기기 값 해시) ──
+function salt_() {
+  var v = props_().getProperty('salt');
+  if (!v) { v = rand_(32); props_().setProperty('salt', v); }
+  return v;
+}
+function bind_(s, b) {
+  var dev = String(b.dev || '');
+  if (!/^[A-Za-z0-9_-]{16,64}$/.test(dev)) fail_('bad', '이 기기 정보를 읽지 못했어요. 반 링크로 다시 열어 주세요.');
+  var email = String(Session.getActiveUser().getEmail() || '');
+  var salt = salt_();
+  var eh = email ? hex_(salt + '|e|' + email.toLowerCase(), 16) : '';
+  var dh = hex_(salt + '|d|' + dev, 16);
+  var key = 'bd:' + s.c + ':' + s.no;
+  var bd = getJson_(key);
+  if (!bd) { setJson_(key, { c: s.c, no: s.no, e: eh, d: dh, at: now_() }); return true; }
+  var same = bd.e ? eh === bd.e : dh === bd.d;
+  if (!same) {
+    var bxKey = 'bx:' + s.c + ':' + s.no;
+    var bx = getJson_(bxKey) || { c: s.c, no: s.no, n: 0 };
+    bx.n = (bx.n || 0) + 1; bx.at = now_();
+    setJson_(bxKey, bx);
+    fail_('bound', '이 학번은 다른 계정(기기)에서 이미 쓰고 있어요. 선생님께 \'서류 잠김 풀기\'를 부탁하세요.');
+  }
+  if (!bd.e && eh) { bd.e = eh; setJson_(key, bd); }
+  return false;
+}
+function unbind_(b) {
+  var c = cls_(b.c), no = String(+b.no || '');
+  if (!no) fail_('bad', '번호가 이상해요.');
+  props_().deleteProperty('bd:' + c + ':' + no);
+  props_().deleteProperty('bx:' + c + ':' + no);
+  return { ok: true };
+}
+
+// ── 학생 ────────────────────────────────────────────────
+function all_(prefix) {
+  var p = props_().getProperties(), out = [];
+  for (var key in p) if (key.indexOf(prefix) === 0) { try { out.push(JSON.parse(p[key])); } catch (err) { /* 깨진 값은 건너뜀 */ } }
+  return out;
+}
+function hello_(b) {
+  var s = student_(b);
+  var reqs = all_('rq:').filter(function (r) { return r.c === s.c && String(r.no) === s.no && !r.done; })
+    .map(function (r) { return { id: r.id, kind: r.kind, att: r.att, from: r.from, to: r.to, at: r.at }; });
+  var subs = all_('sm:').filter(function (m) { return m.c === s.c && String(m.no) === s.no; })
+    .map(function (m) { return { id: m.id, kind: m.kind, at: m.at, up: m.up, lock: m.lock || '' }; });
+  return { ok: true, c: s.c, no: s.no, first: s.first, sch: s.sch, reqs: reqs, subs: subs };
+}
+function folder_() {
+  var id = props_().getProperty('folder');
+  if (id) { try { var f = DriveApp.getFolderById(id); if (!f.isTrashed()) return f; } catch (err) { /* 지워진 폴더면 새로 */ } }
+  var nf = DriveApp.createFolder(FOLDER_NAME);
+  nf.setDescription('출석부 웹앱 학생 서류 제출함. 선생님이 [서류함]에서 확인·인쇄한 뒤 지웁니다. 이 폴더를 다른 사람과 공유하지 마세요.');
+  props_().setProperty('folder', nf.getId());
+  return nf;
+}
+function remove_(fileId) {
+  if (!fileId) return;
+  try { Drive.Files.remove(fileId); return; } catch (err) { /* 고급 서비스가 없으면 아래 */ }
+  try { var f = DriveApp.getFileById(fileId); f.setContent(''); f.setTrashed(true); } catch (err2) { /* 이미 없음 */ }
+}
+function submit_(b) {
+  var s = student_(b);
+  var kind = String(b.kind || '');
+  if (!KINDS[kind]) fail_('bad', '모르는 서류예요.');
+  var data = b.data;
+  if (!data || typeof data !== 'object' || Array.isArray(data)) fail_('bad', '서류 내용이 비었어요.');
+  var m = b.meta || {};
+  var old = null, id, edit = '';
+  if (b.id) {
+    id = id_(b.id);
+    old = getJson_('sm:' + id);
+    if (!old || String(old.no) !== s.no || old.c !== s.c) fail_('gone', '선생님이 이미 지운 서류예요. 새로 써서 내 주세요.');
+    if (old.eh !== hex_(String(b.edit || ''))) fail_('edit', '이 폰에서 낸 서류가 아니라 고칠 수 없어요.');
+    if (old.lock) fail_('locked', '선생님이 이미 인쇄해서 고칠 수 없어요. 고칠 것이 있으면 선생님께 말씀드려 주세요.');
+  } else {
+    id = rand_(16).toLowerCase();
+    edit = rand_(32);
+  }
+  var at = old ? old.at : now_();
+  var doc = { v: 1, id: id, kind: kind, c: s.c, no: s.no, name: s.name, at: at, up: now_(), f: data };
+  var file = folder_().createFile(kind + '_' + s.c + '_' + s.no + '_' + id + '.json', JSON.stringify(doc), 'application/json');
+  if (old) remove_(old.file);
+  var req = '';
+  if (b.req) {
+    var rq = getJson_('rq:' + id_(b.req));
+    if (rq && rq.c === s.c && String(rq.no) === s.no) { rq.done = id; setJson_('rq:' + rq.id, rq); req = rq.id; }
+  }
+  setJson_('sm:' + id, {
+    id: id, kind: kind, c: s.c, no: s.no, name: s.name, h: s.h, file: file.getId(),
+    eh: old ? old.eh : hex_(edit), at: at, up: doc.up, seen: '', lock: '', req: req || (old ? old.req : ''),
+    from: iso_(m.from), to: iso_(m.to), att: /^(결석|지각|조퇴|결과)$/.test(m.att || '') ? m.att : '', n: Math.min(60, +m.n || 0), proxy: !!m.proxy
+  });
+  return { ok: true, id: id, edit: edit, at: at, up: doc.up };
+}
+
+// ── 교사 ────────────────────────────────────────────────
+function request_(b) {
+  var c = cls_(b.c), kind = String(b.kind || '');
+  if (!REQ_KINDS[kind]) fail_('bad', '요청할 수 없는 서류예요.');
+  if (!/^[0-9a-f]{16}$/.test(String(b.h || ''))) fail_('bad', '학생 값이 이상해요.');
+  var id = rand_(16).toLowerCase();
+  setJson_('rq:' + id, { id: id, c: c, h: b.h, no: String(+b.no || ''), kind: kind, att: /^(결석|지각|조퇴|결과)$/.test(b.att || '') ? b.att : '결석', from: iso_(b.from), to: iso_(b.to) || iso_(b.from), at: now_(), done: '' });
+  return { ok: true, id: id };
+}
+function list_() {
+  var subs = all_('sm:').map(function (m) {
+    return { id: m.id, kind: m.kind, c: m.c, no: m.no, name: m.name, at: m.at, up: m.up, seen: m.seen, lock: m.lock, req: m.req, from: m.from, to: m.to, att: m.att, n: m.n, proxy: m.proxy };
+  }).sort(function (x, y) { return x.up < y.up ? 1 : -1; });
+  var reqs = all_('rq:').map(function (r) { return { id: r.id, c: r.c, no: r.no, kind: r.kind, att: r.att, from: r.from, to: r.to, at: r.at, done: r.done }; });
+  var blocked = all_('bx:').map(function (x) { return { c: x.c, no: x.no, at: x.at, n: x.n }; });
+  var binds = all_('bd:').map(function (x) { return { c: x.c, no: x.no, by: x.e ? 'account' : 'device' }; });
+  return { ok: true, subs: subs, reqs: reqs, blocked: blocked, binds: binds };
+}
+function get_(b) {
+  var id = id_(b.id), m = getJson_('sm:' + id);
+  if (!m) fail_('gone', '이미 지운 서류예요.');
+  var text = DriveApp.getFileById(m.file).getBlob().getDataAsString('UTF-8');
+  if (!m.seen || m.seen < m.up) { m.seen = now_(); setJson_('sm:' + id, m); }
+  return { ok: true, doc: JSON.parse(text), lock: m.lock || '' };
+}
+function lock_(b) {
+  var id = id_(b.id), m = getJson_('sm:' + id);
+  if (!m) fail_('gone', '이미 지운 서류예요.');
+  if (!m.lock) { m.lock = now_(); setJson_('sm:' + id, m); }
+  return { ok: true, lock: m.lock };
+}
+function del_(id) {
+  var m = getJson_('sm:' + id);
+  if (m) remove_(m.file);
+  props_().deleteProperty('sm:' + id);
+  all_('rq:').forEach(function (r) { if (r.done === id) props_().deleteProperty('rq:' + r.id); });
+  return { ok: true };
+}
+function deleteAll_() {
+  var n = 0;
+  all_('sm:').forEach(function (m) { remove_(m.file); props_().deleteProperty('sm:' + m.id); n++; });
+  all_('rq:').forEach(function (r) { props_().deleteProperty('rq:' + r.id); });
+  ['bd:', 'bx:'].forEach(function (pre) { Object.keys(props_().getProperties()).forEach(function (k) { if (k.indexOf(pre) === 0) props_().deleteProperty(k); }); });
+  return { ok: true, n: n };
+}

@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<style>
+  body { margin: 0; padding: 18px; background: #f4f6f9; color: #222; font: 15px/1.5 "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; }
+  .card { padding: 16px; background: #fff; border: 1px solid #dde2e9; border-radius: 4px; }
+  h1 { position: relative; margin: 0 0 10px; padding-left: 11px; font-size: 17px; }
+  h1::before { content: ""; position: absolute; left: 0; top: 4px; width: 4px; height: 16px; background: #2a64d6; }
+  p { margin: 8px 0; font-size: 14px; color: #555; }
+  .to { padding: 8px 10px; background: #f3f5f9; border: 1px solid #dde2e9; border-radius: 4px; font-size: 13px; word-break: break-all; }
+  .err { color: #c4392b; }
+  .ok { color: #1f8a4c; font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>서류함 연결 창</h1>
+  <? if (!origin) { ?>
+    <p class="err">허용되지 않은 곳에서 열렸어요. 출석부 웹앱의 [서류함]에서 다시 열어 주세요.</p>
+  <? } else { ?>
+    <p>출석부 웹앱 [서류함]이 이 창을 거쳐 선생님 구글 드라이브의 학생 서류를 주고받아요. 서류함을 쓰는 동안 열어 두세요(닫아도 다시 누르면 열려요).</p>
+    <div class="to">받는 곳: <?= origin ?></div>
+    <p id="msg">연결하는 중…</p>
+    <p style="font-size:12px;color:#8a9099">이 서류함을 만든 선생님 계정으로 로그인돼 있어야 해요. 다른 구글 계정이 함께 로그인돼 있으면 그 계정은 로그아웃해 주세요. 이 창은 내용을 저장하지 않아요.</p>
+  <? } ?>
+</div>
+<? if (origin) { ?>
+<script>
+  var ORIGIN = <?!= JSON.stringify(origin) ?>;
+  var msg = document.getElementById('msg');
+  var done = 0;
+  function target() {
+    try { if (window.top.opener) return window.top.opener; } catch (e) { }
+    return null;
+  }
+  function say(t, cls) { msg.className = cls || ''; msg.textContent = t; }
+  window.addEventListener('message', function (e) {
+    var d = e.data;
+    if (e.origin !== ORIGIN || !d || d.type !== 'sf-cmd') return;
+    var to = target();
+    if (!to) return;
+    say('주고받는 중…');
+    google.script.run
+      .withSuccessHandler(function (res) {
+        to.postMessage({ type: 'sf-res', id: d.id, res: res }, ORIGIN);
+        done++;
+        if (res && res.ok) say('연결됨 · ' + done + '번 주고받음', 'ok');
+        else say((res && res.msg) || '실패했어요.', 'err');
+      })
+      .withFailureHandler(function (err) {
+        to.postMessage({ type: 'sf-res', id: d.id, res: { ok: false, err: 'net', msg: (err && err.message) || '구글 서류함에 닿지 못했어요.' } }, ORIGIN);
+        say((err && err.message) || '구글 서류함에 닿지 못했어요.', 'err');
+      })
+      .teacherApi(d.body);
+  });
+  (function hello() {
+    var to = target();
+    if (!to) { say('출석부 창을 찾지 못했어요. 출석부 [서류함]에서 다시 열어 주세요.', 'err'); return; }
+    to.postMessage({ type: 'sf-ready' }, ORIGIN);
+    say('연결됨', 'ok');
+  })();
+</script>
+<? } ?>
+</body>
+</html>

@@ -1,0 +1,1162 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<meta name="robots" content="noindex">
+<title>서류 제출</title>
+<style>
+/* 학생 서류 제출 — 출석부 웹앱과 같은 결(흰 바탕·연회색 테두리·파란 막대 소제목·파란 버튼).
+   작성 중인 서류는 이 폰에만 저장하고, [제출]을 누를 때만 선생님 구글 드라이브(선생님 계정의 다리)로 보낸다. */
+:root {
+  --bg: #f4f6f9; --panel: #fff; --line: #dde2e9; --line-2: #eceff4; --head: #f3f5f9;
+  --text: #222; --text-2: #555; --text-3: #8a9099;
+  --blue: #2a64d6; --blue-soft: #eef3fd; --res: #c4392b; --res-bg: #fdeceb;
+  --fill: #fff4c2; --fill-ink: #6b5200; --ok: #1f8a4c; --ok-bg: #e3f3e8;
+  --ff: "Noto Sans KR", "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --safe-b: env(safe-area-inset-bottom, 0px);
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; background: var(--bg); }
+body { color: var(--text); font: 15px/1.55 var(--ff); -webkit-font-smoothing: antialiased; min-height: 100dvh; padding-bottom: calc(84px + var(--safe-b)); }
+button, input, textarea, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+[hidden] { display: none !important; }
+header.bar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 52px; padding: 0 14px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.app-name { font-size: 16px; font-weight: 700; color: var(--blue); letter-spacing: -0.02em; }
+.who { font-size: 13px; color: var(--text-2); }
+main { padding: 12px; max-width: 640px; margin: 0 auto; }
+.card { margin-bottom: 10px; padding: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; }
+.sec { position: relative; margin: 0 0 10px; padding-left: 11px; font-size: 16px; font-weight: 700; letter-spacing: -0.02em; }
+.sec::before { content: ""; position: absolute; left: 0; top: 4px; width: 4px; height: 16px; background: var(--blue); }
+.hint { margin: 6px 0 0; font-size: 13px; color: var(--text-2); }
+.dim { color: var(--text-3); }
+.btn { height: 44px; padding: 0 16px; border: 1px solid #c5ccd6; border-radius: 4px; background: #fff; font-size: 15px; font-weight: 600; }
+.btn.main { border-color: var(--blue); background: var(--blue); color: #fff; }
+.btn.main:disabled { border-color: var(--line); background: var(--line-2); color: var(--text-3); }
+.btn.small { height: 34px; padding: 0 12px; font-size: 13px; }
+.btn.full { width: 100%; }
+.btn.danger { border-color: var(--res); color: var(--res); }
+.row { display: flex; gap: 8px; margin-top: 10px; }
+.row > * { flex: 1; min-width: 0; }
+.textbtn { padding: 0; border: 0; background: none; color: var(--blue); font-size: 13px; text-decoration: underline; text-underline-offset: 2px; }
+.field { display: block; margin-top: 12px; }
+.field > span { display: block; margin-bottom: 4px; font-size: 13px; font-weight: 600; color: var(--text-2); }
+.field input:not([type=checkbox]), .field textarea { width: 100%; padding: 10px; border: 1px solid #c5ccd6; border-radius: 4px; background: #fff; font-size: 16px; }
+.field textarea { min-height: 110px; resize: vertical; line-height: 1.5; }
+.field input:focus, .field textarea:focus { outline: none; border-color: var(--blue); }
+.field .fhint { margin: 4px 0 0; font-size: 12.5px; color: var(--text-2); }
+.field .ferr { margin: 4px 0 0; font-size: 12.5px; color: var(--res); font-weight: 600; }
+.field.bad input, .field.bad textarea, .field.bad .seg, .field.bad .sigbox, .field.bad .checks { border-color: var(--res) !important; box-shadow: 0 0 0 1px var(--res); }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; border-radius: 4px; }
+.seg button { flex: 1 1 auto; min-width: 64px; height: 40px; padding: 0 10px; border: 1px solid var(--line); border-radius: 4px; background: #fff; font-size: 14px; font-weight: 600; }
+.seg button.on { border-color: var(--blue); background: var(--blue); color: #fff; }
+.checks { display: flex; flex-direction: column; border: 1px solid var(--line-2); border-radius: 4px; }
+.ck { display: flex; align-items: flex-start; gap: 10px; padding: 10px; border-bottom: 1px solid var(--line-2); font-size: 14.5px; }
+.ck:last-child { border-bottom: 0; }
+.ck input { flex: none; width: 20px; height: 20px; margin: 1px 0 0; accent-color: var(--blue); }
+.sub-h { margin: 18px 0 2px; padding-top: 12px; border-top: 1px solid var(--line-2); font-size: 14.5px; font-weight: 700; }
+.sub-h:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.warnbox { margin-top: 10px; padding: 9px 10px; background: var(--fill); color: var(--fill-ink); font-size: 13px; border-radius: 4px; }
+.errbox { margin-bottom: 10px; padding: 10px 12px; background: var(--res-bg); color: var(--res); font-size: 13.5px; border-radius: 4px; }
+.errbox ul { margin: 4px 0 0; padding-left: 18px; }
+.sigbox { position: relative; border: 1px dashed #aab3c0; border-radius: 4px; background: #fff; }
+.sigbox canvas { display: block; width: 100%; height: 140px; }
+.sigbox .sig-ph { position: absolute; left: 10px; bottom: 8px; font-size: 12px; color: var(--text-3); pointer-events: none; }
+.sigbox .sig-x { position: absolute; right: 8px; top: 6px; }
+.day { margin-top: 12px; padding: 10px; border: 1px solid var(--line); border-radius: 4px; }
+.day b { font-size: 14.5px; }
+.day .ph { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.day .ph img { width: 96px; height: 96px; object-fit: cover; border-radius: 4px; border: 1px solid var(--line); }
+.day .ph label { display: inline-flex; align-items: center; justify-content: center; }
+.list { margin: 0; padding: 0; list-style: none; }
+.list li { display: flex; align-items: center; gap: 8px; padding: 11px 0; border-bottom: 1px solid var(--line-2); }
+.list li:last-child { border-bottom: 0; }
+.list li .t { flex: 1; min-width: 0; }
+.list li .t b { display: block; font-size: 15px; }
+.list li .t span { font-size: 12.5px; color: var(--text-2); }
+.badge { display: inline-block; padding: 0 6px; border-radius: 2px; font-size: 12px; font-weight: 600; background: var(--head); color: var(--text-2); white-space: nowrap; }
+.badge.new { background: var(--res-bg); color: var(--res); }
+.badge.ok { background: var(--ok-bg); color: var(--ok); }
+.badge.fill { background: var(--fill); color: var(--fill-ink); }
+.consent dl { margin: 8px 0 0; font-size: 14px; }
+.consent dt { margin-top: 10px; font-weight: 700; }
+.consent dd { margin: 2px 0 0; color: var(--text-2); }
+.actbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; display: flex; gap: 8px; padding: 10px 12px calc(10px + var(--safe-b)); background: var(--panel); border-top: 1px solid var(--line); }
+.actbar .btn { flex: 1; }
+.toast { position: fixed; left: 50%; bottom: calc(92px + var(--safe-b)); z-index: 30; max-width: 92vw; transform: translateX(-50%); padding: 9px 14px; border-radius: 4px; background: #2b313b; color: #fff; font-size: 13.5px; text-align: center; }
+.pv { position: fixed; inset: 0; z-index: 25; display: flex; flex-direction: column; background: #e9ecf1; }
+.pv-bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.pv-bar b { flex: 1; }
+.pv-host { flex: 1; overflow: auto; padding: 0 6px; }
+.empty { padding: 18px 6px; text-align: center; color: var(--text-2); font-size: 14px; }
+.foot { max-width: 640px; margin: 2px auto 0; padding: 0 12px; font-size: 12px; color: var(--text-3); text-align: center; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+</style>
+</head>
+<body>
+<header class="bar"><span class="app-name">서류 제출</span><span class="who" id="who"></span></header>
+<main id="main"></main>
+<div class="actbar" id="actbar" hidden></div>
+<p class="foot">로그인이 안 되면 오른쪽 위 메뉴 → 다른 브라우저로 열기</p>
+<script>window.SF_CFG = <?!= cfg ?>;</script>
+<script>
+/* school-forms.js — 학교 서식(결석신고서·교외체험학습 신청서·결과보고서·대리 인솔 위임장)의 표·문단 모양. */
+/* 원본: 강경고 길잡이 HWPX_FORMS(교사 허락 2026-10-28). 한글 파일 원본(zip)·작성자 정보는 넣지 않고 표 칸·글자 모양만 옮겼다. */
+/* '강경고 서식'으로 고르면 그대로 쓰고, 기본 '공통 서식'은 제목·결재 칸과 'OO학교장 귀하'를 학교 설정으로 바꿔 그린다(forms.js). 개인 이름·연락처는 없다. */
+/* 다른 학교: 이 파일만 바꾸면 된다(forms.js의 칸 위치 규칙은 같은 서식 기준). */
+window.SCHOOL_FORMS = {"absence":{"title":"결석신고서","page":{"w":793.71,"h":1133.85,"ml":75.59,"mr":75.59,"mt":56.68,"mb":37.79},"blocks":[{"t":"tbl","cols":[70.31,117.41,36.33,81.69,36.33,19.73,19.73,63.55,63.55,31.77,31.77,63.55],"rows":[26.19,49.89,27.28,27.28,27.28,28.84,36,66.88,125.07],"cells":[{"r":0,"c":0,"rs":2,"cs":5,"w":25656,"h":5706,"b":{"l":0,"r":2,"t":0,"b":2},"fill":"","va":"center","body":[{"t":"p","pi":1,"text":"결석신고서","align":"center","left":0,"size":23,"bold":true,"serif":false,"color":"#353535"}]},{"r":0,"c":5,"rs":2,"cs":2,"w":2959,"h":5706,"b":{"l":2,"r":1,"t":2,"b":2},"fill":"","va":"center","body":[{"t":"p","pi":3,"text":"결","align":"center","left":0,"size":11,"bold":true,"serif":false,"color":"#000000"},{"t":"p","pi":4,"text":"재","align":"center","left":0,"size":11,"bold":true,"serif":false,"color":"#000000"}]},{"r":0,"c":7,"rs":1,"cs":1,"w":4766,"h":1964,"b":{"l":1,"r":1,"t":2,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":5,"text":" 담 임","align":"center","left":0,"size":11,"bold":true,"serif":false,"color":"#000000"}]},{"r":0,"c":8,"rs":1,"cs":1,"w":4766,"h":1964,"b":{"l":1,"r":1,"t":2,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":6,"text":"담당","align":"center","left":0,"size":11,"bold":true,"serif":false,"color":"#000000"}]},{"r":0,"c":9,"rs":1,"cs":2,"w":4766,"h":1964,"b":{"l":1,"r":1,"t":2,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":7,"text":"부 장","align":"center","left":0,"size":11,"bold":true,"serif":false,"color":"#000000"}]},{"r":0,"c":11,"rs":1,"cs":1,"w":4766,"h":1964,"b":{"l":1,"r":2,"t":2,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":8,"text":"교 감","align":"center","left":0,"size":11,"bold":true,"serif":false,"color":"#000000"}]},{"r":1,"c":7,"rs":1,"cs":1,"w":4766,"h":3742,"b":{"l":1,"r":1,"t":1,"b":2},"fill":"","va":"center","body":[{"t":"p","pi":9,"text":"","align":"center","left":0,"size":11,"bold":true,"serif":false,"color":"#000000"}]},{"r":1,"c":8,"rs":1,"cs":1,"w":4766,"h":3742,"b":{"l":1,"r":1,"t":1,"b":2},"fill":"","va":"center","body":[{"t":"p","pi":10,"text":"","align":"center","left":0,"size":11,"bold":true,"serif":false,"color":"#000000"}]},{"r":1,"c":9,"rs":1,"cs":2,"w":4766,"h":3742,"b":{"l":1,"r":1,"t":1,"b":2},"fill":"","va":"center","body":[{"t":"p","pi":11,"text":"","align":"center","left":0,"size":11,"bold":true,"serif":false,"color":"#000000"}]},{"r":1,"c":11,"rs":1,"cs":1,"w":4766,"h":3742,"b":{"l":1,"r":2,"t":1,"b":2},"fill":"","va":"top","body":[{"t":"p","pi":12,"text":"전결","align":"justify","left":0,"size":8,"bold":true,"serif":false,"color":"#000000"}]},{"r":2,"c":0,"rs":1,"cs":1,"w":5273,"h":2046,"b":{"l":2,"r":1,"t":2,"b":1},"fill":"#F1F1F1","va":"center","body":[{"t":"p","pi":13,"text":"학생 성명","align":"center","left":0,"size":12,"bold":true,"serif":false,"color":"#000000"}]},{"r":2,"c":1,"rs":1,"cs":2,"w":11143,"h":2046,"b":{"l":1,"r":1,"t":2,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":14,"text":"","align":"center","left":0,"size":12,"bold":false,"serif":false,"color":"#000000"}]},{"r":2,"c":3,"rs":1,"cs":1,"w":6127,"h":2046,"b":{"l":1,"r":1,"t":2,"b":1},"fill":"#F2F2F2","va":"center","body":[{"t":"p","pi":15,"text":"학 번","align":"center","left":6.67,"size":12,"bold":true,"serif":false,"color":"#000000"}]},{"r":2,"c":4,"rs":1,"cs":8,"w":25136,"h":2046,"b":{"l":1,"r":2,"t":2,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":16,"text":"(    ) 학년  (    ) 반  (    ) 번","align":"center","left":6.67,"size":12,"bold":true,"serif":false,"color":"#000000"}]},{"r":3,"c":0,"rs":1,"cs":1,"w":5273,"h":2046,"b":{"l":2,"r":1,"t":1,"b":1},"fill":"#F1F1F1","va":"center","body":[{"t":"p","pi":17,"text":"결석 사유","align":"center","left":0,"size":12,"bold":true,"serif":false,"color":"#000000"}]},{"r":3,"c":1,"rs":1,"cs":11,"w":42406,"h":2046,"b":{"l":1,"r":2,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":18,"text":"","align":"center","left":0,"size":12,"bold":false,"serif":false,"color":"#000000"}]},{"r":4,"c":0,"rs":1,"cs":1,"w":5273,"h":2046,"b":{"l":2,"r":1,"t":1,"b":1},"fill":"#F1F1F1","va":"center","body":[{"t":"p","pi":19,"text":"결석 기간","align":"center","left":0,"size":12,"bold":true,"serif":false,"color":"#000000"}]},{"r":4,"c":1,"rs":1,"cs":11,"w":42406,"h":2046,"b":{"l":1,"r":2,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":20,"text":"년   월   일   요일  ~   월    일    요일  (    )일간","align":"center","left":0,"size":12,"bold":false,"serif":false,"color":"#000000"}]},{"r":5,"c":0,"rs":1,"cs":1,"w":5273,"h":2163,"b":{"l":2,"r":1,"t":1,"b":1},"fill":"#F1F1F1","va":"center","body":[{"t":"p","pi":21,"text":"결석 종류","align":"center","left":0,"size":12,"bold":true,"serif":false,"color":"#000000"}]},{"r":5,"c":1,"rs":1,"cs":11,"w":42406,"h":2163,"b":{"l":1,"r":2,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":22,"text":"▢질병결석 ▢출석인정결석 ▢ 출석인정 (지각, 조퇴, 결과) ▢기타결석  ","align":"center","left":0,"size":16,"bold":false,"serif":false,"color":"#000000"}]},{"r":6,"c":0,"rs":3,"cs":1,"w":5273,"h":18396,"b":{"l":2,"r":1,"t":1,"b":2},"fill":"#F1F1F1","va":"center","body":[{"t":"p","pi":23,"text":"증빙서류","align":"center","left":0,"size":12,"bold":true,"serif":false,"color":"#000000"},{"t":"p","pi":24,"text":"","align":"center","left":0,"size":12,"bold":true,"serif":false,"color":"#000000"},{"t":"p","pi":25,"text":"제출할 증빙서류 ▢안에 √표시","align":"center","left":0,"size":11,"bold":true,"serif":false,"color":"#000000"}]},{"r":6,"c":1,"rs":1,"cs":1,"w":8806,"h":2700,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"#F2F2F2","va":"center","body":[{"t":"p","pi":26,"text":"질병결석","align":"center","left":0,"size":12,"bold":true,"serif":false,"color":"#000000"}]},{"r":6,"c":2,"rs":1,"cs":4,"w":12556,"h":2700,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"#F2F2F2","va":"center","body":[{"t":"p","pi":27,"text":"출석인정결석","align":"center","left":0,"size":12,"bold":true,"serif":false,"color":"#000000"}]},{"r":6,"c":6,"rs":1,"cs":4,"w":12751,"h":2700,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"#F2F2F2","va":"center","body":[{"t":"p","pi":28,"text":"출석인정","align":"center","left":0,"size":12,"bold":true,"serif":false,"color":"#000000"},{"t":"p","pi":29,"text":"□ 지각 □ 조퇴 □ 결과","align":"center","left":4,"size":10,"bold":false,"serif":false,"color":"#000000"}]},{"r":6,"c":10,"rs":1,"cs":2,"w":8293,"h":2700,"b":{"l":1,"r":2,"t":1,"b":1},"fill":"#F2F2F2","va":"center","body":[{"t":"p","pi":30,"text":"기타결석","align":"center","left":0,"size":12,"bold":true,"serif":false,"color":"#000000"}]},{"r":7,"c":1,"rs":1,"cs":1,"w":8806,"h":5016,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"#F2F2F2","va":"center","body":[{"t":"p","pi":31,"text":"￭질병결석","align":"center","left":0,"size":11,"bold":true,"serif":false,"color":"#000000"}]},{"r":7,"c":2,"rs":1,"cs":4,"w":12556,"h":4680,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"#F2F2F2","va":"center","body":[{"t":"p","pi":32,"text":"￭경조사 ","align":"justify","left":6.67,"size":11,"bold":true,"serif":false,"color":"#000000"},{"t":"p","pi":33,"text":"￭법정감염병","align":"justify","left":6.67,"size":11,"bold":true,"serif":false,"color":"#000000"},{"t":"p","pi":34,"text":"￭생리통(월1회)","align":"justify","left":6.67,"size":11,"bold":true,"serif":false,"color":"#000000"},{"t":"p","pi":35,"text":"￭기타","align":"justify","left":6.67,"size":11,"bold":true,"serif":false,"color":"#000000"}]},{"r":7,"c":6,"rs":1,"cs":4,"w":12751,"h":4680,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"#F2F2F2","va":"center","body":[{"t":"p","pi":36,"text":"￭경조사 ","align":"justify","left":6.67,"size":11,"bold":true,"serif":false,"color":"#000000"},{"t":"p","pi":37,"text":"￭법정감염병","align":"justify","left":6.67,"size":11,"bold":true,"serif":false,"color":"#000000"},{"t":"p","pi":38,"text":"￭생리통(월1회)","align":"justify","left":6.67,"size":11,"bold":true,"serif":false,"color":"#000000"},{"t":"p","pi":39,"text":"￭기타","align":"justify","left":6.67,"size":11,"bold":true,"serif":false,"color":"#000000"}]},{"r":7,"c":10,"rs":1,"cs":2,"w":8293,"h":5016,"b":{"l":1,"r":2,"t":1,"b":1},"fill":"#F2F2F2","va":"center","body":[{"t":"p","pi":40,"text":"￭학교장 인정","align":"justify","left":6.67,"size":11,"bold":true,"serif":false,"color":"#000000"}]},{"r":8,"c":1,"rs":1,"cs":1,"w":8806,"h":9380,"b":{"l":1,"r":1,"t":1,"b":2},"fill":"","va":"top","body":[{"t":"p","pi":41,"text":"□ 진료확인서","align":"justify","left":4,"size":13,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":42,"text":"□ 의사소견서","align":"justify","left":4,"size":13,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":43,"text":"□ 의사진단서","align":"justify","left":4,"size":13,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":44,"text":"□ 처방전/투약봉투 ","align":"justify","left":4,"size":13,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":45,"text":"□ 보호자확인서 ","align":"justify","left":4,"size":13,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":46,"text":"□ 기타(    )","align":"justify","left":4,"size":13,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":47,"text":"","align":"justify","left":4,"size":10,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":48,"text":"","align":"justify","left":4,"size":10,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":49,"text":"","align":"justify","left":4,"size":10,"bold":false,"serif":false,"color":"#000000"}]},{"r":8,"c":2,"rs":1,"cs":4,"w":12556,"h":9380,"b":{"l":1,"r":1,"t":1,"b":2},"fill":"","va":"top","body":[{"t":"p","pi":50,"text":"□ 청첩장 ","align":"justify","left":4,"size":13,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":51,"text":"□ 사망진단서/가족관계증명서 ","align":"justify","left":4,"size":13,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":52,"text":"□ 의사진단서","align":"justify","left":4,"size":13,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":53,"text":"□ 의사소견서 ","align":"justify","left":4,"size":13,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":54,"text":"□ 진료확인서","align":"justify","left":4,"size":13,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":55,"text":"□ 보호자확인서(생리통)","align":"justify","left":4,"size":13,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":56,"text":"□ 기타(     )","align":"justify","left":4,"size":13,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":57,"text":"※ 법정 감염병의 경우 병명, 진료기간 명시 필수","align":"justify","left":4,"size":9,"bold":false,"serif":false,"color":"#000000"}]},{"r":8,"c":6,"rs":1,"cs":4,"w":12751,"h":9380,"b":{"l":1,"r":1,"t":1,"b":2},"fill":"","va":"top","body":[{"t":"p","pi":58,"text":"□ 청첩장 ","align":"justify","left":4,"size":13,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":59,"text":"□ 사망진단서/가족관계증명서","align":"justify","left":4,"size":13,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":60,"text":"□ 의사진단서","align":"justify","left":4,"size":13,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":61,"text":"□ 의사소견서 ","align":"justify","left":4,"size":13,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":62,"text":"□ 진료확인서 ","align":"justify","left":4,"size":13,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":63,"text":"□ 보호자확인서(생리통)","align":"justify","left":4,"size":13,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":64,"text":"□ 기타(       )","align":"justify","left":4,"size":13,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":65,"text":"※ 법정 감염병의 경우 병명, 진료기간 명시 필수","align":"justify","left":4,"size":9,"bold":false,"serif":false,"color":"#000000"}]},{"r":8,"c":10,"rs":1,"cs":2,"w":8293,"h":9380,"b":{"l":1,"r":2,"t":1,"b":2},"fill":"","va":"top","body":[{"t":"p","pi":66,"text":"□ 부모가족 봉양 등","align":"justify","left":4,"size":13,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":67,"text":"□ 공납금 미납 사유","align":"justify","left":4,"size":13,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":68,"text":"□ 기타(          )","align":"justify","left":4,"size":13,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":69,"text":"","align":"justify","left":4,"size":10,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":70,"text":"","align":"justify","left":4,"size":10,"bold":false,"serif":false,"color":"#000000"}]}]},{"t":"p","pi":71,"text":"위와 같은 사유로 결석하였으므로 보호자(법정대리인) 연서로 결석신고서를 제출합니다.","align":"center","left":0,"size":12,"bold":false,"serif":true,"color":"#000000"},{"t":"p","pi":72,"text":"","align":"center","left":0,"size":12,"bold":false,"serif":true,"color":"#000000"},{"t":"p","pi":73,"text":"년     월     일","align":"center","left":0,"size":12,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":74,"text":"     학생  성명:             (서명 또는 인)","align":"right","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":75,"text":"보호자(법정대리인) 성명:             (서명 또는 인)","align":"right","left":0,"size":11,"bold":true,"serif":false,"color":"#000000"},{"t":"p","pi":76,"text":"강경고등학교장 귀하","align":"left","left":0,"size":15,"bold":true,"serif":false,"color":"#000000"},{"t":"p","pi":77,"text":"---------------------------------------- ","align":"center","left":0,"size":19,"bold":true,"serif":false,"color":"#000000"},{"t":"tbl","cols":[641.23],"rows":[187.76],"cells":[{"r":0,"c":0,"rs":1,"cs":1,"w":48092,"h":14082,"b":{"l":2,"r":2,"t":2,"b":2},"fill":"","va":"center","body":[{"t":"p","pi":79,"text":"< 보 호 자 확 인 서 >","align":"center","left":0,"size":14,"bold":true,"serif":false,"color":"#000000"},{"t":"p","pi":80,"text":"","align":"right","left":0,"size":9,"bold":true,"serif":false,"color":"#0000FF"},{"t":"p","pi":81,"text":"다음과 같은 사유로 결석하였으므로 보호자(법정대리인) 연서로 결석신고서를 제출합니다.","align":"center","left":0,"size":12,"bold":false,"serif":true,"color":"#000000"},{"t":"p","pi":82,"text":"","align":"justify","left":0,"size":12,"bold":false,"serif":true,"color":"#000000"},{"t":"p","pi":83,"text":" ☞ 결석 사유 (질병 등 구체적 사유를 자세히 기재, 반드시 보호자 자필로 작성)","align":"justify","left":0,"size":12,"bold":false,"serif":true,"color":"#000000"},{"t":"tbl","cols":[607.21],"rows":[62.48],"cells":[{"r":0,"c":0,"rs":1,"cs":1,"w":45541,"h":4686,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":85,"text":"","align":"justify","left":6.67,"size":13,"bold":false,"serif":false,"color":"#000000"}]}]},{"t":"p","pi":86,"text":"※ 증빙서류에 보호자 확인서를 선택한 경우 활용","align":"right","left":0,"size":9,"bold":true,"serif":false,"color":"#000000"}]}]},{"t":"tbl","cols":[641.23],"rows":[229.68],"cells":[{"r":0,"c":0,"rs":1,"cs":1,"w":48092,"h":17226,"b":{"l":2,"r":2,"t":2,"b":2},"fill":"","va":"center","body":[{"t":"p","pi":88,"text":"< 담 임 확 인 서 >","align":"center","left":0,"size":14,"bold":true,"serif":false,"color":"#000000"},{"t":"p","pi":89,"text":"","align":"center","left":0,"size":10,"bold":false,"serif":true,"color":"#000000"},{"t":"p","pi":90,"text":"다음과 같은 사유로 결석하였으므로 담임 교사의 확인으로 결석신고서를 제출합니다.","align":"center","left":0,"size":12,"bold":false,"serif":true,"color":"#000000"},{"t":"p","pi":91,"text":"","align":"center","left":0,"size":12,"bold":false,"serif":true,"color":"#000000"},{"t":"p","pi":92,"text":" ☞ 결석 사유: ▢질병결석 ▢출석인정결석 ▢ 출석인정 (지각, 조퇴, 결과) ▢기타결석(      )","align":"justify","left":0,"size":13,"bold":true,"serif":true,"color":"#000000"},{"t":"p","pi":93,"text":" ☞ 확인 방법","align":"justify","left":0,"size":13,"bold":false,"serif":true,"color":"#000000"},{"t":"p","pi":94,"text":"  ▢ 보호자 연락 일시","align":"justify","left":0,"size":13,"bold":false,"serif":true,"color":"#000000"},{"t":"p","pi":95,"text":"        년    월    일   요일 (      :      )               와/과 ▢ 전화 ▢ 문자 연락함","align":"justify","left":0,"size":13,"bold":false,"serif":true,"color":"#000000"},{"t":"p","pi":96,"text":"※ 담임확인서 서명은 결재란 서명(인)으로 대신함","align":"right","left":0,"size":9,"bold":true,"serif":false,"color":"#000000"}]}]}]},"field-apply":{"title":"교외체험학습 신청서","page":{"w":793.71,"h":1122.51,"ml":75.59,"mr":75.59,"mt":94.47,"mb":94.47},"blocks":[{"t":"tbl","cols":[69.88,43.2,47.82,47.82,47.82,47.82,30.19,25.56,25.56,25.56,76.67,38.33,38.33,38.33,38.33],"rows":[22.17,23.28,34.35,31.11,39.72,39.72,39.72,33.69,29.72,29.92,29.92,136.32,80.84,28.39],"cells":[{"r":0,"c":0,"rs":3,"cs":6,"w":22826,"h":5985,"b":{"l":0,"r":2,"t":0,"b":2},"fill":"","va":"center","body":[{"t":"p","pi":1,"text":"학교장 허가","align":"center","left":0,"size":18,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":2,"text":"교외체험학습 신청서","align":"center","left":0,"size":18,"bold":false,"serif":false,"color":"#000000"}]},{"r":0,"c":6,"rs":3,"cs":1,"w":2264,"h":5985,"b":{"l":2,"r":1,"t":2,"b":2},"fill":"","va":"center","body":[{"t":"p","pi":3,"text":"결","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":4,"text":"재","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":0,"c":7,"rs":1,"cs":3,"w":5750,"h":1663,"b":{"l":1,"r":1,"t":2,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":5,"text":"담임","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":0,"c":10,"rs":1,"cs":1,"w":5750,"h":1663,"b":{"l":1,"r":1,"t":2,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":6,"text":"담당","align":"justify","left":26.67,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":0,"c":11,"rs":1,"cs":2,"w":5750,"h":1663,"b":{"l":1,"r":1,"t":2,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":7,"text":"부장","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":0,"c":13,"rs":1,"cs":2,"w":5750,"h":1663,"b":{"l":1,"r":2,"t":2,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":8,"text":"교감","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":1,"c":7,"rs":2,"cs":3,"w":5750,"h":4322,"b":{"l":1,"r":1,"t":1,"b":2},"fill":"","va":"center","body":[{"t":"p","pi":9,"text":"","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":1,"c":10,"rs":2,"cs":1,"w":5750,"h":4322,"b":{"l":1,"r":1,"t":1,"b":2},"fill":"","va":"center","body":[{"t":"p","pi":10,"text":"","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":1,"c":11,"rs":2,"cs":2,"w":5750,"h":4322,"b":{"l":1,"r":1,"t":1,"b":2},"fill":"","va":"center","body":[{"t":"p","pi":11,"text":"","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":1,"c":13,"rs":1,"cs":1,"w":2875,"h":1746,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":12,"text":"전결","align":"center","left":0,"size":9,"bold":false,"serif":false,"color":"#000000"}]},{"r":1,"c":14,"rs":1,"cs":1,"w":2875,"h":1746,"b":{"l":1,"r":2,"t":1,"b":0},"fill":"","va":"center","body":[{"t":"p","pi":13,"text":"","align":"center","left":0,"size":9,"bold":false,"serif":false,"color":"#000000"}]},{"r":2,"c":13,"rs":1,"cs":1,"w":2875,"h":2576,"b":{"l":1,"r":0,"t":1,"b":2},"fill":"","va":"center","body":[{"t":"p","pi":14,"text":"","align":"center","left":0,"size":9,"bold":false,"serif":false,"color":"#000000"}]},{"r":2,"c":14,"rs":1,"cs":1,"w":2875,"h":2576,"b":{"l":0,"r":2,"t":0,"b":2},"fill":"","va":"center","body":[{"t":"p","pi":15,"text":"","align":"center","left":0,"size":9,"bold":false,"serif":false,"color":"#000000"}]},{"r":3,"c":0,"rs":1,"cs":1,"w":5241,"h":2333,"b":{"l":2,"r":1,"t":2,"b":1},"fill":"#F1F1F1","va":"center","body":[{"t":"p","pi":16,"text":"성명","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":3,"c":1,"rs":1,"cs":3,"w":12667,"h":2333,"b":{"l":1,"r":1,"t":2,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":17,"text":"","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":3,"c":4,"rs":1,"cs":2,"w":4918,"h":2333,"b":{"l":1,"r":1,"t":2,"b":1},"fill":"#F1F1F1","va":"center","body":[{"t":"p","pi":18,"text":"학년 반","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":3,"c":6,"rs":1,"cs":9,"w":25264,"h":2333,"b":{"l":1,"r":2,"t":2,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":19,"text":"     학년     반     번","align":"center","left":0,"size":10.5,"bold":false,"serif":false,"color":"#353535"}]},{"r":4,"c":0,"rs":3,"cs":1,"w":5241,"h":8937,"b":{"l":2,"r":1,"t":1,"b":1},"fill":"#F1F1F1","va":"center","body":[{"t":"p","pi":20,"text":"기간","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":4,"c":1,"rs":1,"cs":1,"w":3240,"h":2979,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"#F2F2F2","va":"center","body":[{"t":"p","pi":21,"text":"1일 ","align":"center","left":0,"size":10.5,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":22,"text":"단위","align":"center","left":0,"size":10.5,"bold":false,"serif":false,"color":"#000000"}]},{"r":4,"c":2,"rs":1,"cs":2,"w":9427,"h":2979,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":23,"text":"신청 기간(보호자)","align":"center","left":0,"size":10,"bold":false,"serif":false,"color":"#000000"}]},{"r":4,"c":4,"rs":1,"cs":11,"w":30182,"h":2979,"b":{"l":1,"r":2,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":24,"text":" 202   년   월    일 ~    월    일 (      ) 일간","align":"justify","left":0,"size":10,"bold":false,"serif":false,"color":"#000000"}]},{"r":5,"c":1,"rs":1,"cs":1,"w":3240,"h":2979,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"#F2F2F2","va":"center","body":[{"t":"p","pi":25,"text":"반일 ","align":"center","left":0,"size":10.5,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":26,"text":"단위","align":"center","left":0,"size":10.5,"bold":false,"serif":false,"color":"#000000"}]},{"r":5,"c":2,"rs":1,"cs":2,"w":9427,"h":2979,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":27,"text":"신청 시간(보호자)","align":"center","left":0,"size":10,"bold":false,"serif":false,"color":"#000000"}]},{"r":5,"c":4,"rs":1,"cs":4,"w":7465,"h":2979,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":28,"text":"당일 총수업시수","align":"justify","left":0,"size":10,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":29,"text":" (    )시간","align":"center","left":0,"size":10,"bold":false,"serif":false,"color":"#000000"}]},{"r":5,"c":8,"rs":1,"cs":7,"w":22717,"h":2979,"b":{"l":1,"r":2,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":30,"text":"2026년  월   일 (  )교시~(  )교시/(  )시간 신청","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":6,"c":1,"rs":1,"cs":11,"w":32295,"h":2979,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":31,"text":"학교장 허가 교외체험학습 세부 규정 및 불허 기간 확인 여부","align":"center","left":0,"size":10.5,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":32,"text":"(필요 시 학교 홈페이지 등에서 확인)","align":"center","left":0,"size":10.5,"bold":false,"serif":false,"color":"#000000"}]},{"r":6,"c":12,"rs":1,"cs":3,"w":10554,"h":2979,"b":{"l":1,"r":2,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":33,"text":"( O ,  X )","align":"center","left":0,"size":10.5,"bold":false,"serif":false,"color":"#000000"}]},{"r":7,"c":0,"rs":1,"cs":1,"w":5241,"h":2527,"b":{"l":2,"r":1,"t":1,"b":1},"fill":"#F1F1F1","va":"center","body":[{"t":"p","pi":34,"text":"학습형태","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":7,"c":1,"rs":1,"cs":14,"w":42849,"h":2527,"b":{"l":1,"r":2,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":35,"text":"가족행사 참여(     ), 주제가 있는 체험학습(     ), 가정학습(     ), 기타 체험활동(    )","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":8,"c":0,"rs":1,"cs":1,"w":5241,"h":2229,"b":{"l":2,"r":1,"t":1,"b":1},"fill":"#F1F1F1","va":"center","body":[{"t":"p","pi":36,"text":"목적","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":8,"c":1,"rs":1,"cs":8,"w":24449,"h":2229,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":37,"text":"","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":8,"c":9,"rs":1,"cs":3,"w":7846,"h":2229,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"#F2F2F2","va":"center","body":[{"t":"p","pi":38,"text":"목적지","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":8,"c":12,"rs":1,"cs":3,"w":10554,"h":2229,"b":{"l":1,"r":2,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":39,"text":"","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":9,"c":0,"rs":1,"cs":1,"w":5241,"h":2244,"b":{"l":2,"r":1,"t":1,"b":1},"fill":"#F1F1F1","va":"center","body":[{"t":"p","pi":40,"text":"보호자명","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":9,"c":1,"rs":1,"cs":2,"w":10267,"h":2244,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":41,"text":"","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":9,"c":3,"rs":1,"cs":2,"w":6871,"h":2244,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"#F2F2F2","va":"center","body":[{"t":"p","pi":42,"text":"관계","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":9,"c":5,"rs":1,"cs":4,"w":7311,"h":2244,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":43,"text":"","align":"justify","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":9,"c":9,"rs":1,"cs":3,"w":7846,"h":2244,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"#F2F2F2","va":"center","body":[{"t":"p","pi":44,"text":"연락처","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":9,"c":12,"rs":1,"cs":3,"w":10554,"h":2244,"b":{"l":1,"r":2,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":45,"text":"","align":"justify","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":10,"c":0,"rs":1,"cs":1,"w":5241,"h":2244,"b":{"l":2,"r":1,"t":1,"b":1},"fill":"#F1F1F1","va":"center","body":[{"t":"p","pi":46,"text":"인솔자명","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":10,"c":1,"rs":1,"cs":2,"w":10267,"h":2244,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":47,"text":"","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":10,"c":3,"rs":1,"cs":2,"w":6871,"h":2244,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"#F2F2F2","va":"center","body":[{"t":"p","pi":48,"text":"관계","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":10,"c":5,"rs":1,"cs":4,"w":7311,"h":2244,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":49,"text":"","align":"justify","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":10,"c":9,"rs":1,"cs":3,"w":7846,"h":2244,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"#F2F2F2","va":"center","body":[{"t":"p","pi":50,"text":"연락처","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":10,"c":12,"rs":1,"cs":3,"w":10554,"h":2244,"b":{"l":1,"r":2,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":51,"text":"","align":"justify","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":11,"c":0,"rs":1,"cs":1,"w":5241,"h":10224,"b":{"l":2,"r":1,"t":1,"b":1},"fill":"#F1F1F1","va":"center","body":[{"t":"p","pi":52,"text":"교외체험","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":53,"text":"학습계획","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":11,"c":1,"rs":1,"cs":14,"w":42849,"h":10224,"b":{"l":1,"r":2,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":54,"text":"","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":12,"c":0,"rs":2,"cs":1,"w":5241,"h":8192,"b":{"l":2,"r":1,"t":1,"b":2},"fill":"#F1F1F1","va":"center","body":[{"t":"p","pi":55,"text":"확인 사항","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":12,"c":1,"rs":1,"cs":14,"w":42849,"h":6063,"b":{"l":1,"r":2,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":56,"text":"ㆍ신청한 내용과 다르게 허위로 현장체험학습을 추진할 경우에는 미인정결석으로 처리됨을 확인합니다.","align":"justify","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":57,"text":"ㆍ연속하여 5일 이상 교외체험학습 시 주 1회 이상 학생이 담임교사와 통화하여 안전과 건강을 확인시키겠습니다.","align":"justify","left":0,"size":11,"bold":true,"serif":false,"color":"#000000"}]},{"r":13,"c":1,"rs":1,"cs":14,"w":42849,"h":2129,"b":{"l":1,"r":2,"t":1,"b":2},"fill":"","va":"center","body":[{"t":"p","pi":58,"text":"    □ 동의 합니다","align":"center","left":13.33,"size":11,"bold":false,"serif":false,"color":"#000000"}]}]},{"t":"p","pi":59,"text":"교외체험학습 규정에 의거 학습 기간 중 성실히 체험학습에 임하며 제반 규정을 준수하고 만약의 경우 야기되는 모든 사항에 대하여 본인이 책임질 것을 보호자 연서로 서약하며, 위와 같이 교외 체험학습을 신청합니다.","align":"justify","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":60,"text":" 년     월     일","align":"center","left":0,"size":12,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":61,"text":"학  생               (인)","align":"right","left":0,"size":12,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":62,"text":"보호자               (인)","align":"right","left":0,"size":12,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":63,"text":"강경고등학교장 귀하","align":"justify","left":0,"size":14,"bold":true,"serif":false,"color":"#000000"}]},"field-report":{"title":"교외체험학습 결과보고서","page":{"w":793.71,"h":1122.51,"ml":75.59,"mr":75.59,"mt":94.47,"mb":94.47},"blocks":[{"t":"tbl","cols":[69.88,43.2,47.82,47.82,47.82,47.82,30.19,38.33,38.33,38.33,38.33,38.33,38.33,38.33,38.33],"rows":[22.17,18.4,24.13,34.88,27.4,26.41,27.4,26.41,33.69,33.49,33.69,33.69],"cells":[{"r":0,"c":0,"rs":3,"cs":6,"w":22826,"h":4853,"b":{"l":0,"r":2,"t":0,"b":2},"fill":"","va":"center","body":[{"t":"p","pi":1,"text":"학교장 허가 ","align":"center","left":0,"size":18,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":2,"text":"교외체험학습 결과 보고서","align":"center","left":0,"size":18,"bold":false,"serif":false,"color":"#000000"}]},{"r":0,"c":6,"rs":3,"cs":1,"w":2264,"h":4853,"b":{"l":2,"r":1,"t":2,"b":2},"fill":"","va":"center","body":[{"t":"p","pi":3,"text":"결","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":4,"text":"재","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":0,"c":7,"rs":1,"cs":2,"w":5750,"h":1663,"b":{"l":1,"r":1,"t":2,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":5,"text":"담임","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":0,"c":9,"rs":1,"cs":2,"w":5750,"h":1663,"b":{"l":1,"r":1,"t":2,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":6,"text":"담당","align":"justify","left":26.67,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":0,"c":11,"rs":1,"cs":2,"w":5750,"h":1663,"b":{"l":1,"r":1,"t":2,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":7,"text":"부장","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":0,"c":13,"rs":1,"cs":2,"w":5750,"h":1663,"b":{"l":1,"r":2,"t":2,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":8,"text":"교감","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":1,"c":7,"rs":2,"cs":2,"w":5750,"h":3190,"b":{"l":1,"r":1,"t":1,"b":2},"fill":"","va":"center","body":[{"t":"p","pi":9,"text":"","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":1,"c":9,"rs":2,"cs":2,"w":5750,"h":3190,"b":{"l":1,"r":1,"t":1,"b":2},"fill":"","va":"center","body":[{"t":"p","pi":10,"text":"","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":1,"c":11,"rs":2,"cs":2,"w":5750,"h":3190,"b":{"l":1,"r":1,"t":1,"b":2},"fill":"","va":"center","body":[{"t":"p","pi":11,"text":"","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":1,"c":13,"rs":1,"cs":1,"w":2875,"h":1380,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":12,"text":"전결","align":"center","left":0,"size":7,"bold":false,"serif":false,"color":"#000000"}]},{"r":1,"c":14,"rs":1,"cs":1,"w":2875,"h":1380,"b":{"l":1,"r":2,"t":1,"b":0},"fill":"","va":"center","body":[{"t":"p","pi":13,"text":"","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":2,"c":13,"rs":1,"cs":1,"w":2875,"h":1810,"b":{"l":1,"r":0,"t":1,"b":2},"fill":"","va":"center","body":[{"t":"p","pi":14,"text":"","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":2,"c":14,"rs":1,"cs":1,"w":2875,"h":1810,"b":{"l":0,"r":2,"t":0,"b":2},"fill":"","va":"center","body":[{"t":"p","pi":15,"text":"","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":3,"c":0,"rs":1,"cs":1,"w":5241,"h":2616,"b":{"l":2,"r":1,"t":2,"b":1},"fill":"#F1F1F1","va":"center","body":[{"t":"p","pi":16,"text":"성명","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":3,"c":1,"rs":1,"cs":3,"w":12667,"h":2616,"b":{"l":1,"r":1,"t":2,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":17,"text":"","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":3,"c":4,"rs":1,"cs":2,"w":4918,"h":2616,"b":{"l":1,"r":1,"t":2,"b":1},"fill":"#F1F1F1","va":"center","body":[{"t":"p","pi":18,"text":"학년 반","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":3,"c":6,"rs":1,"cs":9,"w":25264,"h":2616,"b":{"l":1,"r":2,"t":2,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":19,"text":"     학년     반     번","align":"center","left":0,"size":10,"bold":false,"serif":false,"color":"#000000"}]},{"r":4,"c":0,"rs":4,"cs":1,"w":5241,"h":8072,"b":{"l":2,"r":1,"t":1,"b":1},"fill":"#F1F1F1","va":"center","body":[{"t":"p","pi":20,"text":"기간","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":4,"c":1,"rs":2,"cs":1,"w":3240,"h":4036,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":21,"text":"1일 ","align":"center","left":0,"size":10.5,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":22,"text":"단위","align":"center","left":0,"size":10.5,"bold":false,"serif":false,"color":"#000000"}]},{"r":4,"c":2,"rs":1,"cs":2,"w":9427,"h":2055,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":23,"text":"신청 기간(보호자)","align":"center","left":0,"size":10,"bold":false,"serif":false,"color":"#000000"}]},{"r":4,"c":4,"rs":1,"cs":11,"w":30182,"h":2055,"b":{"l":1,"r":2,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":24,"text":" 202   년   월    일 ~    월    일 (      ) 일간","align":"justify","left":0,"size":10,"bold":false,"serif":false,"color":"#000000"}]},{"r":5,"c":2,"rs":1,"cs":2,"w":9427,"h":1981,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":25,"text":"인정 기간(담임교사)","align":"center","left":0,"size":10,"bold":false,"serif":false,"color":"#000000"}]},{"r":5,"c":4,"rs":1,"cs":11,"w":30182,"h":1981,"b":{"l":1,"r":2,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":26,"text":" 202   년   월    일 ~    월    일 (      ) 일간","align":"justify","left":0,"size":10,"bold":false,"serif":false,"color":"#000000"}]},{"r":6,"c":1,"rs":2,"cs":1,"w":3240,"h":4036,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":27,"text":"반일 ","align":"center","left":0,"size":10.5,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":28,"text":"단위","align":"center","left":0,"size":10.5,"bold":false,"serif":false,"color":"#000000"}]},{"r":6,"c":2,"rs":1,"cs":2,"w":9427,"h":2055,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":29,"text":"신청 시간(보호자)","align":"center","left":0,"size":10,"bold":false,"serif":false,"color":"#000000"}]},{"r":6,"c":4,"rs":2,"cs":4,"w":7537,"h":4036,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":30,"text":"당일 총수업시수","align":"justify","left":0,"size":10,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":31,"text":" (    )시간","align":"center","left":0,"size":10,"bold":false,"serif":false,"color":"#000000"}]},{"r":6,"c":8,"rs":1,"cs":7,"w":22645,"h":2055,"b":{"l":1,"r":2,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":32,"text":"20  년  월   일 (  )교시~(  )교시/(  )시간 신청","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":7,"c":2,"rs":1,"cs":2,"w":9427,"h":1981,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":33,"text":"인정 기간(담임교사)","align":"center","left":0,"size":10,"bold":false,"serif":false,"color":"#000000"}]},{"r":7,"c":8,"rs":1,"cs":7,"w":22645,"h":1981,"b":{"l":1,"r":2,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":34,"text":"20  년  월   일 (  )교시~(  )교시/(  )시간 신청","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":8,"c":0,"rs":1,"cs":1,"w":5241,"h":2527,"b":{"l":2,"r":1,"t":1,"b":1},"fill":"#F1F1F1","va":"center","body":[{"t":"p","pi":35,"text":"학습형태","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":8,"c":1,"rs":1,"cs":14,"w":42849,"h":2527,"b":{"l":1,"r":2,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":36,"text":"가족행사 참여(     ), 주제가 있는 체험학습(     ), 가정학습(     ), 기타 체험활동(    )","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":9,"c":0,"rs":1,"cs":1,"w":5241,"h":2512,"b":{"l":2,"r":1,"t":1,"b":1},"fill":"#F1F1F1","va":"center","body":[{"t":"p","pi":37,"text":"목적","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":9,"c":1,"rs":1,"cs":9,"w":25707,"h":2512,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":38,"text":"","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":9,"c":10,"rs":1,"cs":2,"w":6588,"h":2512,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"#F2F2F2","va":"center","body":[{"t":"p","pi":39,"text":"목적지","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":9,"c":12,"rs":1,"cs":3,"w":10554,"h":2512,"b":{"l":1,"r":2,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":40,"text":"","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":10,"c":0,"rs":1,"cs":1,"w":5241,"h":2527,"b":{"l":2,"r":1,"t":1,"b":1},"fill":"#F1F1F1","va":"center","body":[{"t":"p","pi":41,"text":"보호자명","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":10,"c":1,"rs":1,"cs":2,"w":10267,"h":2527,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":42,"text":"","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":10,"c":3,"rs":1,"cs":2,"w":6871,"h":2527,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"#F2F2F2","va":"center","body":[{"t":"p","pi":43,"text":"관계","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":10,"c":5,"rs":1,"cs":5,"w":8569,"h":2527,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":44,"text":"","align":"justify","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":10,"c":10,"rs":1,"cs":2,"w":6588,"h":2527,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"#F2F2F2","va":"center","body":[{"t":"p","pi":45,"text":"연락처","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":10,"c":12,"rs":1,"cs":3,"w":10554,"h":2527,"b":{"l":1,"r":2,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":46,"text":"","align":"justify","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":11,"c":0,"rs":1,"cs":1,"w":5241,"h":2527,"b":{"l":2,"r":1,"t":1,"b":2},"fill":"#F1F1F1","va":"center","body":[{"t":"p","pi":47,"text":"인솔자명","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":11,"c":1,"rs":1,"cs":2,"w":10267,"h":2527,"b":{"l":1,"r":1,"t":1,"b":2},"fill":"","va":"center","body":[{"t":"p","pi":48,"text":"","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":11,"c":3,"rs":1,"cs":2,"w":6871,"h":2527,"b":{"l":1,"r":1,"t":1,"b":2},"fill":"#F2F2F2","va":"center","body":[{"t":"p","pi":49,"text":"관계","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":11,"c":5,"rs":1,"cs":5,"w":8569,"h":2527,"b":{"l":1,"r":1,"t":1,"b":2},"fill":"","va":"center","body":[{"t":"p","pi":50,"text":"","align":"justify","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":11,"c":10,"rs":1,"cs":2,"w":6588,"h":2527,"b":{"l":1,"r":1,"t":1,"b":2},"fill":"#F2F2F2","va":"center","body":[{"t":"p","pi":51,"text":"연락처","align":"center","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]},{"r":11,"c":12,"rs":1,"cs":3,"w":10554,"h":2527,"b":{"l":1,"r":2,"t":1,"b":2},"fill":"","va":"center","body":[{"t":"p","pi":52,"text":"","align":"justify","left":0,"size":11,"bold":false,"serif":false,"color":"#000000"}]}]},{"t":"p","pi":53,"text":"① 어디에서","align":"justify","left":0,"size":10,"bold":false,"serif":false,"color":"#000000"},{"t":"tbl","cols":[96.44,543.05],"rows":[38.07],"cells":[{"r":0,"c":0,"rs":1,"cs":1,"w":7233,"h":2855,"b":{"l":2,"r":1,"t":2,"b":2},"fill":"","va":"center","body":[{"t":"p","pi":55,"text":"장소","align":"center","left":0,"size":10,"bold":false,"serif":false,"color":"#000000"}]},{"r":0,"c":1,"rs":1,"cs":1,"w":40729,"h":2855,"b":{"l":1,"r":2,"t":2,"b":2},"fill":"","va":"center","body":[{"t":"p","pi":56,"text":"▸","align":"left","left":26.67,"size":10,"bold":false,"serif":false,"color":"#000000"}]}]},{"t":"p","pi":57,"text":"② 교외체험 학습내용 및 소감","align":"justify","left":0,"size":10,"bold":false,"serif":false,"color":"#000000"},{"t":"tbl","cols":[96.28,543.21],"rows":[177.52,88.76],"cells":[{"r":0,"c":0,"rs":1,"cs":1,"w":7221,"h":13314,"b":{"l":2,"r":1,"t":2,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":59,"text":"교외체험","align":"center","left":0,"size":10,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":60,"text":"학습내용","align":"center","left":0,"size":10,"bold":false,"serif":false,"color":"#000000"}]},{"r":0,"c":1,"rs":1,"cs":1,"w":40741,"h":13314,"b":{"l":1,"r":2,"t":2,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":61,"text":"각 일정별로 구체적인 체험 내용, 배운 점 등을 자유롭게 기록","align":"justify","left":13.33,"size":8,"bold":false,"serif":false,"color":"#BFBFBF"},{"t":"p","pi":62,"text":"","align":"justify","left":13.33,"size":10,"bold":false,"serif":false,"color":"#BFBFBF"},{"t":"p","pi":63,"text":"","align":"justify","left":13.33,"size":10,"bold":false,"serif":false,"color":"#BFBFBF"},{"t":"p","pi":64,"text":"","align":"justify","left":13.33,"size":10,"bold":false,"serif":false,"color":"#BFBFBF"},{"t":"p","pi":65,"text":"","align":"justify","left":13.33,"size":10,"bold":false,"serif":false,"color":"#BFBFBF"},{"t":"p","pi":66,"text":"","align":"justify","left":13.33,"size":10,"bold":false,"serif":false,"color":"#BFBFBF"},{"t":"p","pi":67,"text":"","align":"justify","left":13.33,"size":10,"bold":false,"serif":false,"color":"#BFBFBF"},{"t":"p","pi":68,"text":"","align":"justify","left":13.33,"size":10,"bold":false,"serif":false,"color":"#BFBFBF"},{"t":"p","pi":69,"text":"","align":"justify","left":13.33,"size":10,"bold":false,"serif":false,"color":"#BFBFBF"}]},{"r":1,"c":0,"rs":1,"cs":1,"w":7221,"h":6657,"b":{"l":2,"r":1,"t":1,"b":2},"fill":"","va":"center","body":[{"t":"p","pi":70,"text":"소  감","align":"center","left":0,"size":10,"bold":false,"serif":false,"color":"#000000"}]},{"r":1,"c":1,"rs":1,"cs":1,"w":40741,"h":6657,"b":{"l":1,"r":2,"t":1,"b":2},"fill":"","va":"center","body":[{"t":"p","pi":71,"text":"교외체험학습을 통해 느낀 점을 자유롭게 기술","align":"justify","left":13.33,"size":8,"bold":false,"serif":false,"color":"#BFBFBF"},{"t":"p","pi":72,"text":"","align":"justify","left":13.33,"size":10,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":73,"text":"","align":"justify","left":13.33,"size":10,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":74,"text":"","align":"justify","left":13.33,"size":10,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":75,"text":"","align":"justify","left":13.33,"size":5,"bold":false,"serif":false,"color":"#000000"}]}]},{"t":"p","pi":76,"text":"※ 사진 등 증빙자료는 별도 제출","align":"justify","left":0,"size":10,"bold":true,"serif":false,"color":"#000000"},{"t":"p","pi":77,"text":"","align":"justify","left":0,"size":10,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":78,"text":"위와 같이 교외체험학습 결과 보고서를 제출합니다. ","align":"center","left":0,"size":12,"bold":false,"serif":false,"color":"#353535"},{"t":"p","pi":79,"text":" 년     월     일","align":"center","left":0,"size":12,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":80,"text":"학  생              (인)","align":"right","left":0,"size":12,"bold":false,"serif":false,"color":"#353535"},{"t":"p","pi":81,"text":"보호자              (인)","align":"right","left":0,"size":12,"bold":false,"serif":false,"color":"#353535"},{"t":"p","pi":82,"text":"강경고등학교장 귀하","align":"justify","left":0,"size":14,"bold":true,"serif":false,"color":"#000000"}]},"field-proxy":{"title":"교외체험학습 대리 인솔 위임장","page":{"w":793.71,"h":1122.51,"ml":75.59,"mr":75.59,"mt":94.47,"mb":94.47},"blocks":[{"t":"tbl","cols":[95.83,141.56,100.08,107.63,65.23,130.45],"rows":[51.19,32.16,32.16,29.11,29.32,38.17,34.24,34.24,34.24,34.4,206.03],"cells":[{"r":0,"c":0,"rs":1,"cs":6,"w":48058,"h":3839,"b":{"l":0,"r":0,"t":0,"b":2},"fill":"","va":"center","body":[{"t":"p","pi":1,"text":"학교장 허가 교외체험학습 대리 인솔 위임장","align":"center","left":0,"size":17,"bold":false,"serif":false,"color":"#000000"}]},{"r":1,"c":0,"rs":1,"cs":1,"w":7187,"h":2412,"b":{"l":2,"r":1,"t":2,"b":1},"fill":"#F1F1F1","va":"center","body":[{"t":"p","pi":2,"text":"학    생","align":"center","left":0,"size":10,"bold":true,"serif":false,"color":"#000000"}]},{"r":1,"c":1,"rs":1,"cs":1,"w":10617,"h":2412,"b":{"l":1,"r":1,"t":2,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":3,"text":"   학년   반   번","align":"center","left":0,"size":10,"bold":false,"serif":false,"color":"#000000"}]},{"r":1,"c":2,"rs":1,"cs":1,"w":7506,"h":2412,"b":{"l":1,"r":1,"t":2,"b":1},"fill":"#F1F1F1","va":"center","body":[{"t":"p","pi":4,"text":"성  명","align":"center","left":0,"size":10,"bold":true,"serif":false,"color":"#000000"}]},{"r":1,"c":3,"rs":1,"cs":1,"w":8072,"h":2412,"b":{"l":1,"r":1,"t":2,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":5,"text":"","align":"center","left":0,"size":10,"bold":true,"serif":false,"color":"#000000"}]},{"r":1,"c":4,"rs":1,"cs":1,"w":4892,"h":2412,"b":{"l":1,"r":1,"t":2,"b":1},"fill":"#F1F1F1","va":"center","body":[{"t":"p","pi":6,"text":"휴대 전화","align":"center","left":0,"size":10,"bold":true,"serif":false,"color":"#000000"}]},{"r":1,"c":5,"rs":1,"cs":1,"w":9784,"h":2412,"b":{"l":1,"r":2,"t":2,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":7,"text":"","align":"center","left":0,"size":10,"bold":false,"serif":false,"color":"#000000"}]},{"r":2,"c":0,"rs":1,"cs":1,"w":7187,"h":2412,"b":{"l":2,"r":1,"t":1,"b":1},"fill":"#F1F1F1","va":"center","body":[{"t":"p","pi":8,"text":"보 호 자","align":"center","left":0,"size":10,"bold":true,"serif":false,"color":"#000000"}]},{"r":2,"c":1,"rs":1,"cs":1,"w":10617,"h":2412,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":9,"text":" (관계)","align":"left","left":0,"size":10,"bold":false,"serif":false,"color":"#000000"}]},{"r":2,"c":2,"rs":1,"cs":1,"w":7506,"h":2412,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"#F1F1F1","va":"center","body":[{"t":"p","pi":10,"text":"성  명","align":"center","left":0,"size":10,"bold":true,"serif":false,"color":"#000000"}]},{"r":2,"c":3,"rs":1,"cs":1,"w":8072,"h":2412,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":11,"text":"","align":"center","left":0,"size":10,"bold":true,"serif":false,"color":"#000000"}]},{"r":2,"c":4,"rs":1,"cs":1,"w":4892,"h":2412,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"#F1F1F1","va":"center","body":[{"t":"p","pi":12,"text":"휴대 전화","align":"center","left":0,"size":10,"bold":true,"serif":false,"color":"#000000"}]},{"r":2,"c":5,"rs":1,"cs":1,"w":9784,"h":2412,"b":{"l":1,"r":2,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":13,"text":"","align":"center","left":0,"size":10,"bold":false,"serif":false,"color":"#000000"}]},{"r":3,"c":0,"rs":1,"cs":1,"w":7187,"h":2183,"b":{"l":2,"r":1,"t":1,"b":1},"fill":"#F1F1F1","va":"center","body":[{"t":"p","pi":14,"text":"기    간","align":"center","left":0,"size":10,"bold":true,"serif":false,"color":"#000000"}]},{"r":3,"c":1,"rs":1,"cs":5,"w":40871,"h":2183,"b":{"l":1,"r":2,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":15,"text":"20○○년  ○월  ○○일 00:00  ~  ○월  ○○일 00:00, (   )일 (   )시간","align":"center","left":0,"size":10,"bold":false,"serif":false,"color":"#000000"}]},{"r":4,"c":0,"rs":1,"cs":1,"w":7187,"h":2199,"b":{"l":2,"r":1,"t":1,"b":1},"fill":"#F1F1F1","va":"center","body":[{"t":"p","pi":16,"text":"목 적 지","align":"center","left":0,"size":10,"bold":true,"serif":false,"color":"#000000"}]},{"r":4,"c":1,"rs":1,"cs":2,"w":18123,"h":2199,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":17,"text":"(구체적으로 작성)","align":"center","left":0,"size":10,"bold":false,"serif":false,"color":"#D9D9D9"}]},{"r":4,"c":3,"rs":1,"cs":1,"w":8072,"h":2199,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"#F1F1F1","va":"center","body":[{"t":"p","pi":18,"text":"숙박 장소","align":"center","left":0,"size":10,"bold":true,"serif":false,"color":"#000000"}]},{"r":4,"c":4,"rs":1,"cs":2,"w":14676,"h":2199,"b":{"l":1,"r":2,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":19,"text":"","align":"justify","left":0,"size":8,"bold":false,"serif":false,"color":"#000000"}]},{"r":5,"c":0,"rs":1,"cs":1,"w":7187,"h":2863,"b":{"l":2,"r":1,"t":1,"b":1},"fill":"#F1F1F1","va":"center","body":[{"t":"p","pi":20,"text":"대리인솔","align":"center","left":0,"size":10,"bold":true,"serif":false,"color":"#000000"},{"t":"p","pi":21,"text":"사    유","align":"center","left":0,"size":10,"bold":true,"serif":false,"color":"#000000"}]},{"r":5,"c":1,"rs":1,"cs":5,"w":40871,"h":2863,"b":{"l":1,"r":2,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":22,"text":"(구체적으로 작성)","align":"center","left":0,"size":10,"bold":false,"serif":false,"color":"#D9D9D9"}]},{"r":6,"c":0,"rs":3,"cs":1,"w":7187,"h":7704,"b":{"l":2,"r":1,"t":1,"b":1},"fill":"#F1F1F1","va":"center","body":[{"t":"p","pi":23,"text":"인 솔 자","align":"center","left":0,"size":10,"bold":true,"serif":false,"color":"#000000"},{"t":"p","pi":24,"text":"인적사항","align":"center","left":0,"size":10,"bold":true,"serif":false,"color":"#000000"}]},{"r":6,"c":1,"rs":1,"cs":1,"w":10617,"h":2568,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"#F1F1F1","va":"center","body":[{"t":"p","pi":25,"text":"성  명","align":"center","left":0,"size":10,"bold":true,"serif":false,"color":"#000000"}]},{"r":6,"c":2,"rs":1,"cs":4,"w":30254,"h":2568,"b":{"l":1,"r":2,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":26,"text":"","align":"center","left":0,"size":10,"bold":false,"serif":false,"color":"#000000"}]},{"r":7,"c":1,"rs":1,"cs":1,"w":10617,"h":2568,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"#F1F1F1","va":"center","body":[{"t":"p","pi":27,"text":"연락처","align":"center","left":0,"size":10,"bold":true,"serif":false,"color":"#000000"}]},{"r":7,"c":2,"rs":1,"cs":4,"w":30254,"h":2568,"b":{"l":1,"r":2,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":28,"text":"","align":"justify","left":0,"size":10,"bold":true,"serif":false,"color":"#000000"}]},{"r":8,"c":1,"rs":1,"cs":1,"w":10617,"h":2568,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"#F1F1F1","va":"center","body":[{"t":"p","pi":29,"text":"주  소","align":"center","left":0,"size":10,"bold":true,"serif":false,"color":"#000000"}]},{"r":8,"c":2,"rs":1,"cs":4,"w":30254,"h":2568,"b":{"l":1,"r":2,"t":1,"b":1},"fill":"","va":"center","body":[{"t":"p","pi":30,"text":"","align":"center","left":0,"size":10,"bold":false,"serif":false,"color":"#000000"}]},{"r":9,"c":0,"rs":1,"cs":1,"w":7187,"h":1846,"b":{"l":2,"r":1,"t":1,"b":1},"fill":"#F1F1F1","va":"center","body":[{"t":"p","pi":31,"text":"개인정보","align":"center","left":0,"size":10,"bold":true,"serif":false,"color":"#000000"},{"t":"p","pi":32,"text":"수집·이용 동의","align":"center","left":0,"size":10,"bold":true,"serif":false,"color":"#000000"}]},{"r":9,"c":1,"rs":1,"cs":3,"w":26195,"h":2580,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"#F1F1F1","va":"center","body":[{"t":"p","pi":33,"text":"  (목적) 교외체험학습 운영 및 비상 연락","align":"left","left":0,"size":10,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":34,"text":"  (항목) 인솔자 성명, 연락처, 주소","align":"left","left":0,"size":10,"bold":false,"serif":false,"color":"#000000"}]},{"r":9,"c":4,"rs":1,"cs":1,"w":4892,"h":2580,"b":{"l":1,"r":1,"t":1,"b":1},"fill":"#F1F1F1","va":"center","body":[{"t":"p","pi":35,"text":"동의 여부","align":"center","left":0,"size":10,"bold":false,"serif":false,"color":"#000000"}]},{"r":9,"c":5,"rs":1,"cs":1,"w":9784,"h":2580,"b":{"l":1,"r":2,"t":1,"b":1},"fill":"#F1F1F1","va":"center","body":[{"t":"p","pi":36,"text":"( ○ , × )","align":"center","left":0,"size":10,"bold":false,"serif":false,"color":"#000000"}]},{"r":10,"c":0,"rs":1,"cs":6,"w":48058,"h":15452,"b":{"l":2,"r":2,"t":1,"b":2},"fill":"","va":"center","body":[{"t":"p","pi":37,"text":"교외체험학습은 보호자와 동행하여 실시함이 원칙이나, 위와 같은 사유로 자녀를 안전하게 보호하고 책임질 수 있는 위 대리인에게 인솔을 위임합니다.","align":"center","left":0,"size":12,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":38,"text":"","align":"center","left":0,"size":4,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":39,"text":" 년     월     일","align":"center","left":0,"size":12,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":40,"text":"학  생              (인)","align":"right","left":0,"size":12,"bold":false,"serif":false,"color":"#353535"},{"t":"p","pi":41,"text":"보호자              (인)","align":"right","left":0,"size":12,"bold":false,"serif":false,"color":"#353535"},{"t":"p","pi":42,"text":"강경고등학교장 귀하","align":"justify","left":0,"size":14,"bold":true,"serif":false,"color":"#000000"}]}]},{"t":"p","pi":43,"text":"-----------------------------------------------------------------------------------------","align":"center","left":0,"size":12,"bold":false,"serif":true,"color":"#000000"},{"t":"p","pi":44,"text":"학교장 허가 교외체험학습 대리 인솔자 서약서","align":"center","left":0,"size":17,"bold":false,"serif":false,"color":"#000000"},{"t":"tbl","cols":[640.77],"rows":[256.85],"cells":[{"r":0,"c":0,"rs":1,"cs":1,"w":48058,"h":19264,"b":{"l":2,"r":2,"t":2,"b":2},"fill":"","va":"center","body":[{"t":"p","pi":46,"text":"  본인은 귀교에 재학 중인 위 학생의 교외체험학습 대리 인솔자로서 다음 사항에 대하여 서약합니다.","align":"justify","left":14.67,"size":12,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":47,"text":"","align":"center","left":14.67,"size":5,"bold":true,"serif":false,"color":"#000000"},{"t":"p","pi":48,"text":"  위 학생의 보호자에게 교외체험학습 기간에 대리 인솔자(보호자)로 그 책임을 위임받아 교외체험학습이 본래 목적에 맞게 이뤄지도록 하고 학생의 안전에 책임질 것이며, 만일 허가받은 교외체험학습으로 인해 물의가 일어날 경우, 어떠한 책임도 감수할 것을 서약합니다.","align":"justify","left":14.67,"size":12,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":49,"text":"","align":"center","left":0,"size":4,"bold":true,"serif":false,"color":"#000000"},{"t":"p","pi":50,"text":" 년     월     일","align":"center","left":0,"size":12,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":51,"text":"                                                        대리 인솔자 :            (인)  ","align":"center","left":0,"size":12,"bold":false,"serif":false,"color":"#000000"},{"t":"p","pi":52,"text":"","align":"center","left":0,"size":10,"bold":true,"serif":false,"color":"#000000"},{"t":"p","pi":53,"text":"강경고등학교장 귀하","align":"justify","left":0,"size":14,"bold":true,"serif":false,"color":"#000000"}]}]}]}};
+</script>
+<script>
+/* forms.js — 학생 서류(결석신고서·교외체험학습 신청서·대리 인솔 위임장·결과보고서) 공용 규칙과 학교 서식 그리기. */
+/* 학생 웹앱(student.html)과 교사 출석부 웹앱(index.html [서류함])이 함께 쓴다. 서식 모양은 school-forms.js(SCHOOL_FORMS). */
+/* 이 파일은 아무 데도 보내지 않는다. 학생 자료는 칸 값으로만 다루고, 그림은 data:image(png/jpeg)만 받아 그린다. */
+(function (root) {
+  'use strict';
+
+  const KIND = { absence: '결석신고서', 'field-apply': '교외체험학습 신청서', 'field-report': '교외체험학습 결과보고서', 'field-proxy': '대리 인솔 위임장' };
+  const ATT = ['결석', '지각', '조퇴', '결과'];
+  const AKIND = ['질병', '미인정', '기타', '출석인정'];
+  const ASUB = ['경조사', '법정감염병', '생리통', '기타'];
+  const LEARN = ['가족행사 참여', '주제가 있는 체험학습', '가정학습', '기타 체험활동'];
+  const FACE = '본인임을 확인할 수 있게 얼굴이 정면으로 또렷이 나와야 해요(모자·마스크·선글라스·멀리서 찍은 사진 안 됨). 보호자도 함께 나오게 찍어 주세요.';
+
+  /* ── 날짜(칸 값은 'YYYY-MM-DD') ────────────────────────── */
+  const pad = (n) => String(n).padStart(2, '0');
+  const DAYS = '일월화수목금토';
+  function dateOf(iso) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ''));
+    if (!m) return null;
+    const d = new Date(+m[1], +m[2] - 1, +m[3]);
+    return d.getMonth() === +m[2] - 1 ? d : null;
+  }
+  const isoOf = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const today = () => isoOf(new Date());
+  const addDays = (iso, n) => { const d = dateOf(iso); d.setDate(d.getDate() + n); return isoOf(d); };
+  const isWeekend = (iso) => { const d = dateOf(iso); return !!d && (d.getDay() === 0 || d.getDay() === 6); };
+  function weekdays(from, to) {
+    const a = dateOf(from), b = dateOf(to);
+    if (!a || !b || b < a) return [];
+    const out = [];
+    for (const d = a; d <= b && out.length < 62; d.setDate(d.getDate() + 1)) if (d.getDay() % 6) out.push(isoOf(d));
+    return out;
+  }
+  const nextSchoolDay = (iso) => { let d = addDays(iso, 1); while (isWeekend(d)) d = addDays(d, 1); return d; };
+  const dayName = (iso) => DAYS[dateOf(iso).getDay()];
+  const md = (iso) => { const d = dateOf(iso); return d ? `${d.getMonth() + 1}월 ${d.getDate()}일` : ''; };
+  const short = (iso) => { const d = dateOf(iso); return d ? `${d.getMonth() + 1}/${d.getDate()}` : ''; };
+  const range = (from, to) => (!from ? '' : !to || to === from ? short(from) : `${short(from)}~${short(to)}`);
+  /* 결석신고서 제출 날짜: 결석이 끝난 다음 날 이후, 학교 나온 날(주말 아님) */
+  function submitDateProblem(to, date) {
+    if (!dateOf(date)) return '제출 날짜를 골라 주세요.';
+    if (dateOf(to) && date <= to) return '제출 날짜는 결석한 다음 날 이후여야 해요(학교에 나온 날).';
+    if (isWeekend(date)) return '제출 날짜가 주말이에요. 학교에 나온 날을 골라 주세요.';
+    return '';
+  }
+
+  /* ── 학생 확인 ─────────────────────────────────────────── */
+  const normName = (s) => String(s || '').replace(/\s+/g, '');
+  const classParts = (cls) => { const m = /^(\d)-(\d{1,2})$/.exec(String(cls || '')); return m ? { g: +m[1], c: +m[2] } : null; };
+  const hakbunOf = (cls, no) => { const p = classParts(cls); return p ? `${p.g}${pad(p.c)}${pad(+no)}` : ''; };
+  /* 학번 5자리(10307) 또는 4자리(1307) → 반·번호. 반 QR의 반과 다르면 null */
+  function parseHakbun(s, cls) {
+    const t = String(s || '').replace(/\D/g, '');
+    const p = classParts(cls);
+    if (!p) return null;
+    let g, c, no;
+    if (t.length === 5) [g, c, no] = [+t[0], +t.slice(1, 3), +t.slice(3)];
+    else if (t.length === 4) [g, c, no] = [+t[0], +t[1], +t.slice(2)];
+    else return null;
+    if (g !== p.g || c !== p.c || !no) return null;
+    return { no: String(no) };
+  }
+  /* 반 비밀값 + 번호 + 이름 → 16자리(다리는 이 값만 명단으로 가진다) */
+  async function stuHash(k, no, name) {
+    const data = new TextEncoder().encode(`${k}|${String(+no)}|${normName(name)}`);
+    const buf = await (root.crypto || globalThis.crypto).subtle.digest('SHA-256', data);
+    return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 16);
+  }
+  const telOk = (s) => /^0\d{1,2}-?\d{3,4}-?\d{4}$/.test(String(s || '').trim());
+  const imgOk = (s) => typeof s === 'string' && s.length < 4e6 && /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(s);
+
+  /* ── 서식 안의 칸(경로) ─────────────────────────────────── */
+  /* 경로: 맨 위 문단 'p3', 표 't0', 표 칸 문단 't0.r2c1.p0', 칸 안 표 't8.r0c0.t5.r0c0.p0' */
+  const FORMS = () => root.SCHOOL_FORMS || {};
+  function walk(blocks, prefix, fn) {
+    (blocks || []).forEach((b, i) => {
+      if (b.t === 'tbl') { const tp = `${prefix}t${i}`; fn(b, tp); b.cells.forEach((c) => walk(c.body, `${tp}.r${c.r}c${c.c}.`, fn)); }
+      else fn(b, `${prefix}p${i}`);
+    });
+  }
+  function paths(kind) { const m = {}; walk((FORMS()[kind] || {}).blocks, '', (b, p) => { if (b.t === 'p') m[p] = b.text; }); return m; }
+  const origCache = {};
+  const orig = (kind, path) => (origCache[kind] || (origCache[kind] = paths(kind)))[path];
+  /* 증빙서류 칸: 결석 종류마다 서식 칸(□ 진료확인서 …)에서 이름을 읽는다 */
+  const PROOF_CELL = { 질병: 't0.r8c1', 인정결석: 't0.r8c2', 인정: 't0.r8c6', 기타: 't0.r8c10' };
+  function proofGroup(f) {
+    if (f.kind === '질병') return '질병';
+    if (f.kind === '기타') return '기타';
+    if (f.kind === '출석인정') return (f.att || '결석') === '결석' ? '인정결석' : '인정';
+    return '';
+  }
+  const proofLabel = (t) => String(t).replace(/^[□▢]\s*/, '').replace(/\(\s*\)\s*$/, '').trim();
+  function proofsFor(f) {
+    const cell = PROOF_CELL[proofGroup(f)];
+    if (!cell) return [];
+    return Object.entries(paths('absence')).filter(([p, t]) => p.startsWith(`${cell}.`) && /^[□▢]/.test(t)).map(([, t]) => proofLabel(t));
+  }
+  const needsGuardianNote = (f) => (f.proofs || []).some((p) => p.startsWith('보호자확인서'));
+
+  /* ── 검사(제출 전) ─────────────────────────────────────── */
+  const blank = (v) => !String(v ?? '').trim();
+  function problems(doc) {
+    const f = doc.f || {}, out = [];
+    const need = (k, msg) => { if (blank(k.split('.').reduce((o, x) => (o || {})[x], f))) out.push({ k, msg }); };
+    const sig = (k, who) => { if (!imgOk((f.sig || {})[k])) out.push({ k: `sig.${k}`, msg: `${who} 서명을 해 주세요.` }); };
+    const days = (from, to) => {
+      if (!dateOf(from)) out.push({ k: 'from', msg: '시작 날짜를 골라 주세요.' });
+      else if (!dateOf(to)) out.push({ k: 'to', msg: '끝 날짜를 골라 주세요.' });
+      else if (to < from) out.push({ k: 'to', msg: '끝 날짜가 시작보다 앞이에요.' });
+      else if (!weekdays(from, to).length) out.push({ k: 'from', msg: '기간에 평일이 없어요.' });
+    };
+    const period = () => {
+      if (f.unit === 'half') {
+        if (!dateOf(f.halfDate)) out.push({ k: 'halfDate', msg: '반일 체험 날짜를 골라 주세요.' });
+        if (!(+f.p1 >= 1 && +f.p2 >= +f.p1 && +f.p2 <= 9)) out.push({ k: 'p1', msg: '몇 교시부터 몇 교시까지인지 적어 주세요.' });
+      } else days(f.from, f.to);
+    };
+    const people = () => {
+      need('gName', '보호자 이름을 적어 주세요.'); need('gRel', '보호자 관계를 적어 주세요.');
+      if (!telOk(f.gTel)) out.push({ k: 'gTel', msg: '보호자 연락처를 010-0000-0000처럼 적어 주세요.' });
+    };
+    if (doc.kind === 'absence') {
+      if (!ATT.includes(f.att)) out.push({ k: 'att', msg: '결석·지각·조퇴·결과 중 하나를 골라 주세요.' });
+      if (!AKIND.includes(f.kind)) out.push({ k: 'kind', msg: '결석 종류를 골라 주세요.' });
+      if (f.kind === '출석인정' && !ASUB.includes(f.sub)) out.push({ k: 'sub', msg: '출석인정 세부(경조사·법정감염병·생리통·기타)를 골라 주세요.' });
+      if ((f.att || '결석') === '결석') days(f.from, f.to); else if (!dateOf(f.from)) out.push({ k: 'from', msg: '날짜를 골라 주세요.' });
+      if (String(f.reason || '').trim().length < 10) out.push({ k: 'reason', msg: '결석 사유를 구체적으로(10자 이상) 써 주세요.' });
+      if (proofGroup(f) && !(f.proofs || []).length) out.push({ k: 'proofs', msg: '낼 증빙서류를 골라 주세요.' });
+      if ((f.proofs || []).includes('기타') && blank(f.proofEtc)) out.push({ k: 'proofEtc', msg: '기타 증빙서류 이름을 적어 주세요.' });
+      if (needsGuardianNote(f) && String(f.guardianNote || '').trim().length < 10) out.push({ k: 'guardianNote', msg: '보호자 확인서를 보호자가 구체적으로(10자 이상) 써 주세요.' });
+      const sd = submitDateProblem((f.att || '결석') === '결석' ? f.to : f.from, f.date);
+      if (sd) out.push({ k: 'date', msg: sd });
+      if (!dateOf(f.cDate) || !/^\d{1,2}:\d{2}$/.test(f.cTime || '')) out.push({ k: 'cDate', msg: '보호자 연락 날짜·시각을 적어 주세요.' });
+      need('parentName', '보호자 이름을 적어 주세요.');
+      sig('stu', '학생'); sig('par', '보호자');
+    }
+    if (doc.kind === 'field-apply') {
+      period();
+      if (!f.checked) out.push({ k: 'checked', msg: '세부 규정·불허 기간을 확인했는지 체크해 주세요.' });
+      if (!LEARN.includes(f.form)) out.push({ k: 'form', msg: '학습 형태를 골라 주세요.' });
+      need('purpose', '목적을 적어 주세요.'); need('dest', '목적지를 적어 주세요.');
+      people();
+      if (f.proxy) {
+        need('lName', '인솔자 이름을 적어 주세요.'); need('lRel', '인솔자 관계를 적어 주세요.');
+        if (!telOk(f.lTel)) out.push({ k: 'lTel', msg: '인솔자 연락처를 010-0000-0000처럼 적어 주세요.' });
+        const px = f.px || {};
+        if (String(px.reason || '').trim().length < 10) out.push({ k: 'px.reason', msg: '대리 인솔 위임장: 대리 인솔 사유를 구체적으로(10자 이상) 써 주세요.' });
+        need('px.lAddr', '대리 인솔 위임장: 인솔자 주소를 적어 주세요.');
+        if (!px.agree) out.push({ k: 'px.agree', msg: '대리 인솔 위임장: 인솔자 개인정보 수집·이용 동의가 필요해요.' });
+        if (!imgOk(px.sigLead)) out.push({ k: 'px.sigLead', msg: '대리 인솔 위임장: 대리 인솔자 서명을 받아 주세요.' });
+      }
+      need('plan', '체험학습 계획을 적어 주세요.');
+      if (!f.agree) out.push({ k: 'agree', msg: '확인 사항에 동의해 주세요.' });
+      if (!dateOf(f.date)) out.push({ k: 'date', msg: '신청 날짜를 골라 주세요.' });
+      sig('stu', '학생'); sig('par', '보호자');
+    }
+    if (doc.kind === 'field-report') {
+      period();
+      if (!LEARN.includes(f.form)) out.push({ k: 'form', msg: '학습 형태를 골라 주세요.' });
+      need('purpose', '목적을 적어 주세요.'); need('dest', '목적지를 적어 주세요.');
+      people();
+      need('place', '어디에서 했는지(장소) 적어 주세요.');
+      const want = f.unit === 'half' ? (dateOf(f.halfDate) ? [f.halfDate] : []) : weekdays(f.from, f.to);
+      const got = Object.fromEntries([].concat(f.days || []).map((d) => [d.date, d]));
+      for (const d of want) {
+        const e = got[d] || {};
+        if (String(e.text || '').trim().length < 10) out.push({ k: `day.${d}`, msg: `${md(d)} 체험 내용을 구체적으로(10자 이상) 써 주세요.` });
+        if (!imgOk(e.photo)) out.push({ k: `photo.${d}`, msg: `${md(d)} 사진을 한 장 올려 주세요.` });
+      }
+      if (String(f.feel || '').trim().length < 10) out.push({ k: 'feel', msg: '소감을 10자 이상 써 주세요.' });
+      const end = f.unit === 'half' ? f.halfDate : f.to;
+      if (!dateOf(f.date)) out.push({ k: 'date', msg: '제출 날짜를 골라 주세요.' });
+      else if (dateOf(end) && f.date <= end) out.push({ k: 'date', msg: '제출 날짜는 체험학습이 끝난 다음이어야 해요.' });
+      sig('stu', '학생'); sig('par', '보호자');
+    }
+    return out;
+  }
+
+  /* 교사 목록·출결 연결용 요약(이름·사유 없음) */
+  function meta(doc) {
+    const f = doc.f || {};
+    const half = f.unit === 'half' && doc.kind !== 'absence';
+    const from = half ? f.halfDate : f.from;
+    const to = half ? f.halfDate : (doc.kind === 'absence' && (f.att || '결석') !== '결석') ? f.from : f.to;
+    return { from: from || '', to: to || from || '', att: doc.kind === 'absence' ? f.att || '결석' : '결석', n: doc.kind === 'field-report' ? [].concat(f.days || []).filter((d) => imgOk(d.photo)).length : 0, proxy: doc.kind === 'field-apply' && !!f.proxy };
+  }
+  function summary(doc) {
+    const f = doc.f || {}, m = meta(doc);
+    if (doc.kind === 'absence') return `${range(m.from, m.to)} ${f.kind || ''}${m.att}`.trim();
+    return `${range(m.from, m.to)} ${f.form || '교외체험학습'}${m.proxy ? ' · 대리 인솔' : ''}${doc.kind === 'field-report' ? ` · 사진 ${m.n}장` : ''}`;
+  }
+
+  /* ── 학교 서식에 값 채우기 ───────────────────────────────── */
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const textHtml = (s) => esc(s).replace(/\t/g, '    ').replace(/\r?\n/g, '<br>');
+  const V = (s) => `<span class="v">${textHtml(s)}</span>`;
+  const reEsc = (s) => s.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+  const ON = '<span class="v">■</span>';
+  /* 원래 글의 □/▢ 중 label 앞의 것만 ■ */
+  function ticks(text, labels) {
+    let h = esc(text);
+    for (const l of labels) h = h.replace(new RegExp(`[▢□](\\s?${reEsc(esc(l))})`), `${ON}$1`);
+    return h;
+  }
+  const sigImg = (s) => (imgOk(s) ? `<img class="sf-sig" alt="서명" src="${s}">` : '');
+  const signLine = (before, name, mark, s) => ({ html: `${esc(before)}${name ? ` ${V(name)} ` : ''}<span class="sf-sign">${esc(mark)}${sigImg(s)}</span>` });
+  const dateLine = (iso) => { const d = dateOf(iso); return d ? { html: `${V(d.getFullYear())}년 ${V(d.getMonth() + 1)}월 ${V(d.getDate())}일` } : undefined; };
+  const left = (s) => ({ html: V(s), align: 'left' });
+  const ymdLong = (iso) => { const d = dateOf(iso); return d ? `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일` : ''; };
+  function gcn(cls, no) { const p = classParts(cls) || { g: '', c: '' }; return { g: p.g, c: p.c, no: no || '' }; }
+  /* 칸의 빈 줄(쓰는 자리)을 내용 줄 수만큼 뺀다 */
+  function dropBlanks(O, kind, cell, from, count) {
+    let i = from;
+    for (let n = 0; n < count; i++) { const t = orig(kind, `${cell}.p${i}`); if (t === undefined) break; if (!t.trim()) { O[`${cell}.p${i}`] = { skip: true }; n++; } }
+  }
+  const linesOf = (s, per = 44) => String(s || '').split('\n').reduce((n, l) => n + Math.max(1, Math.ceil(l.length / per)), 0);
+
+  function fillAbsence(doc) {
+    const f = doc.f || {}, O = {}, K = 'absence';
+    const att = f.att || '결석', n = gcn(doc.cls, doc.no);
+    O['t0.r2c1.p0'] = { html: V(doc.name) };
+    O['t0.r2c4.p0'] = { html: `( ${V(n.g)} ) 학년  ( ${V(n.c)} ) 반  ( ${V(n.no)} ) 번` };
+    O['t0.r3c1.p0'] = left(f.reason);
+    if (dateOf(f.from)) {
+      const to = att === '결석' && dateOf(f.to) ? f.to : f.from;
+      O['t0.r4c1.p0'] = att === '결석'
+        ? { html: `${V(ymdLong(f.from))} ${V(dayName(f.from))}요일 ~ ${V(md(to))} ${V(dayName(to))}요일 ( ${V(weekdays(f.from, to).length)} )일간` }
+        : { html: `${V(ymdLong(f.from))} ${V(dayName(f.from))}요일 · ${V(att)}${f.when ? ` (${V(f.when)})` : ''}` };
+    }
+    /* 결석 종류 칸과 담임 확인서의 같은 줄 */
+    const kindHtml = (text) => {
+      let h = text;
+      if (f.kind === '질병') h = att === '결석' ? ticks(h, ['질병결석']) : ticks(h, ['질병결석']).replace('질병결석', `질병${esc(att)}`);
+      else if (f.kind === '기타') h = att === '결석' ? ticks(h, ['기타결석']) : ticks(h, ['기타결석']).replace('기타결석', `기타${esc(att)}`);
+      else if (f.kind === '출석인정') h = ticks(h, [att === '결석' ? '출석인정결석' : '출석인정 (지각']);
+      else h = esc(h);
+      if (f.kind === '미인정') h += `  ${ON}${V(`미인정${att}`)}`;
+      return { html: h };
+    };
+    O['t0.r5c1.p0'] = kindHtml(orig(K, 't0.r5c1.p0'));
+    if (f.kind === '출석인정' && att !== '결석') O['t0.r6c6.p1'] = { html: ticks(orig(K, 't0.r6c6.p1'), [att]) };
+    if (f.kind === '출석인정' && ASUB.includes(f.sub)) {
+      const cell = att === '결석' ? 't0.r7c2' : 't0.r7c6';
+      for (let i = 0; i < 4; i++) {
+        const t = orig(K, `${cell}.p${i}`) || '';
+        if (t.replace('￭', '').trim().startsWith(f.sub)) O[`${cell}.p${i}`] = { html: `${ON}<span class="v" style="text-decoration:underline">${esc(t.replace('￭', '').trim())}</span>` };
+      }
+    }
+    const cell = PROOF_CELL[proofGroup(f)];
+    if (cell) {
+      for (const [p, t] of Object.entries(paths(K))) {
+        if (!p.startsWith(`${cell}.`) || !/^[□▢]/.test(t)) continue;
+        const lab = proofLabel(t);
+        if (!(f.proofs || []).includes(lab)) continue;
+        O[p] = lab === '기타' ? { html: `${ON} 기타( ${V(f.proofEtc || '')} )` } : { html: `${ON}${esc(t.slice(1))}` };
+      }
+    }
+    O.p3 = dateLine(f.date);
+    O.p4 = signLine('학생  성명:', doc.name, '(서명 또는 인)', (f.sig || {}).stu);
+    O.p5 = signLine('보호자(법정대리인) 성명:', f.parentName, '(서명 또는 인)', (f.sig || {}).par);
+    if (!blank(f.guardianNote)) O['t8.r0c0.t5.r0c0.p0'] = left(f.guardianNote);
+    O['t9.r0c0.p4'] = kindHtml(orig(K, 't9.r0c0.p4'));
+    if (dateOf(f.cDate)) {
+      const [hh, mm] = String(f.cTime || '').split(':');
+      O['t9.r0c0.p6'] = { html: ticks(orig(K, 't9.r0c0.p6'), ['보호자 연락 일시']) };
+      O['t9.r0c0.p7'] = { html: `        ${V(ymdLong(f.cDate))} ${V(dayName(f.cDate))}요일 ( ${V(hh || '')} : ${V(mm || '')} )  ${V(f.cWho || '보호자')} 와/과 ${f.cHow === '문자' ? `▢ 전화 ${ON} 문자` : `${ON} 전화 ▢ 문자`} 연락함` };
+    }
+    return O;
+  }
+  /* 신청서·보고서 공통 위쪽(성명·학년반·기간·학습형태·목적·보호자·인솔자) */
+  function fillFieldTop(doc, O, R) {
+    const f = doc.f || {}, n = gcn(doc.cls, doc.no);
+    O['t0.r3c1.p0'] = { html: V(doc.name) };
+    O['t0.r3c6.p0'] = { html: `  ${V(n.g)}  학년   ${V(n.c)}  반   ${V(n.no)}  번` };
+    if (f.unit === 'half') {
+      if (dateOf(f.halfDate)) {
+        const d = dateOf(f.halfDate);
+        const hours = +f.p2 >= +f.p1 ? +f.p2 - +f.p1 + 1 : '';
+        O[R.halfTotal] = { html: ` ( ${V(f.dayTotal || '')} )시간` };
+        O[R.half] = { html: `${V(d.getFullYear())}년 ${V(d.getMonth() + 1)}월 ${V(d.getDate())}일 (${V(dayName(f.halfDate))}) ( ${V(f.p1 || '')} )교시~( ${V(f.p2 || '')} )교시/( ${V(hours)} )시간 신청` };
+      }
+    } else if (dateOf(f.from) && dateOf(f.to)) {
+      O[R.day] = { html: ` ${V(dateOf(f.from).getFullYear())}년 ${V(md(f.from))} ~ ${V(md(f.to))} ( ${V(weekdays(f.from, f.to).length)} ) 일간`, align: 'left' };
+    }
+    if (LEARN.includes(f.form)) {
+      let h = esc(orig(doc.kind, R.form));
+      h = h.replace(new RegExp(`(${reEsc(f.form)})\\(\\s*\\)`), `$1( ${ON.replace('■', '○')} )`);
+      O[R.form] = { html: h };
+    }
+    O[R.purpose] = { html: V(f.purpose) };
+    O[R.dest] = { html: V(f.dest) };
+    O[R.gName] = { html: V(f.gName) }; O[R.gRel] = { html: V(f.gRel) }; O[R.gTel] = { html: V(f.gTel) };
+    const lead = doc.kind === 'field-apply' && !f.proxy ? { n: f.gName, r: f.gRel, t: f.gTel } : { n: f.lName, r: f.lRel, t: f.lTel };
+    O[R.lName] = { html: V(lead.n) }; O[R.lRel] = { html: V(lead.r) }; O[R.lTel] = { html: V(lead.t) };
+  }
+  function fillApply(doc) {
+    const f = doc.f || {}, O = {};
+    fillFieldTop(doc, O, { day: 't0.r4c4.p0', halfTotal: 't0.r5c4.p1', half: 't0.r5c8.p0', form: 't0.r7c1.p0', purpose: 't0.r8c1.p0', dest: 't0.r8c12.p0', gName: 't0.r9c1.p0', gRel: 't0.r9c5.p0', gTel: 't0.r9c12.p0', lName: 't0.r10c1.p0', lRel: 't0.r10c5.p0', lTel: 't0.r10c12.p0' });
+    if (f.checked) O['t0.r6c12.p0'] = { html: `( <span class="v sf-circ">O</span> ,  X )` };
+    O['t0.r11c1.p0'] = left(f.plan);
+    if (f.agree) O['t0.r13c1.p0'] = { html: ticks(orig('field-apply', 't0.r13c1.p0'), ['동의']) };
+    O.p2 = dateLine(f.date);
+    O.p3 = signLine('학  생', doc.name, '(인)', (f.sig || {}).stu);
+    O.p4 = signLine('보호자', f.gName, '(인)', (f.sig || {}).par);
+    return O;
+  }
+  function fillProxy(doc) {
+    const f = doc.f || {}, px = f.px || {}, O = {}, n = gcn(doc.cls, doc.no);
+    O['t0.r1c1.p0'] = { html: `${V(n.g)}학년 ${V(n.c)}반 ${V(n.no)}번` };
+    O['t0.r1c3.p0'] = { html: V(doc.name) };
+    O['t0.r1c5.p0'] = { html: V(px.stuTel) };
+    O['t0.r2c1.p0'] = { html: ` (${V(f.gRel)})`, align: 'left' };
+    O['t0.r2c3.p0'] = { html: V(f.gName) };
+    O['t0.r2c5.p0'] = { html: V(f.gTel) };
+    const half = f.unit === 'half';
+    const a = half ? f.halfDate : f.from, b = half ? f.halfDate : f.to;
+    if (dateOf(a) && dateOf(b)) {
+      const hours = half && +f.p2 >= +f.p1 ? +f.p2 - +f.p1 + 1 : '';
+      O['t0.r3c1.p0'] = { html: `${V(ymdLong(a))} ${V(px.t1 || '')}  ~  ${V(md(b))} ${V(px.t2 || '')}, ( ${V(half ? 0 : weekdays(a, b).length)} )일 ( ${V(hours)} )시간` };
+    }
+    O['t0.r4c1.p0'] = { html: V(f.dest) };
+    O['t0.r4c4.p0'] = { html: V(px.stay || '없음(당일)') };
+    O['t0.r5c1.p0'] = left(px.reason);
+    O['t0.r6c2.p0'] = { html: V(f.lName) };
+    O['t0.r7c2.p0'] = { html: `${V(f.lTel)}${f.lRel ? ` (관계: ${V(f.lRel)})` : ''}`, align: 'center' };
+    O['t0.r8c2.p0'] = { html: V(px.lAddr) };
+    if (px.agree) O['t0.r9c5.p0'] = { html: `( <span class="v sf-circ">○</span> , × )` };
+    O['t0.r10c0.p2'] = dateLine(f.date);
+    O['t0.r10c0.p3'] = signLine('학  생', doc.name, '(인)', (f.sig || {}).stu);
+    O['t0.r10c0.p4'] = signLine('보호자', f.gName, '(인)', (f.sig || {}).par);
+    O['t3.r0c0.p4'] = dateLine(f.date);
+    O['t3.r0c0.p5'] = signLine('대리 인솔자 :', f.lName, '(인)', px.sigLead);
+    return O;
+  }
+  function fillReport(doc) {
+    const f = doc.f || {}, O = {}, K = 'field-report';
+    fillFieldTop(doc, O, { day: 't0.r4c4.p0', halfTotal: 't0.r6c4.p1', half: 't0.r6c8.p0', form: 't0.r8c1.p0', purpose: 't0.r9c1.p0', dest: 't0.r9c12.p0', gName: 't0.r10c1.p0', gRel: 't0.r10c5.p0', gTel: 't0.r10c12.p0', lName: 't0.r11c1.p0', lRel: 't0.r11c5.p0', lTel: 't0.r11c12.p0' });
+    O['t2.r0c1.p0'] = { html: `▸ ${V(f.place)}`, align: 'left' };
+    const days = [].concat(f.days || []).filter((d) => dateOf(d.date)).sort((x, y) => x.date.localeCompare(y.date));
+    if (days.length) {
+      O['t4.r0c1.p0'] = { html: days.map((d) => `<b>${esc(md(d.date))}(${esc(dayName(d.date))})</b> ${V(d.text || '')}`).join('<br>'), align: 'left', size: 10 };
+      dropBlanks(O, K, 't4.r0c1', 1, Math.min(8, days.reduce((n, d) => n + linesOf(d.text), 0)));
+    }
+    if (!blank(f.feel)) { O['t4.r1c1.p0'] = { html: V(f.feel), align: 'left', size: 10 }; dropBlanks(O, K, 't4.r1c1', 1, Math.min(4, linesOf(f.feel))); }
+    const n = days.filter((d) => imgOk(d.photo)).length;
+    if (n) O.p5 = { html: `※ 사진 증빙: 뒤쪽 붙임(날짜별 ${V(n)}장)` };
+    O.p8 = dateLine(f.date);
+    O.p9 = signLine('학  생', doc.name, '(인)', (f.sig || {}).stu);
+    O.p10 = signLine('보호자', f.gName, '(인)', (f.sig || {}).par);
+    return O;
+  }
+  const FILL = { absence: fillAbsence, 'field-apply': fillApply, 'field-report': fillReport, 'field-proxy': fillProxy };
+  function fill(kind, doc) { return (FILL[kind] || (() => ({})))(doc); }
+
+  /* ── 학교 설정(교사 결정 2026-10-28: 공통 서식 + 학교 이름·결재 칸) ──
+     form: 'common'(공통 서식: 제목 + 설정한 결재 칸) / 'gg'(강경고 서식 그대로). name: 'OO학교장 귀하'의 학교 이름 */
+  const APPR = ['담임', '부장', '교감', '교장'];
+  const HEAD_ROWS = { absence: 2, 'field-apply': 3, 'field-report': 3 };
+  function school(o) {
+    const x = o || {};
+    const appr = (Array.isArray(x.appr) ? x.appr : APPR).map((a) => String(a || '').replace(/\s+/g, ' ').trim().slice(0, 8)).filter(Boolean).slice(0, 7);
+    return { form: x.form === 'gg' ? 'gg' : 'common', name: String(x.name || '').trim().slice(0, 30), appr: appr.length ? appr : APPR.slice() };
+  }
+  let SCH = school();
+  const TO_SCHOOL = /^\s*\S*학교장\s*귀하\s*$/;
+
+  /* ── 그리기(길잡이 HwpxEditor의 표 그리기 방식: 칸을 CSS grid로) ── */
+  function pHtml(b, path, O) {
+    let v = O[path];
+    if (v === undefined && SCH.form === 'common' && TO_SCHOOL.test(b.text)) v = { html: esc(`${SCH.name || '학교'}장 귀하`) };
+    if (v && v.skip) return '';
+    let align = b.align === 'distribute' ? 'justify' : b.align, size = b.size, inner;
+    if (v === undefined) inner = textHtml(b.text);
+    else if (typeof v === 'string') inner = V(v);
+    else { if (v.align) align = v.align; if (v.size) size = v.size; inner = v.html !== undefined ? v.html : V(v.text); }
+    const st = [`text-align:${align}`, `font-size:calc(var(--fs, 1) * ${(size * 1.333).toFixed(1)}px)`];
+    if (b.bold) st.push('font-weight:700');
+    if (b.left) st.push(`padding-left:${(+b.left).toFixed(1)}px`);
+    if (b.color && b.color !== '#000000' && v === undefined) st.push(`color:${b.color}`);
+    return `<div class="hp${b.serif ? ' serif' : ''}" style="${st.join(';')}">${inner || '&nbsp;'}</div>`;
+  }
+  function blocksHtml(blocks, prefix, O, from = 0) {
+    return (blocks || []).map((b, j) => { const i = j + from; return b.t === 'tbl' ? tblHtml(b, `${prefix}t${i}`, O) : pHtml(b, `${prefix}p${i}`, O); }).join('');
+  }
+  /* skip: 공통 서식에서 위쪽 제목·결재 줄을 빼고 그린다(그 자리는 headHtml) */
+  function tblHtml(t, tp, O, skip = 0) {
+    const cols = t.cols.map((w) => `${(+w).toFixed(1)}px`).join(' ');
+    const rows = t.rows.slice(skip).map((h) => `minmax(${Math.max(14, +h).toFixed(1)}px,auto)`).join(' ');
+    const bw = (n) => (n ? `${n >= 2 ? '2px' : '1px'} solid #111` : '0');
+    const cells = t.cells.filter((c) => c.r >= skip).map((c) => {
+      const st = [`grid-column:${c.c + 1}/span ${c.cs}`, `grid-row:${c.r - skip + 1}/span ${c.rs}`, `border-left:${bw(c.b.l)}`, `border-right:${bw(c.b.r)}`, `border-top:${bw(c.b.t)}`, `border-bottom:${bw(c.b.b)}`,
+        `justify-content:${c.va === 'top' ? 'flex-start' : c.va === 'bottom' ? 'flex-end' : 'center'}`];
+      if (c.fill) st.push(`background:${c.fill}`);
+      return `<div class="htc" style="${st.join(';')}">${blocksHtml(c.body, `${tp}.r${c.r}c${c.c}.`, O)}</div>`;
+    }).join('');
+    return `<div class="htbl" style="grid-template-columns:${cols};grid-template-rows:${rows}">${cells}</div>`;
+  }
+  /* 공통 서식 위쪽: 서식 제목(원래 제목 칸 글) + 설정한 결재 칸 */
+  function headHtml(tpl) {
+    const t0 = tpl.blocks[0];
+    const tc = t0.cells.find((c) => c.r === 0 && c.c === 0) || { body: [] };
+    const ps = tc.body.filter((b) => b.t === 'p' && b.text.trim());
+    const size = Math.max(...ps.map((b) => b.size || 18), 16);
+    const width = t0.cols.reduce((n, w) => n + +w, 0);
+    return `<div class="sf-head" style="width:${width.toFixed(1)}px"><div class="sf-title" style="font-size:calc(var(--fs, 1) * ${(size * 1.333).toFixed(1)}px)">${ps.map((b) => esc(b.text.trim())).join('<br>')}</div>
+      <table class="sf-appr"><tr><th rowspan="2" class="k">결<br>재</th>${SCH.appr.map((a) => `<th>${esc(a)}</th>`).join('')}</tr><tr>${SCH.appr.map(() => '<td></td>').join('')}</tr></table></div>`;
+  }
+  function pageHtml(kind, O) {
+    const tpl = FORMS()[kind];
+    if (!tpl) return `<div class="sf-page"><p>서식(${esc(kind)})이 없어요.</p></div>`;
+    const pg = tpl.page;
+    const skip = SCH.form === 'common' ? HEAD_ROWS[kind] || 0 : 0;
+    const body = skip ? headHtml(tpl) + tblHtml(tpl.blocks[0], 't0', O, skip) + blocksHtml(tpl.blocks.slice(1), '', O, 1) : blocksHtml(tpl.blocks, '', O);
+    return `<div class="sf-page" data-form="${esc(kind)}" data-h="${(Math.min(pg.h, 1122.5) - pg.mt - pg.mb - 24).toFixed(1)}" style="padding:${pg.mt}px ${pg.mr}px ${pg.mb}px ${pg.ml}px"><div class="sf-in">${body}</div></div>`;
+  }
+  function photoPages(doc) {
+    const f = doc.f || {};
+    const list = [].concat(f.days || []).filter((d) => imgOk(d.photo) && dateOf(d.date)).sort((x, y) => x.date.localeCompare(y.date));
+    const out = [];
+    for (let i = 0; i < list.length; i += 2) {
+      out.push(`<div class="sf-page sf-photos" data-form="photos">
+        <div class="sf-ph-head">교외체험학습 사진 증빙 (${i / 2 + 1}/${Math.ceil(list.length / 2)}) · ${esc(hakbunOf(doc.cls, doc.no))} ${esc(doc.name)}</div>
+        ${list.slice(i, i + 2).map((d) => `<figure><img class="sf-photo" alt="${esc(md(d.date))} 사진" src="${d.photo}"><figcaption>${esc(md(d.date))}(${esc(dayName(d.date))}) · ${esc(String(d.text || '').slice(0, 60))}</figcaption></figure>`).join('')}
+      </div>`);
+    }
+    return out.join('');
+  }
+  /* 제출 한 건 → 인쇄할 쪽들(신청서+위임장, 보고서+사진) */
+  function pagesHtml(doc, opts) {
+    SCH = school(opts && opts.school);
+    const out = [pageHtml(doc.kind, fill(doc.kind, doc))];
+    if (doc.kind === 'field-apply' && doc.f && doc.f.proxy) out.push(pageHtml('field-proxy', fill('field-proxy', doc)));
+    if (doc.kind === 'field-report') out.push(photoPages(doc));
+    return out.join('');
+  }
+
+  const CSS = `
+.sf-pages { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 10px 0 24px; }
+.sf-scale { zoom: var(--sf-z, 1); }
+.sf-page { box-sizing: border-box; width: 793.7px; min-height: 1122.5px; background: #fff; color: #111; box-shadow: 0 1px 6px rgb(0 0 0 / .18); font-family: "Malgun Gothic", "맑은 고딕", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; line-height: 1.45; }
+.sf-page .serif { font-family: "Batang", "바탕", "AppleMyungjo", serif; }
+.sf-page .hp { min-height: 1.2em; white-space: pre-wrap; overflow-wrap: anywhere; }
+.sf-page .htbl { display: grid; }
+.sf-page .htc { display: flex; flex-direction: column; padding: 2px 4px; min-width: 0; overflow: hidden; }
+.sf-page .v { color: #0d2a6b; font-weight: 600; }
+.sf-page .sf-circ { display: inline-block; min-width: 1.3em; border: 1.5px solid #0d2a6b; border-radius: 50%; text-align: center; line-height: 1.2; }
+.sf-page .sf-sign { position: relative; display: inline-block; min-width: 4.5em; text-align: center; }
+.sf-page .sf-sig { position: absolute; left: 50%; top: 50%; width: 7.5em; height: 3em; object-fit: contain; transform: translate(-50%, -55%); pointer-events: none; }
+.sf-head { display: flex; align-items: center; gap: 12px; margin: 0 auto 6px; }
+.sf-title { flex: 1; text-align: center; font-weight: 700; line-height: 1.3; }
+.sf-appr { border-collapse: collapse; }
+.sf-appr th, .sf-appr td { border: 1px solid #111; min-width: 58px; padding: 2px 4px; font-size: calc(var(--fs, 1) * 14.7px); font-weight: 700; text-align: center; }
+.sf-appr th.k { min-width: 26px; width: 26px; line-height: 1.4; }
+.sf-appr td { height: 52px; }
+.sf-photos { padding: 56px 64px; display: flex; flex-direction: column; gap: 18px; }
+.sf-ph-head { font-size: 15px; font-weight: 700; border-bottom: 2px solid #111; padding-bottom: 6px; }
+.sf-photos figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.sf-photos .sf-photo { max-width: 100%; max-height: 440px; object-fit: contain; border: 1px solid #ccc; }
+.sf-photos figcaption { font-size: 13.5px; }
+@media print {
+  html, body { background: #fff !important; }
+  @page { size: A4; margin: 0; }
+  .sf-pages { display: block; padding: 0; gap: 0; }
+  .sf-scale { zoom: 1 !important; }
+  .sf-page { box-shadow: none; margin: 0; min-height: 0; break-after: page; page-break-after: always; }
+  .sf-page:last-child { break-after: auto; page-break-after: auto; }
+  .sf-page .v { color: #000; }
+  .sf-page .sf-circ { border-color: #000; }
+}`;
+  function ensureStyle(doc = root.document) {
+    if (!doc || doc.getElementById('sf-style')) return;
+    const st = doc.createElement('style');
+    st.id = 'sf-style';
+    st.textContent = CSS;
+    doc.head.appendChild(st);
+  }
+  /* host 안에 쪽들을 그리고 화면 폭에 맞춘다 */
+  function mount(host, doc, opts) {
+    ensureStyle(host.ownerDocument);
+    host.innerHTML = `<div class="sf-scale"><div class="sf-pages">${pagesHtml(doc, opts)}</div></div>`;
+    const sc = host.querySelector('.sf-scale');
+    const fit = () => sc.style.setProperty('--sf-z', String(Math.min(1, Math.max(0.3, (host.clientWidth - 8) / 794))));
+    /* 한 쪽에 들어가게: 이 기기 글꼴이 한글 서식 글꼴보다 넓으면 글자만 조금씩 줄인다(표 칸 폭은 그대로, 최소 70%). A4 높이 기준 */
+    sc.style.setProperty('--sf-z', '1');
+    host.querySelectorAll('.sf-page[data-h]').forEach((pg) => {
+      const inner = pg.querySelector('.sf-in'), room = +pg.dataset.h;
+      for (let fs = 1; fs >= 0.73 && inner.offsetHeight > room; fs = Math.round((fs - 0.03) * 100) / 100) pg.style.setProperty('--fs', String(fs - 0.03));
+    });
+    fit();
+    return { fit, pages: host.querySelectorAll('.sf-page').length };
+  }
+
+  /* ── 폰에서 쓰는 도구: 손가락 서명, 사진 줄이기 ───────────── */
+  function sigPad(canvas, onChange) {
+    const ctx = canvas.getContext('2d');
+    let drawing = false, dirty = false, last = null;
+    const size = () => {
+      const r = canvas.getBoundingClientRect(), dpr = Math.min(2, root.devicePixelRatio || 1);
+      if (!r.width) return;
+      const keep = dirty ? canvas.toDataURL('image/png') : '';
+      canvas.width = Math.round(r.width * dpr); canvas.height = Math.round(r.height * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.lineWidth = 2.6; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#111';
+      if (keep) { const im = new Image(); im.onload = () => ctx.drawImage(im, 0, 0, r.width, r.height); im.src = keep; }
+    };
+    const pt = (e) => { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+    canvas.style.touchAction = 'none';
+    canvas.addEventListener('pointerdown', (e) => { drawing = true; last = pt(e); try { canvas.setPointerCapture(e.pointerId); } catch { /* 일부 브라우저 */ } ctx.beginPath(); ctx.arc(last[0], last[1], 1.2, 0, Math.PI * 2); ctx.fillStyle = '#111'; ctx.fill(); dirty = true; });
+    canvas.addEventListener('pointermove', (e) => {
+      if (!drawing) return;
+      const p = pt(e);
+      ctx.beginPath(); ctx.moveTo(last[0], last[1]); ctx.lineTo(p[0], p[1]); ctx.stroke();
+      last = p; dirty = true;
+    });
+    const end = () => { if (!drawing) return; drawing = false; if (onChange) onChange(api.value()); };
+    canvas.addEventListener('pointerup', end); canvas.addEventListener('pointercancel', end); canvas.addEventListener('pointerleave', end);
+    const api = {
+      value: () => (dirty ? canvas.toDataURL('image/png') : ''),
+      clear: () => { ctx.clearRect(0, 0, canvas.width, canvas.height); dirty = false; if (onChange) onChange(''); },
+      load: (src) => {
+        if (!imgOk(src)) return;
+        const im = new Image();
+        im.onload = () => { const r = canvas.getBoundingClientRect(); ctx.drawImage(im, 0, 0, r.width, r.height); dirty = true; };
+        im.src = src;
+      },
+      size,
+    };
+    size();
+    return api;
+  }
+  /* 사진: 폰에서 긴 변 1280px, JPEG로 줄여 올린다(얼굴 확인용으로 충분, 용량은 보통 100~250KB) */
+  async function shrinkPhoto(file, max = 1280, q = 0.72) {
+    let src;
+    try { src = await createImageBitmap(file, { imageOrientation: 'from-image' }); } catch {
+      src = await new Promise((ok, no) => { const im = new Image(); im.onload = () => ok(im); im.onerror = () => no(new Error('사진을 읽지 못했어요.')); im.src = URL.createObjectURL(file); });
+    }
+    const w = src.width, h = src.height, z = Math.min(1, max / Math.max(w, h));
+    const cv = document.createElement('canvas');
+    cv.width = Math.max(1, Math.round(w * z)); cv.height = Math.max(1, Math.round(h * z));
+    const cx = cv.getContext('2d');
+    cx.fillStyle = '#fff'; cx.fillRect(0, 0, cv.width, cv.height);
+    cx.drawImage(src, 0, 0, cv.width, cv.height);
+    return cv.toDataURL('image/jpeg', q);
+  }
+
+  root.StudentForms = {
+    KIND, ATT, AKIND, ASUB, LEARN, FACE,
+    dateOf, isoOf, today, addDays, isWeekend, weekdays, nextSchoolDay, dayName, md, range, submitDateProblem,
+    normName, classParts, hakbunOf, parseHakbun, stuHash, telOk, imgOk,
+    proofGroup, proofsFor, needsGuardianNote, problems, meta, summary,
+    paths, fill, pagesHtml, mount, ensureStyle, sigPad, shrinkPhoto, esc, school, APPR,
+  };
+})(typeof window !== 'undefined' ? window : globalThis);
+</script>
+<script>
+(() => {
+  'use strict';
+  /* 이 페이지는 선생님 구글 계정의 Apps Script(HtmlService)가 보여 준다. 학생은 학교 구글 계정으로 로그인한 뒤 연다.
+     인라인 스크립트라 슬래시 두 개를 쓰지 않는다(주석은 이 모양만). */
+  const SF = window.StudentForms;
+  const KEY = 'chulseokbu.student.v1';
+  const $ = (s, r = document) => r.querySelector(s);
+  const esc = SF.esc;
+  const blank = () => ({ v: 1, cfg: null, consent: '', me: null, docs: [] });
+  let LS = null;
+  try { LS = window.localStorage; LS.setItem('sf.t', '1'); LS.removeItem('sf.t'); } catch { LS = null; }
+  function load() { try { const s = JSON.parse((LS && LS.getItem(KEY)) || 'null'); if (s && s.v === 1) return { ...blank(), ...s }; } catch { /* 새로 시작 */ } return blank(); }
+  let P = load();
+  /* 이 기기 값: 처음 열 때 만든 임의값(학번을 이 기기에 묶을 때 씀, 다리에는 해시로만 남음) */
+  const DEV_KEY = 'chulseokbu.student.dev';
+  function devToken() {
+    const ABC = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+    const make = () => Array.from(crypto.getRandomValues(new Uint8Array(24)), (b) => ABC[b & 63]).join('');
+    let ss = null;
+    try { ss = window.sessionStorage; } catch { ss = null; }
+    for (const st of [LS, ss]) {
+      if (!st) continue;
+      try { let v = st.getItem(DEV_KEY); if (!/^[A-Za-z0-9_-]{24}$/.test(v || '')) { v = make(); st.setItem(DEV_KEY, v); } return v; } catch { /* 다음 저장소 */ }
+    }
+    return make();
+  }
+  const DEV = devToken();
+  const BOUND = '이 학번은 지금 로그인한 계정(이 폰)으로만 쓸 수 있어요.';
+  function save() {
+    if (!LS) return true;
+    try { LS.setItem(KEY, JSON.stringify(P)); return true; }
+    catch { toast('폰 저장 공간이 부족해요. 사진을 줄이거나 먼저 제출해 주세요.'); return false; }
+  }
+  let toastTimer;
+  function toast(msg) {
+    document.querySelectorAll('.toast').forEach((t) => t.remove());
+    const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.appendChild(t);
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.remove(), 2600);
+  }
+  const uid = () => Math.random().toString(36).slice(2, 10);
+
+  /* ── 반 링크(?p=s&b=1-3&k=반 비밀값)에서 서버가 넣어 준 반·비밀값 ── */
+  function readLink() {
+    const c = (window.SF_CFG && window.SF_CFG.c) || '', k = (window.SF_CFG && window.SF_CFG.k) || '';
+    if (!/^\d-\d{1,2}$/.test(c) || !/^[A-Za-z0-9_-]{16,64}$/.test(k)) return;
+    if (!P.cfg || P.cfg.c !== c || P.cfg.k !== k) {
+      if (P.cfg && P.cfg.c !== c) { P.me = null; P.docs = []; }
+      P.cfg = { c, k };
+      save();
+    }
+  }
+
+  /* ── 선생님 다리와 주고받기(같은 Apps Script, google.script.run — 제출할 때·목록 볼 때만) ── */
+  function api(body) {
+    return new Promise((ok, no) => {
+      const run = window.google && google.script && google.script.run;
+      if (!run) { no(Object.assign(new Error('반 링크로 열어 주세요.'), { code: 'net' })); return; }
+      run.withSuccessHandler((j) => {
+        if (!j || !j.ok) no(Object.assign(new Error((j && j.msg) || '보내지 못했어요.'), { code: j && j.err }));
+        else ok(j);
+      }).withFailureHandler(() => no(Object.assign(new Error('인터넷 연결을 확인해 주세요. (선생님 서류함에 닿지 못했어요)'), { code: 'net' })))
+        .studentApi(body);
+    });
+  }
+  const auth = () => ({ c: P.cfg.c, k: P.cfg.k, no: P.me.no, name: P.me.name, dev: DEV });
+  /* 다른 계정·기기라 막혔거나 명단·링크가 맞지 않으면: 이 폰의 나 정보를 지우고 확인 화면으로 */
+  const AUTH_ERR = ['who', 'class', 'bound'];
+
+  let screen = 'home', cur = null, reqs = [], lastSync = '';
+  function go(s) { screen = s; render(); window.scrollTo(0, 0); }
+  function render() {
+    $('#who').textContent = P.me ? `${P.cfg.c} ${P.me.no}번 ${P.me.name}` : P.cfg ? `${P.cfg.c}` : '';
+    $('#actbar').hidden = screen !== 'edit';
+    if (screen !== 'edit') $('#actbar').innerHTML = '';
+    if (!P.cfg) return noLink();
+    if (!P.consent) return screen === 'refused' ? refused() : consent();
+    if (!P.me) return login();
+    if (screen === 'edit' && cur) return editor();
+    home();
+  }
+
+  function noLink() {
+    $('#main').innerHTML = `<div class="card"><h2 class="sec">반 링크로 열어 주세요</h2><p class="hint">선생님이 반 카톡방에 올린 우리 반 링크로 열어야 서류를 낼 수 있어요. 링크가 바뀌었으면 새 링크를 받아 주세요.</p></div>`;
+  }
+  function consent() {
+    $('#main').innerHTML = `
+      <div class="card consent">
+        <h2 class="sec">개인정보 수집·이용 동의</h2>
+        <p class="hint">${esc(P.cfg.c)}반 담임 선생님께 출결 서류를 폰으로 내는 앱이에요. 읽고 동의해야 쓸 수 있어요.</p>
+        <dl>
+          <dt>받는 사람·보관 곳</dt><dd>담임 선생님. 낸 서류는 선생님의 학교(교육청) 구글 드라이브에만 저장돼요.</dd>
+          <dt>목적</dt><dd>결석신고서, 교외체험학습 신청서·대리 인솔 위임장·결과보고서 제출과 확인</dd>
+          <dt>항목</dt><dd>학번·이름, 출결 날짜·종류·사유(질병 등 건강 정보 포함), 증빙서류 종류, 보호자·인솔자 이름·관계·연락처(대리 인솔이면 인솔자 주소, 학생 휴대전화), 학생·보호자·인솔자 손글씨 서명, 체험학습 사진(얼굴 포함)</dd>
+          <dt>보유 기간</dt><dd><b>제출한 서류는 선생님이 확인·인쇄한 뒤 파기</b>해요(구글 드라이브 파일까지 지움). 인쇄한 종이 서류는 학교 규정대로 보관돼요.</dd>
+          <dt>동의하지 않을 권리</dt><dd>동의하지 않아도 돼요. 그때는 종이 서류로 내면 되고 불이익은 없어요.</dd>
+        </dl>
+        <p class="hint">쓰는 중인 서류는 이 폰에만 저장되고, [제출]을 눌러야 선생님께 가요. 만 14세 미만이면 보호자와 함께 읽어 주세요.</p>
+        <div class="row"><button class="btn" id="cNo">동의하지 않아요</button><button class="btn main" id="cYes">동의해요</button></div>
+      </div>`;
+  }
+  function refused() {
+    $('#main').innerHTML = `<div class="card"><h2 class="sec">종이 서류로 내 주세요</h2><p class="hint">동의하지 않으면 이 앱으로는 낼 수 없어요. 선생님께 종이 서류를 받아 내면 되고, 불이익은 없어요.</p><div class="row"><button class="btn" id="cAgain">동의 내용 다시 보기</button></div></div>`;
+  }
+  function login(msg = '') {
+    $('#main').innerHTML = `
+      <div class="card">
+        <h2 class="sec">나를 확인해요</h2>
+        <p class="hint">${esc(P.cfg.c)}반 선생님 명단과 맞는지 확인해요.</p>
+        <label class="field"><span>학번 (예: ${esc(SF.hakbunOf(P.cfg.c, 7))})</span><input id="lgNo" inputmode="numeric" maxlength="5" autocomplete="off"></label>
+        <label class="field"><span>이름</span><input id="lgName" maxlength="20" autocomplete="off"></label>
+        ${msg ? `<p class="hint" style="color:var(--res);font-weight:600">${esc(msg)}</p>` : ''}
+        <div class="row"><button class="btn main" id="lgGo">확인</button></div>
+      </div>`;
+  }
+  async function doLogin() {
+    const hb = $('#lgNo').value, name = SF.normName($('#lgName').value);
+    const p = SF.parseHakbun(hb, P.cfg.c);
+    if (!p) { login(`학번을 다시 확인해 주세요. ${P.cfg.c}반 학번 5자리예요.`); return; }
+    if (!name) { login('이름을 적어 주세요.'); return; }
+    $('#lgGo').disabled = true;
+    try {
+      const j = await api({ a: 'hello', c: P.cfg.c, k: P.cfg.k, no: p.no, name, dev: DEV });
+      if (j.first) toast(BOUND);
+      P.me = { no: p.no, name };
+      save();
+      sync(j);
+      go('home');
+    } catch (e) { login(e.message); }
+  }
+
+  /* 다리의 상태 → 이 폰: 선생님이 인쇄했으면 잠그고 내용은 지움, 선생님이 지웠으면 이 폰에서도 지움 */
+  function sync(j) {
+    reqs = j.reqs || [];
+    if (j.sch) P.sch = j.sch; /* 선생님이 정한 학교 이름·결재 칸(미리 보기용) */
+    lastSync = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+    const subs = Object.fromEntries((j.subs || []).map((s) => [s.id, s]));
+    let gone = 0, locked = 0;
+    P.docs = P.docs.filter((d) => {
+      if (!d.sid) return true;
+      const s = subs[d.sid];
+      if (!s) { gone++; return false; }
+      if (s.lock && d.status !== 'locked') { d.status = 'locked'; d.sum = SF.summary(view(d)); delete d.f; delete d.edit; locked++; }
+      return true;
+    });
+    save();
+    if (gone || locked) toast(`선생님이 확인한 서류 ${gone + locked}건은 이 폰에서 내용을 지웠어요.`);
+  }
+  async function refresh(quiet) {
+    try { const j = await api({ a: 'hello', ...auth() }); sync(j); if (j.first) toast(BOUND); else if (!quiet) toast('새로 받았어요'); }
+    catch (e) { if (AUTH_ERR.includes(e.code)) { P.me = null; save(); login(e.message); return; } if (!quiet) toast(e.message); }
+    if (screen === 'home') home();
+  }
+
+  const view = (d) => ({ kind: d.kind, cls: P.cfg.c, no: P.me.no, name: P.me.name, f: d.f || {} });
+  const STATUS = (d) => d.status === 'locked' ? '<span class="badge ok">선생님 확인 끝</span>'
+    : d.status === 'sent' ? (d.dirty ? '<span class="badge fill">고친 뒤 아직 안 냄</span>' : '<span class="badge ok">제출함 · 고칠 수 있음</span>')
+      : '<span class="badge">임시 저장</span>';
+  function home() {
+    const open = reqs.filter((r) => !P.docs.some((d) => d.req && d.req.id === r.id && d.status !== 'draft'));
+    $('#main').innerHTML = `
+      <div class="card">
+        <h2 class="sec">선생님이 요청한 서류</h2>
+        ${open.length ? `<ul class="list">${open.map((r) => {
+          const has = P.docs.find((d) => d.req && d.req.id === r.id);
+          return `<li><div class="t"><b>${esc(SF.KIND[r.kind] || r.kind)}</b><span>${esc(SF.range(r.from, r.to))} ${esc(r.kind === 'absence' ? r.att || '' : '교외체험학습')}</span></div><span class="badge new">요청</span><button class="btn small main" data-req="${esc(r.id)}">${has ? '이어 쓰기' : '쓰기'}</button></li>`;
+        }).join('')}</ul>` : '<p class="empty">요청받은 서류가 없어요.</p>'}
+        <div class="row"><button class="btn small" id="hRefresh">새로 받기</button></div>
+        ${lastSync ? `<p class="hint dim">${esc(lastSync)}에 받음</p>` : ''}
+      </div>
+      <div class="card">
+        <h2 class="sec">내가 먼저 내는 서류</h2>
+        <p class="hint">교외체험학습을 가기 전에 신청서를 내요. 보호자가 아닌 사람이 데려가면(대리 인솔) 위임장도 이어서 써요.</p>
+        <div class="row"><button class="btn main" id="hApply">교외체험학습 신청서 쓰기</button></div>
+      </div>
+      <div class="card">
+        <h2 class="sec">내 서류</h2>
+        ${P.docs.length ? `<ul class="list">${P.docs.map((d) => `<li><div class="t"><b>${esc(SF.KIND[d.kind])}</b><span>${esc(d.f ? SF.summary(view(d)) : d.sum || '')}</span></div>${STATUS(d)}${d.status === 'locked' ? '' : `<button class="btn small" data-open="${esc(d.lid)}">열기</button>`}</li>`).join('')}</ul>`
+          : '<p class="empty">아직 쓴 서류가 없어요.</p>'}
+        <p class="hint dim">제출한 서류는 선생님이 인쇄하기 전까지 고쳐서 다시 낼 수 있어요. 선생님이 확인·인쇄하면 이 폰에서도 내용이 지워져요.</p>
+      </div>
+      <div class="card">
+        <h2 class="sec">개인정보</h2>
+        <p class="hint">제출한 서류는 선생님이 확인·인쇄한 뒤 파기돼요. 쓰는 중인 서류는 이 폰에만 있어요.</p>
+        <p class="hint" id="boundNote">${BOUND} 폰이나 계정을 바꾸면 선생님께 '서류 잠김 풀기'를 부탁하세요.</p>
+        <div class="row"><button class="btn small" id="hNotMe">내가 아니에요</button><button class="btn small danger" id="hWipe">동의 철회·자료 지우기</button></div>
+      </div>`;
+  }
+
+  /* ── 서류 만들기 ── */
+  function newDoc(kind, req) {
+    const t = SF.today();
+    const prev = P.docs.filter((d) => d.f && (d.kind === 'field-apply' || d.kind === 'field-report')).slice(-1)[0];
+    const pf = prev ? prev.f : {};
+    let f;
+    if (kind === 'absence') {
+      const from = req ? req.from : t, to = req ? req.to : t;
+      /* 제출 날짜 기본값: 결석이 끝난 다음 등교일(학교에 나온 날) */
+      const att = req ? req.att || '결석' : '결석';
+      f = { att, kind: '', sub: '', from, to, reason: '', proofs: [], cDate: from, cTime: '08:30', cWho: '주 보호자', cHow: '전화', date: SF.nextSchoolDay(att === '결석' ? to : from), parentName: '', sig: {} };
+    } else {
+      const keep = ['unit', 'form', 'purpose', 'dest', 'gName', 'gRel', 'gTel', 'lName', 'lRel', 'lTel', 'halfDate', 'p1', 'p2', 'dayTotal'];
+      f = { unit: 'day', from: req ? req.from : '', to: req ? req.to : '', date: t, sig: {}, days: [] };
+      for (const k of keep) if (pf[k] !== undefined && pf[k] !== '') f[k] = pf[k];
+      if (req) { f.from = req.from; f.to = req.to; }
+      if (kind === 'field-apply') Object.assign(f, { checked: false, agree: false, proxy: false, plan: '', px: { t1: '09:00', t2: '18:00' } });
+      if (kind === 'field-report') { if (SF.dateOf(f.to) && t <= f.to) f.date = SF.nextSchoolDay(f.to); f.place = pf.dest || ''; f.feel = ''; if (!f.lName) { f.lName = f.gName || ''; f.lRel = f.gRel || ''; f.lTel = f.gTel || ''; } }
+    }
+    const d = { lid: uid(), kind, req: req ? { id: req.id, from: req.from, to: req.to, att: req.att } : null, f, status: 'draft' };
+    P.docs.push(d);
+    save();
+    return d;
+  }
+
+  /* ── 칸 정의 ── */
+  const get = (o, k) => k.split('.').reduce((x, p) => (x == null ? undefined : x[p]), o);
+  function set(o, k, v) { const ps = k.split('.'); let x = o; ps.slice(0, -1).forEach((p) => { if (!x[p] || typeof x[p] !== 'object') x[p] = {}; x = x[p]; }); x[ps[ps.length - 1]] = v; }
+  const H = (t) => ({ t: 'head', label: t });
+  const N = (html, warn) => ({ t: 'note', html, warn });
+  const seg = (k, label, opts, o = {}) => ({ t: 'seg', k, label, opts: opts.map((x) => (Array.isArray(x) ? x : [x, x])), ...o });
+  const inp = (type) => (k, label, o = {}) => ({ t: 'input', type, k, label, ...o });
+  const text = inp('text'), tel = inp('tel'), date = inp('date'), time = inp('time'), num = inp('number');
+  const area = (k, label, o = {}) => ({ t: 'area', k, label, ...o });
+  const check = (k, label, o = {}) => ({ t: 'check', k, label, ...o });
+  const multi = (k, label, opts, o = {}) => ({ t: 'multi', k, label, opts, ...o });
+  const sig = (k, label) => ({ t: 'sig', k, label });
+  const pair = (a, b) => ({ t: 'pair', a, b });
+  function periodSpec(f) {
+    return [
+      seg('unit', '단위', [['day', '1일 단위'], ['half', '반일 단위']]),
+      ...(f.unit === 'half'
+        ? [date('halfDate', '날짜'), pair(num('p1', '시작 교시', { min: 1, max: 9 }), num('p2', '끝 교시', { min: 1, max: 9 })), num('dayTotal', '그날 총 수업 시수', { min: 1, max: 9 })]
+        : [pair(date('from', '시작'), date('to', '끝')), N(SF.weekdays(f.from, f.to).length ? `평일 <b>${SF.weekdays(f.from, f.to).length}</b>일` : '')]),
+    ];
+  }
+  const peopleSpec = () => [H('보호자'), pair(text('gName', '보호자 이름'), text('gRel', '관계', { ph: '어머니' })), tel('gTel', '보호자 연락처', { ph: '010-0000-0000' })];
+  function spec(d) {
+    const f = d.f;
+    if (d.kind === 'absence') {
+      const abs = (f.att || '결석') === '결석';
+      const proofs = SF.proofsFor(f);
+      const sdp = SF.submitDateProblem(abs ? f.to : f.from, f.date);
+      return [
+        H('출결'),
+        seg('att', '출결 구분', SF.ATT, { hint: d.req ? '선생님이 요청한 구분이에요.' : '' }),
+        seg('kind', '결석 종류', SF.AKIND),
+        ...(f.kind === '출석인정' ? [seg('sub', '출석인정 세부', SF.ASUB)] : []),
+        ...(abs ? [pair(date('from', '시작'), date('to', '끝'))] : [pair(date('from', '날짜'), text('when', '시각·교시', { ph: '예: 10:50 등교' }))]),
+        area('reason', '결석 사유', { hint: '언제부터 어떤 증상(일)으로 빠졌는지, 병원에 갔는지까지 구체적으로 써 주세요.', ph: '예) 10월 27일 새벽부터 38도 열과 기침이 나서 ○○의원에서 진료를 받고 집에서 쉬었습니다.' }),
+        ...(proofs.length ? [multi('proofs', '낼 증빙서류', proofs, { hint: '진료확인서 같은 증빙서류 원본은 학교에 올 때 선생님께 내요.' })] : []),
+        ...((f.proofs || []).includes('기타') ? [text('proofEtc', '기타 증빙서류 이름')] : []),
+        area('guardianNote', '보호자 확인서 (보호자가 직접)', { hint: `보호자가 결석 사유를 자세히 적어 주세요(질병이면 증상·기간·진료 여부). ${SF.needsGuardianNote(f) ? '증빙서류로 보호자확인서를 골라서 꼭 써야 해요.' : '증빙서류로 보호자확인서를 고를 때 써요.'}` }),
+        H('보호자 연락'),
+        N('빠진 날 보호자가 선생님께 연락한 때예요. 보통 아침 8시 30분, 주 보호자가 전화해요.'),
+        pair(date('cDate', '날짜'), time('cTime', '시각')),
+        pair(text('cWho', '누가', { ph: '주 보호자' }), seg('cHow', '방법', ['전화', '문자'])),
+        H('제출'),
+        date('date', '제출 날짜', { hint: '결석한 다음 날 이후, 학교에 나온 날을 골라요(주말 안 됨).', err: f.date ? sdp : '', min: SF.dateOf(abs ? f.to : f.from) ? SF.addDays(abs ? f.to : f.from, 1) : '' }),
+        text('parentName', '보호자(법정대리인) 성명'),
+        sig('sig.stu', '학생 서명'), sig('sig.par', '보호자 서명'),
+      ];
+    }
+    if (d.kind === 'field-apply') {
+      return [
+        H('기간'), ...periodSpec(f),
+        check('checked', '학교장 허가 교외체험학습 세부 규정과 불허 기간을 확인했어요(학교 홈페이지 등).'),
+        H('체험학습'), seg('form', '학습 형태', SF.LEARN), text('purpose', '목적'), text('dest', '목적지', { ph: '예: 경북 경주시 불국사·석굴암' }),
+        ...peopleSpec(),
+        H('인솔자'),
+        seg('lead', '누가 데려가나요', [['par', '보호자가 인솔'], ['proxy', '대리 인솔(보호자 아님)']]),
+        ...(f.proxy ? [N('대리 인솔이면 아래 <b>대리 인솔 위임장</b>까지 써야 제출돼요.', true), pair(text('lName', '인솔자 이름'), text('lRel', '관계', { ph: '이모' })), tel('lTel', '인솔자 연락처', { ph: '010-0000-0000' })] : [N('인솔자는 위 보호자로 적혀요.')]),
+        area('plan', '교외체험학습 계획', { ph: '11/3(월) 경주 불국사·석굴암 견학\n11/4(화) 국립경주박물관' }),
+        check('agree', '확인 사항에 동의해요: 신청과 다르게 허위로 하면 미인정결석이 되고, 5일 이상이면 주 1회 이상 담임 선생님과 통화해요.'),
+        H('신청'), date('date', '신청 날짜'), sig('sig.stu', '학생 서명'), sig('sig.par', '보호자 서명'),
+        ...(f.proxy ? [
+          H('대리 인솔 위임장'),
+          N('보호자가 함께 가지 못해 다른 사람이 인솔할 때 내는 서류예요. 신청서의 기간·목적지·보호자·인솔자와 학생·보호자 서명은 그대로 들어가요.'),
+          tel('px.stuTel', '학생 휴대전화', { ph: '010-0000-0000' }),
+          pair(time('px.t1', '출발 시각'), time('px.t2', '돌아오는 시각')),
+          text('px.stay', '숙박 장소', { ph: '당일이면 비워 두세요' }),
+          area('px.reason', '대리 인솔 사유', { hint: '보호자가 함께 가지 못하는 까닭을 구체적으로 써 주세요.' }),
+          text('px.lAddr', '인솔자 주소'),
+          check('px.agree', '인솔자가 개인정보(성명·연락처·주소) 수집·이용에 동의했어요. 목적: 교외체험학습 운영 및 비상 연락'),
+          sig('px.sigLead', '대리 인솔자 서명 (서약서)'),
+        ] : []),
+      ];
+    }
+    const want = f.unit === 'half' ? (SF.dateOf(f.halfDate) ? [f.halfDate] : []) : SF.weekdays(f.from, f.to);
+    return [
+      H('기간'), ...periodSpec(f),
+      H('체험학습'), seg('form', '학습 형태', SF.LEARN), text('purpose', '목적'), text('dest', '목적지'), text('place', '어디에서 (장소)', { ph: '예: 불국사, 석굴암, 국립경주박물관' }),
+      ...peopleSpec(), pair(text('lName', '인솔자 이름'), text('lRel', '관계')), tel('lTel', '인솔자 연락처'),
+      H('날짜별 내용과 사진'),
+      N(esc(SF.FACE), true),
+      { t: 'days', want },
+      area('feel', '소감', { hint: '체험학습으로 느낀 점을 자유롭게 써요.' }),
+      H('제출'), date('date', '제출 날짜'), sig('sig.stu', '학생 서명'), sig('sig.par', '보호자 서명'),
+    ];
+  }
+
+  let bad = new Set(), errs = [];
+  function fieldHtml(s, f) {
+    const cls = (k) => `field${bad.has(k) ? ' bad' : ''}`;
+    const hint = (s) => `${s.hint ? `<p class="fhint">${esc(s.hint)}</p>` : ''}${s.err ? `<p class="ferr">${esc(s.err)}</p>` : ''}`;
+    if (s.t === 'head') return `<div class="sub-h">${esc(s.label)}</div>`;
+    if (s.t === 'note') return s.html ? (s.warn ? `<div class="warnbox">${s.html}</div>` : `<p class="hint">${s.html}</p>`) : '';
+    if (s.t === 'pair') return `<div class="row" style="margin-top:0">${fieldHtml(s.a, f)}${fieldHtml(s.b, f)}</div>`;
+    if (s.t === 'seg') {
+      const v = s.k === 'lead' ? (f.proxy ? 'proxy' : 'par') : get(f, s.k);
+      return `<div class="${cls(s.k)}" data-k="${esc(s.k)}"><span>${esc(s.label)}</span><div class="seg">${s.opts.map(([val, lab]) => `<button type="button" data-seg="${esc(s.k)}" data-v="${esc(val)}" class="${v === val ? 'on' : ''}">${esc(lab)}</button>`).join('')}</div>${hint(s)}</div>`;
+    }
+    if (s.t === 'input') return `<label class="${cls(s.k)}" data-k="${esc(s.k)}"><span>${esc(s.label)}</span><input type="${s.type}" data-f="${esc(s.k)}" value="${esc(get(f, s.k) ?? '')}"${s.ph ? ` placeholder="${esc(s.ph)}"` : ''}${s.min !== undefined && s.min !== '' ? ` min="${esc(s.min)}"` : ''}${s.max !== undefined ? ` max="${esc(s.max)}"` : ''}${s.type === 'number' ? ' inputmode="numeric"' : ''}${s.type === 'tel' ? ' inputmode="tel" autocomplete="off"' : ''} maxlength="200">${hint(s)}</label>`;
+    if (s.t === 'area') return `<label class="${cls(s.k)}" data-k="${esc(s.k)}"><span>${esc(s.label)}</span><textarea data-f="${esc(s.k)}" maxlength="1500"${s.ph ? ` placeholder="${esc(s.ph)}"` : ''}>${esc(get(f, s.k) ?? '')}</textarea>${hint(s)}</label>`;
+    if (s.t === 'check') return `<div class="${cls(s.k)}" data-k="${esc(s.k)}"><div class="checks"><label class="ck"><input type="checkbox" data-chk="${esc(s.k)}" ${get(f, s.k) ? 'checked' : ''}><span>${esc(s.label)}</span></label></div></div>`;
+    if (s.t === 'multi') {
+      const v = get(f, s.k) || [];
+      return `<div class="${cls(s.k)}" data-k="${esc(s.k)}"><span>${esc(s.label)}</span><div class="checks">${s.opts.map((o) => `<label class="ck"><input type="checkbox" data-multi="${esc(s.k)}" data-v="${esc(o)}" ${v.includes(o) ? 'checked' : ''}><span>${esc(o)}</span></label>`).join('')}</div>${hint(s)}</div>`;
+    }
+    if (s.t === 'sig') return `<div class="${cls(s.k)}" data-k="${esc(s.k)}"><span>${esc(s.label)}</span><div class="sigbox"><canvas data-sig="${esc(s.k)}" aria-label="${esc(s.label)} 칸"></canvas><span class="sig-ph">여기에 손가락으로 서명</span><button type="button" class="btn small sig-x" data-sigx="${esc(s.k)}">지우기</button></div></div>`;
+    if (s.t === 'days') {
+      if (!s.want.length) return '<p class="hint">위에서 기간을 고르면 날짜별 칸이 나와요.</p>';
+      const by = Object.fromEntries((f.days || []).map((x) => [x.date, x]));
+      return s.want.map((dt) => {
+        const e = by[dt] || {};
+        return `<div class="day" data-k="day.${esc(dt)}">
+          <b>${esc(SF.md(dt))} (${esc(SF.dayName(dt))})</b>
+          <label class="field${bad.has(`day.${dt}`) ? ' bad' : ''}" style="margin-top:6px"><textarea data-day="${esc(dt)}" maxlength="800" placeholder="그날 한 일, 배운 점을 구체적으로">${esc(e.text || '')}</textarea></label>
+          <div class="ph field${bad.has(`photo.${dt}`) ? ' bad' : ''}" data-k="photo.${esc(dt)}">${SF.imgOk(e.photo) ? `<img alt="${esc(SF.md(dt))} 사진" src="${e.photo}">` : ''}
+            <label class="btn small">${SF.imgOk(e.photo) ? '사진 바꾸기' : '사진 올리기 (하루 한 장)'}<input type="file" accept="image/*" data-photo="${esc(dt)}" hidden></label></div>
+        </div>`;
+      }).join('');
+    }
+    return '';
+  }
+  const pads = [];
+  function editor() {
+    const d = cur;
+    const locked = d.status === 'locked';
+    const reqLine = d.req ? `<p class="hint">선생님 요청: ${esc(SF.range(d.req.from, d.req.to))} ${esc(d.kind === 'absence' ? d.req.att || '' : '교외체험학습')}</p>` : '';
+    $('#main').innerHTML = `
+      ${errs.length ? `<div class="errbox"><b>제출하려면 ${errs.length}가지를 채워 주세요</b><ul>${errs.slice(0, 8).map((e) => `<li>${esc(e.msg)}</li>`).join('')}</ul></div>` : ''}
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h2 class="sec" style="margin:0">${esc(SF.KIND[d.kind])}</h2>${STATUS(d)}</div>
+        ${reqLine}
+        ${d.status === 'sent' ? '<p class="hint">이미 제출했어요. 고친 뒤 [다시 제출]을 눌러야 선생님께 바뀐 내용이 가요.</p>' : ''}
+        <div id="fields">${spec(d).map((s) => fieldHtml(s, d.f)).join('')}</div>
+        <div class="row"><button class="textbtn" id="ePreview" style="flex:none">학교 서식으로 미리 보기</button><span></span>${d.status === 'draft' ? '<button class="textbtn" id="eDel" style="flex:none;color:var(--res)">이 서류 지우기</button>' : ''}</div>
+      </div>`;
+    $('#actbar').innerHTML = `<button class="btn" id="eBack">목록</button><button class="btn" id="eSave">저장</button><button class="btn main" id="eSubmit" ${locked ? 'disabled' : ''}>${d.status === 'sent' ? '다시 제출' : '제출'}</button>`;
+    pads.length = 0;
+    document.querySelectorAll('canvas[data-sig]').forEach((cv) => {
+      const k = cv.dataset.sig;
+      const pad = SF.sigPad(cv, (v) => { set(d.f, k, v); touched(k); cv.parentElement.querySelector('.sig-ph').hidden = !!v; });
+      const v = get(d.f, k);
+      if (v) { pad.load(v); cv.parentElement.querySelector('.sig-ph').hidden = true; }
+      pads.push([k, pad]);
+    });
+  }
+  let saveTimer = null;
+  /* 고친 칸은 빨간 표시·목록에서 바로 뺀다 */
+  function touched(k) {
+    if (k && bad.delete(k)) {
+      errs = errs.filter((e) => e.k !== k);
+      const el = document.querySelector(`[data-k="${CSS.escape(k)}"]`);
+      if (el) el.classList.remove('bad');
+      const box = document.querySelector('.errbox');
+      if (box && !errs.length) box.remove();
+    }
+    if (cur && cur.status === 'sent') cur.dirty = true;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(save, 600);
+  }
+  function redraw() { const y = window.scrollY; editor(); window.scrollTo(0, y); }
+  /* 기간 밖 날짜의 사진·글은 내기 전에 뺀다 */
+  function prune(d) {
+    if (d.kind !== 'field-report') return;
+    const f = d.f;
+    const want = new Set(f.unit === 'half' ? [f.halfDate] : SF.weekdays(f.from, f.to));
+    f.days = (f.days || []).filter((x) => want.has(x.date));
+  }
+  async function submit() {
+    const d = cur;
+    prune(d);
+    errs = SF.problems(view(d));
+    bad = new Set(errs.map((e) => e.k));
+    if (errs.length) {
+      redraw(); window.scrollTo(0, 0);
+      toast(`채울 곳이 ${errs.length}군데 있어요`);
+      return;
+    }
+    const btn = $('#eSubmit'); btn.disabled = true; btn.textContent = '보내는 중…';
+    try {
+      const j = await api({ a: 'submit', ...auth(), kind: d.kind, id: d.sid || '', edit: d.edit || '', req: d.req ? d.req.id : '', data: d.f, meta: SF.meta(view(d)) });
+      d.sid = j.id; if (j.edit) d.edit = j.edit;
+      d.status = 'sent'; d.dirty = false; d.sentAt = j.up;
+      save();
+      toast('제출했어요. 선생님이 인쇄하기 전까지 고칠 수 있어요.');
+      cur = null; go('home');
+      refresh(true);
+    } catch (e) {
+      if (AUTH_ERR.includes(e.code)) { P.me = null; save(); cur = null; go('home'); login(e.message); return; }
+      if (e.code === 'locked') { d.status = 'locked'; d.sum = SF.summary(view(d)); delete d.f; delete d.edit; save(); cur = null; go('home'); }
+      else if (e.code === 'gone') { d.sid = ''; d.edit = ''; d.status = 'draft'; save(); redraw(); }
+      else { btn.disabled = false; btn.textContent = d.status === 'sent' ? '다시 제출' : '제출'; }
+      toast(e.message);
+    }
+  }
+  function preview() {
+    prune(cur);
+    const box = document.createElement('div');
+    box.className = 'pv';
+    box.innerHTML = '<div class="pv-bar"><b>학교 서식 미리 보기</b><button class="btn small" id="pvClose">닫기</button></div><div class="pv-host" id="pvHost"></div>';
+    document.body.appendChild(box);
+    SF.mount($('#pvHost', box), view(cur), { school: P.sch });
+    $('#pvClose', box).addEventListener('click', () => box.remove());
+  }
+
+  /* ── 누르기 ── */
+  document.addEventListener('click', async (e) => {
+    const t = e.target.closest('button, [data-req], [data-open]');
+    if (!t) return;
+    const id = t.id;
+    if (id === 'cYes') { P.consent = new Date().toISOString(); save(); go('home'); return; }
+    if (id === 'cNo') { go('refused'); return; }
+    if (id === 'cAgain') { go('home'); return; }
+    if (id === 'lgGo') { doLogin(); return; }
+    if (id === 'hRefresh') { refresh(false); return; }
+    if (id === 'hApply') { cur = newDoc('field-apply', null); errs = []; bad = new Set(); go('edit'); return; }
+    if (id === 'hNotMe' && confirm('다른 학생으로 다시 확인할까요? 이 폰에서 쓰던 서류는 지워져요.')) { P.me = null; P.docs = []; save(); go('home'); return; }
+    if (id === 'hWipe' && confirm('동의를 철회하고 이 폰의 서류를 모두 지울까요? 이미 낸 서류는 선생님께 지워 달라고 말씀드려 주세요.')) { P = { ...blank(), cfg: P.cfg }; save(); go('home'); return; }
+    if (t.dataset.req) {
+      const r = reqs.find((x) => x.id === t.dataset.req);
+      if (!r) return;
+      cur = P.docs.find((d) => d.req && d.req.id === r.id) || newDoc(r.kind, r);
+      errs = []; bad = new Set(); go('edit'); return;
+    }
+    if (t.dataset.open) { cur = P.docs.find((d) => d.lid === t.dataset.open) || null; errs = []; bad = new Set(); go('edit'); return; }
+    if (!cur) return;
+    if (id === 'eBack') { save(); cur = null; go('home'); return; }
+    if (id === 'eSave') { if (save()) toast(cur.status === 'sent' ? '폰에 저장했어요. [다시 제출]해야 선생님께 가요.' : '폰에 저장했어요. 아직 선생님께 안 갔어요.'); return; }
+    if (id === 'eSubmit') { submit(); return; }
+    if (id === 'ePreview') { preview(); return; }
+    if (id === 'eDel' && confirm('이 서류를 지울까요?')) { P.docs = P.docs.filter((d) => d !== cur); save(); cur = null; go('home'); return; }
+    if (t.dataset.sigx) { const p = pads.find(([k]) => k === t.dataset.sigx); if (p) p[1].clear(); return; }
+    if (t.dataset.seg) {
+      const k = t.dataset.seg, v = t.dataset.v;
+      if (k === 'lead') cur.f.proxy = v === 'proxy';
+      else set(cur.f, k, v);
+      if (k === 'kind' || k === 'att') { cur.f.proofs = []; if (k === 'kind' && v !== '출석인정') cur.f.sub = ''; }
+      touched(k); redraw();
+    }
+  });
+  document.addEventListener('input', (e) => {
+    if (!cur) return;
+    const el = e.target;
+    if (el.dataset.f) { set(cur.f, el.dataset.f, el.value); touched(el.dataset.f); }
+    if (el.dataset.day) {
+      const days = cur.f.days || (cur.f.days = []);
+      let x = days.find((y) => y.date === el.dataset.day);
+      if (!x) days.push(x = { date: el.dataset.day, text: '', photo: '' });
+      x.text = el.value; touched(`day.${el.dataset.day}`);
+    }
+  });
+  document.addEventListener('change', async (e) => {
+    if (!cur) return;
+    const el = e.target;
+    if (el.dataset.chk) { set(cur.f, el.dataset.chk, el.checked); touched(el.dataset.chk); }
+    if (el.dataset.multi) {
+      const k = el.dataset.multi, list = new Set(get(cur.f, k) || []);
+      el.checked ? list.add(el.dataset.v) : list.delete(el.dataset.v);
+      set(cur.f, k, [...list]); touched(k); redraw();
+    }
+    if (el.dataset.f && el.type === 'date') redraw();
+    if (el.dataset.photo && el.files && el.files[0]) {
+      const dt = el.dataset.photo;
+      try {
+        toast('사진을 줄이는 중…');
+        const img = await SF.shrinkPhoto(el.files[0], 1024, 0.7);
+        const days = cur.f.days || (cur.f.days = []);
+        let x = days.find((y) => y.date === dt);
+        if (!x) days.push(x = { date: dt, text: '', photo: '' });
+        x.photo = img; touched(`photo.${dt}`); save(); redraw();
+        toast('사진을 넣었어요');
+      } catch (err) { toast(err.message || '사진을 넣지 못했어요'); }
+    }
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.target.id === 'lgName' || e.target.id === 'lgNo')) doLogin(); });
+  window.addEventListener('pagehide', () => { if (cur) save(); });
+  window.addEventListener('resize', () => pads.forEach(([, p]) => p.size()));
+
+  readLink();
+  render();
+  if (P.cfg && P.consent && P.me) refresh(true);
+})();
+</script>
+</body>
+</html>

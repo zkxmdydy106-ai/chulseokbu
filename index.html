@@ -33,9 +33,11 @@ header.bar { position: sticky; top: 0; z-index: 5; display: flex; align-items: c
 .datenav input { position: absolute; inset: 0; opacity: 0; }
 .today-dot { margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--blue); }
 
-nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; display: grid; grid-template-columns: repeat(4, 1fr); padding-bottom: var(--safe-b); background: var(--panel); border-top: 1px solid var(--line); }
+nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; display: grid; grid-template-columns: repeat(5, 1fr); padding-bottom: var(--safe-b); background: var(--panel); border-top: 1px solid var(--line); }
 nav.tabs button { height: 56px; border: 0; background: none; font-size: 14px; font-weight: 600; color: var(--text-3); border-top: 2px solid transparent; }
 nav.tabs button.on { color: var(--blue); border-top-color: var(--blue); }
+nav.tabs button { position: relative; letter-spacing: -0.03em; }
+.tab-badge { position: absolute; top: 5px; left: calc(50% + 14px); min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: var(--res); color: #fff; font-size: 11px; font-weight: 700; line-height: 17px; }
 
 main { padding: 12px; }
 .card { margin-bottom: 10px; padding: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; }
@@ -151,6 +153,27 @@ table.list .c { text-align: center; }
 .empty { padding: 28px 10px; text-align: center; color: var(--text-2); }
 .empty b { display: block; margin-bottom: 6px; font-size: 16px; color: var(--text); }
 .warnbox { margin-top: 10px; padding: 9px 10px; background: var(--fill); color: var(--fill-ink); font-size: 13px; border-radius: 4px; }
+/* 서류함(학생이 낸 서류) */
+.steps { margin: 8px 0 0; padding-left: 20px; font-size: 14px; color: var(--text-2); }
+.steps li { margin: 7px 0; }
+.steps b { color: var(--text); }
+.bx li { align-items: flex-start; }
+.docs li .badge { flex: none; }
+.bx li span small { font-size: 12.5px; }
+.sfv { position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column; background: #e9ecf1; }
+.sfv-bar { display: flex; align-items: center; gap: 6px; padding: 8px 10px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.sfv-bar .sp { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.sfv-info { padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--line); font-size: 13px; color: var(--text-2); }
+.sfv-info b { color: var(--text); }
+.sfv-pages { flex: 1; overflow: auto; padding: 0 6px; }
+body.sfv-open { overflow: hidden; }
+@media print {
+  body.sf-printing { padding: 0; background: #fff; }
+  body.sf-printing > *:not(.sfv) { display: none !important; }
+  body.sf-printing .sfv { position: static; display: block; background: #fff; }
+  body.sf-printing .sfv-bar, body.sf-printing .sfv-info { display: none !important; }
+  body.sf-printing .sfv-pages { overflow: visible; padding: 0; }
+}
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
 </style>
 </head>
@@ -169,6 +192,7 @@ table.list .c { text-align: center; }
 <nav class="tabs" id="tabs">
   <button data-tab="check" class="on">출석</button>
   <button data-tab="docs">서류</button>
+  <button data-tab="box">서류함<span class="tab-badge" id="boxBadge" hidden></span></button>
   <button data-tab="export">내보내기</button>
   <button data-tab="setup">설정</button>
 </nav>
@@ -181,7 +205,9 @@ table.list .c { text-align: center; }
   // 교시 시각(쉬는 시간·점심·청소는 적지 않음). 종례는 마지막 교시 뒤로 본다
   const BELLS_TEXT = ['조회 08:40-08:50', '1교시 08:50-09:40', '2교시 09:50-10:40', '3교시 10:50-11:40', '4교시 11:50-12:40', '5교시 13:30-14:20', '6교시 14:30-15:20', '7교시 15:40-16:30'].join('\n');
   // marks: 교과(교시별 / Ø), cases·daily·cleared: 담임 일일출결(사안 하나가 여러 날일 수 있음), cfg: 서류 기한·체험학습 최대 일수
-  const blank = () => ({ v: 1, classes: [], marks: {}, cases: {}, daily: {}, cleared: {}, cfg: { deadline: 7, tripMax: 15, bells: BELLS_TEXT }, ui: { pir: 1, classId: '' } });
+  // school: 학생 서류 서식(교사 결정 2026-10-28: 공통 서식 + 학교 이름·결재 칸, 강경고 서식은 고를 수 있게)
+  const SCHOOL0 = { name: '', appr: ['담임', '부장', '교감', '교장'], form: 'common' };
+  const blank = () => ({ v: 1, classes: [], marks: {}, cases: {}, daily: {}, cleared: {}, cfg: { deadline: 7, tripMax: 15, bells: BELLS_TEXT, school: { ...SCHOOL0 } }, ui: { pir: 1, classId: '' } });
   function loadState() {
     try {
       const s = JSON.parse(localStorage.getItem(KEY) || 'null');
@@ -424,7 +450,8 @@ table.list .c { text-align: center; }
         <label class="field"><span>사유${cs.kind === '기타' && cs.type === '결석' ? ' (필수)' : ''}</span><input id="dsReason" maxlength="100" value="${esc(cs.reason)}" placeholder="예: 감기로 병원 진료"></label>
         ${st.need.length ? `<p class="lab">필요 서류</p><ul class="docs">${st.need.map((d) => d === 'photo'
           ? `<li class="${(cs.docs.photo || 0) >= st.days ? 'done' : ''}"><span>${DOC[d]}</span><div class="cnt"><button data-ph="-1">−</button><b>${cs.docs.photo || 0}/${st.days}</b><button data-ph="1">+</button></div></li>`
-          : `<li class="${cs.docs[d] ? 'done' : ''}"><input type="checkbox" data-doc="${d}" ${cs.docs[d] ? 'checked' : ''}><span>${DOC[d]}</span></li>`).join('')}</ul>` : '<p class="hint dim">이 구분은 따로 받을 서류가 없어요.</p>'}`}
+          : `<li class="${cs.docs[d] ? 'done' : ''}"><input type="checkbox" data-doc="${d}" ${cs.docs[d] ? 'checked' : ''}><span>${DOC[d]}</span></li>`).join('')}</ul>` : '<p class="hint dim">이 구분은 따로 받을 서류가 없어요.</p>'}
+        ${old && !present ? reqHtml(cs) : ''}`}
         ${contactsHtml(s, cls())}
         <div class="row"><button class="btn" id="dsClose">닫기</button><button class="btn main" id="dsSave">저장</button></div>`;
     }
@@ -448,6 +475,7 @@ table.list .c { text-align: center; }
       if (b.dataset.sub) cs.sub = b.dataset.sub;
       if (b.dataset.doc) cs.docs[b.dataset.doc] = b.checked;
       if (b.dataset.ph) cs.docs.photo = Math.max(0, Math.min(docState(cs).days, (cs.docs.photo || 0) + +b.dataset.ph));
+      if (b.dataset.sfreq) { if (!sfWake()) return; requestDoc(S.cases[cs.id]).then(() => { if (S.cases[cs.id]) cs.req = S.cases[cs.id].req; draw(); }); return; }
       if (b.id === 'dsClose') { close(); return; }
       if (b.id === 'dsSave') {
         if (present) {
@@ -665,6 +693,7 @@ table.list .c { text-align: center; }
             <ul class="docs">${x.st.need.map((d) => (d === 'photo'
               ? `<li class="${(x.cs.docs.photo || 0) >= x.st.days ? 'done' : ''}"><span>${DOC[d]}</span><div class="cnt"><button data-case="${x.cs.id}" data-ph="-1">−</button><b>${x.cs.docs.photo || 0}/${x.st.days}</b><button data-case="${x.cs.id}" data-ph="1">+</button></div></li>`
               : `<li class="${x.cs.docs[d] ? 'done' : ''}"><input type="checkbox" data-case="${x.cs.id}" data-doc="${d}" ${x.cs.docs[d] ? 'checked' : ''}><span>${DOC[d]}</span></li>`)).join('')}</ul>
+            ${x.st.miss.length && S.cfg.sf ? reqHtml(x.cs) : ''}
           </div>`;
         }).join('') : `<p class="empty" style="padding:16px">${docsAll ? '서류가 필요한 기록이 없어요.' : '받아야 할 서류가 모두 들어왔어요.'}</p>`}
       </div>
@@ -706,6 +735,8 @@ table.list .c { text-align: center; }
       return;
     }
     if (e.target.id === 'rulesReset' && confirm('서류 규칙을 처음 값으로 되돌릴까요?')) { delete S.cfg.rules; save(true); renderDocs(); return; }
+    const rq = e.target.closest('[data-sfreq]');
+    if (rq) { if (!sfWake()) return; requestDoc(S.cases[rq.dataset.sfreq]).then(() => { if (tab === 'docs') renderDocs(); }); return; }
     const b = e.target.closest('[data-case]');
     if (!b) return;
     const cs = S.cases[b.dataset.case];
@@ -910,6 +941,54 @@ table.list .c { text-align: center; }
     const dup = out.filter((s) => (seen.has(s.no) ? true : (seen.add(s.no), false))).map((s) => s.no);
     return { students: out.filter((s, i) => out.findIndex((x) => x.no === s.no) === i).sort((a, b) => +a.no - +b.no), bad, dup };
   }
+  // ── 학교(학생 서류 서식): 학교 이름 · 서식(공통/강경고) · 결재 칸(칸 수·이름·순서) ──
+  function schoolCfg() {
+    const x = S.cfg.school || {};
+    const appr = (Array.isArray(x.appr) ? x.appr : SCHOOL0.appr).map((a) => String(a || '').trim().slice(0, 8)).filter(Boolean).slice(0, 7);
+    return { name: String(x.name || '').trim().slice(0, 30), appr: appr.length ? appr : SCHOOL0.appr.slice(), form: x.form === 'gg' ? 'gg' : 'common' };
+  }
+  let apprEdit = null; // 고치는 중인 결재 칸(저장 전)
+  function schoolCard() {
+    const sc = schoolCfg();
+    const ap = apprEdit || sc.appr;
+    const form = (S.ui.schForm || sc.form);
+    return `<div class="card" id="schoolCard">
+        <h2 class="sec">학교 (학생 서류 서식)</h2>
+        <label class="field"><span>학교 이름</span><input id="schName" maxlength="30" value="${esc(sc.name)}" placeholder="예: ○○고등학교"></label>
+        <p class="hint">학생 서류 맨 아래 '<b>${esc(sc.name || '○○고등학교')}장 귀하</b>'에 들어가요.</p>
+        <p class="lab">서식</p>
+        <div class="chips"><button class="chip ${form === 'common' ? 'on' : ''}" data-schform="common">공통 서식</button><button class="chip ${form === 'gg' ? 'on' : ''}" data-schform="gg">강경고 서식</button></div>
+        ${form === 'common' ? `<p class="lab">결재 칸 (왼쪽부터, 최대 7칸)</p>
+        <ul class="docs">${ap.map((a, i) => `<li><input data-appr="${i}" value="${esc(a)}" maxlength="8" aria-label="결재 칸 ${i + 1}" style="flex:1;min-width:0;height:36px;padding:0 8px;border:1px solid #c5ccd6;border-radius:4px"><button class="btn small" data-apup="${i}" ${i ? '' : 'disabled'} aria-label="앞으로">↑</button><button class="btn small" data-apdel="${i}" ${ap.length > 1 ? '' : 'disabled'} aria-label="지우기">×</button></li>`).join('')}</ul>
+        <div class="row"><button class="btn small" id="apAdd" ${ap.length >= 7 ? 'disabled' : ''}>칸 더하기</button><button class="btn small" id="apReset">기본으로</button></div>
+        <table class="list" style="margin-top:10px;text-align:center"><tbody><tr><th rowspan="2" style="width:28px;text-align:center">결<br>재</th>${ap.map((a) => `<th style="text-align:center">${esc(a)}</th>`).join('')}</tr><tr>${ap.map(() => '<td style="height:34px"></td>').join('')}</tr></tbody></table>`
+          : '<p class="hint">강경고등학교 원래 서식(결재: 담임·담당·부장·교감 전결) 그대로 인쇄해요.</p>'}
+        <div class="row"><button class="btn small main" id="schSave">저장</button></div>
+        <p class="hint dim">학생 미리 보기에도 같은 모양이 보이도록 [서류함]을 쓸 때 학교 이름·결재 칸만 받는 곳에 함께 보내요(학생 정보 아님).</p>
+      </div>`;
+  }
+  function readAppr() { const list = [...document.querySelectorAll('[data-appr]')].map((el) => el.value.trim().slice(0, 8)); return list.length ? list : (apprEdit || schoolCfg().appr).slice(); }
+  $('#main').addEventListener('click', (e) => {
+    if (tab !== 'setup' || !e.target.closest('#schoolCard')) return;
+    const t = e.target.closest('button');
+    if (!t) return;
+    const nameNow = $('#schName') ? $('#schName').value : '';
+    const keep = () => { renderSetup(); const n = $('#schName'); if (n) n.value = nameNow; const c = $('#schoolCard'); if (c) c.scrollIntoView({ block: 'nearest' }); };
+    if (t.dataset.schform) { if (document.querySelector('[data-appr]')) apprEdit = readAppr(); S.ui.schForm = t.dataset.schform; keep(); return; }
+    if (t.id === 'apAdd') { apprEdit = [...readAppr(), '교장'].slice(0, 7); keep(); return; }
+    if (t.id === 'apReset') { apprEdit = SCHOOL0.appr.slice(); keep(); return; }
+    if (t.dataset.apup) { const a = readAppr(), i = +t.dataset.apup; [a[i - 1], a[i]] = [a[i], a[i - 1]]; apprEdit = a; keep(); return; }
+    if (t.dataset.apdel) { const a = readAppr(); a.splice(+t.dataset.apdel, 1); apprEdit = a; keep(); return; }
+    if (t.id === 'schSave') {
+      const appr = document.querySelector('[data-appr]') ? readAppr().filter(Boolean) : schoolCfg().appr;
+      S.cfg.school = { name: nameNow.trim().slice(0, 30), appr: appr.length ? appr : SCHOOL0.appr.slice(), form: S.ui.schForm || schoolCfg().form };
+      delete S.ui.schForm; apprEdit = null;
+      for (const c of S.classes) delete c.skSig; // 다음에 [서류함]을 쓸 때 받는 곳에 다시 맞춤
+      save(true);
+      renderSetup();
+      toast('학교 설정을 저장했어요');
+    }
+  });
   function renderSetup() {
     if (editing) return renderEdit();
     $('#main').innerHTML = `
@@ -933,8 +1012,10 @@ table.list .c { text-align: center; }
         <h2 class="sec">홈 화면에 추가</h2>
         <p class="hint">${homeGuide()} 다음부터는 홈 화면 아이콘으로 여세요.</p>
       </div>`}
+      ${schoolCard()}
       <div class="card">
         <h2 class="sec">우리 학교 교시 시각</h2>
+        ${S.cfg.bellsSet ? '' : '<div class="warnbox" style="margin:0 0 6px">아래는 예시 시각이에요. 우리 학교 시각으로 고친 뒤 [저장]을 눌러 주세요.</div>'}
         <p class="hint">지각·조퇴·결과 시각으로 나이스에 체크할 교시를 계산할 때 써요. 한 줄에 하나씩, 쉬는 시간·점심·청소는 적지 않아요.</p>
         <label class="field"><textarea id="bellText" rows="9" style="font-variant-numeric:tabular-nums">${esc(S.cfg.bells || '')}</textarea></label>
         <div class="row"><button class="btn small main" id="bellSave">저장</button><button class="btn small" id="bellReset">처음 시각으로</button></div>
@@ -949,7 +1030,7 @@ table.list .c { text-align: center; }
         <h2 class="sec">자료 지우기</h2>
         <p class="hint">이 폰에 저장된 반·명단·출석 기록을 모두 지워요. 되돌릴 수 없어요.</p>
         <div class="row"><button class="btn small danger" id="wipe">전체 지우기</button></div>
-        <p class="hint dim">학생 자료는 이 폰의 브라우저 안에만 저장되고 어디로도 보내지 않아요. 연락처 설문지 응답은 선생님 구글 시트에 있으니 학년도가 끝나면 구글 드라이브에서 지워 주세요.</p>
+        <p class="hint dim">학생 자료는 이 폰의 브라우저 안에만 저장되고 어디로도 보내지 않아요. 연락처 설문지 응답은 선생님 구글 시트에 있으니 학년도가 끝나면 구글 드라이브에서 지워 주세요. 학생이 낸 서류는 선생님 구글 드라이브에 있어서 여기서 지워지지 않아요 — [서류함 → 구글 쪽 서류·요청 모두 지우기]로 지워 주세요.</p>
       </div>`;
     paintFormQr();
   }
@@ -1074,8 +1155,10 @@ table.list .c { text-align: center; }
     return classes;
   }
   async function rosterFromLink() {
-    const m = /^#cb=([A-Za-z0-9_-]+)$/.exec(location.hash);
+    const m = /^#cb=([A-Za-z0-9_-]+)(?:&sf=([A-Za-z0-9_-]+))?$/.exec(location.hash);
     if (!m || typeof DecompressionStream === 'undefined') return '';
+    const sfPart = m[2] ? `&sf=${m[2]}` : '';
+    if (m[2]) sfApply(m[2]); // 업무 도우미가 만든 학생 서류 받는 곳 → [서류함] 저절로 연결
     const key = linkKey(m[1]);
     if (S.ui.link === key) return '';
     const text = new TextDecoder().decode(await squeeze(unb64u(m[1]), new DecompressionStream('deflate-raw')));
@@ -1084,7 +1167,7 @@ table.list .c { text-align: center; }
     const msg = `반 ${got.length}개 · 학생 ${got.reduce((n, c) => n + c.students.length, 0)}명`;
     try {
       const all = b64u(await squeeze(new TextEncoder().encode(rosterText(S.classes)), new CompressionStream('deflate-raw')));
-      history.replaceState(null, '', `${location.pathname}${location.search}#cb=${all}`);
+      history.replaceState(null, '', `${location.pathname}${location.search}#cb=${all}${sfPart}`);
       S.ui.link = linkKey(all);
     } catch { S.ui.link = key; }
     save(true);
@@ -1309,6 +1392,7 @@ table.list .c { text-align: center; }
       const n = bells(text).length;
       if (!n) { $('#bellMsg').textContent = '읽을 수 있는 줄이 없어요. "1교시 08:50-09:40"처럼 적어 주세요.'; return; }
       S.cfg.bells = text;
+      S.cfg.bellsSet = e.target.id === 'bellSave';
       save(true);
       renderSetup();
       toast(`교시 시각 ${n}개를 저장했어요`);
@@ -1325,22 +1409,451 @@ table.list .c { text-align: center; }
     }
   });
 
+  // ── 서류함: 학생이 폰으로 낸 서류(2026-10-28 교사 결정: 선생님 교육청 구글 계정의 '학생 서류 받는 곳' 다리) ──
+  // 서류(이름·사유·서명·사진)는 선생님 구글 드라이브 폴더에만 있다. 이 폰에는 목록 요약을 메모리에만 두고,
+  // 연결 정보(다리 주소·교사 비밀값)와 반 비밀값만 저장한다. 학생 명단은 반 비밀값으로 만든 16자리 값으로만 다리에 보낸다.
+  const SF_URL_RE = /^https:\/\/script\.google\.com\/(macros|a\/macros\/[\w.-]+)\/s\/[\w-]{20,}\/exec$/;
+  const KINDNAME = { absence: '결석신고서', 'field-apply': '교외체험학습 신청서', 'field-report': '교외체험학습 결과보고서' };
+  const SUB_DOC = { absence: 'singo', 'field-apply': 'tripApp', 'field-report': 'tripRep' };
+  const BOX = { subs: [], reqs: [], blocked: [], binds: [], at: '', err: '', busy: false, qr: '', dev: false, making: false };
+  let formsLib = null;
+  function loadForms() {
+    if (window.StudentForms) return Promise.resolve(window.StudentForms);
+    if (!formsLib) {
+      formsLib = (async () => {
+        for (const f of ['school-forms.js', 'forms.js']) {
+          await new Promise((ok, no) => { const sc = document.createElement('script'); sc.src = f; sc.onload = ok; sc.onerror = () => no(new Error('서식 파일을 불러오지 못했어요. 인터넷을 확인해 주세요.')); document.head.append(sc); });
+        }
+        return window.StudentForms;
+      })();
+      formsLib.catch(() => { formsLib = null; });
+    }
+    return formsLib;
+  }
+  const randKey = (n) => { const a = new Uint8Array(n); crypto.getRandomValues(a); return b64u(a); };
+  const isoDate = (s) => String(s || '').replace(/-/g, '');
+  const rangeIso = (a, b) => { if (!a) return ''; const f = isoDate(a), t = isoDate(b) || f; const s = (y) => `${+y.slice(4, 6)}/${+y.slice(6)}`; return f === t ? s(f) : `${s(f)}~${s(t)}`; };
+  const whenOf = (iso) => { const d = new Date(iso); return Number.isNaN(+d) ? '' : `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+  // 다리는 '구글 로그인한 사람만'(교사 결정 2026-10-28)이라 fetch로는 못 부른다 → 선생님 구글 계정으로 열린
+  // 작은 연결 창(?p=t)을 띄우고 postMessage로 명령·결과를 주고받는다(연락처 다리와 같은 방식). 창은 버튼을 누를 때만 연다.
+  const BR = { win: null, src: null, origin: '', ready: false, q: [], seq: 0, wait: new Map() };
+  const bridgeOpen = () => !!(BR.win && !BR.win.closed);
+  function sfWake() {
+    if (!S.cfg.sf || bridgeOpen()) return true;
+    BR.ready = false; BR.src = null; BR.origin = '';
+    BR.win = window.open(`${S.cfg.sf.u}?${new URLSearchParams({ p: 't', origin: location.origin })}`, 'chulseokbu-forms', 'width=440,height=560');
+    if (!BR.win) { toast('팝업이 막혔어요. 주소창의 팝업 차단 표시를 눌러 허용해 주세요.'); return false; }
+    return true;
+  }
+  function sfApi(body) {
+    return new Promise((ok, no) => {
+      if (!S.cfg.sf) { no(new Error('서류함이 연결되지 않았어요.')); return; }
+      if (!bridgeOpen() && !sfWake()) { no(new Error('서류함 연결 창을 열지 못했어요(팝업 차단).')); return; }
+      const id = ++BR.seq;
+      const t = setTimeout(() => { BR.wait.delete(id); no(new Error('서류함 연결 창이 대답하지 않아요. 열린 창에서 선생님 구글 계정으로 로그인했는지 확인해 주세요.')); }, 120000);
+      BR.wait.set(id, { ok, no, t });
+      const send = () => { try { BR.src.postMessage({ type: 'sf-cmd', id, body }, BR.origin); } catch { /* 창이 닫힘: 시간 초과로 알림 */ } };
+      if (BR.ready) send(); else BR.q.push(send);
+    });
+  }
+  window.addEventListener('message', (e) => {
+    if (!/^https:\/\/[a-z0-9-]+-script\.googleusercontent\.com$/.test(e.origin) && e.origin !== 'https://script.google.com') return;
+    const d = e.data;
+    if (!d || !BR.win) return;
+    if (d.type === 'sf-ready') { BR.ready = true; BR.src = e.source; BR.origin = e.origin; const q = BR.q.splice(0); q.forEach((f) => f()); return; }
+    if (d.type !== 'sf-res' || !BR.wait.has(d.id)) return;
+    const w = BR.wait.get(d.id); BR.wait.delete(d.id); clearTimeout(w.t);
+    const j = d.res;
+    if (!j || !j.ok) w.no(Object.assign(new Error((j && j.msg) || '실패했어요.'), { code: j && j.err }));
+    else w.ok(j);
+  });
+  // 반 비밀값(반 QR에 들어감)과 명단 값(비밀값|번호|이름의 앞 16자리)을 다리에 맞춰 둔다
+  async function syncClass(c) {
+    const SFm = await loadForms();
+    if (!c.sk) { c.sk = randKey(12); save(true); }
+    const sch = schoolCfg();
+    const sig = linkKey(`${c.sk}|${c.name}|${c.students.map((s) => `${s.no}.${s.name}`).join(',')}|${JSON.stringify(sch)}`);
+    if (c.skSig === sig) return;
+    const r = await Promise.all(c.students.map((s) => SFm.stuHash(c.sk, s.no, s.name)));
+    await sfApi({ a: 'class', c: c.name, k: c.sk, r, sch });
+    c.skSig = sig;
+    save(true);
+  }
+  // 반 링크(카톡방에 올림): 다리 주소 + 반 이름 + 반 비밀값만. 짧게(p=s, b=반, k=비밀값 16자)
+  const studentLink = (c) => `${S.cfg.sf.u}?p=s&b=${encodeURIComponent(c.name)}&k=${c.sk}`;
+  const linkText = (c) => `결석신고서·체험학습 서류는 여기서 내 주세요(학교 구글 계정 로그인) ${studentLink(c)}`;
+  function reqHtml(cs) {
+    if (!S.cfg.sf) return '<p class="hint dim">[서류함]을 연결하면 학생에게 서류를 폰으로 요청할 수 있어요.</p>';
+    const kind = isTrip(cs) ? 'field-report' : 'absence';
+    if (cs.sf && cs.sf[kind]) return `<p class="hint">학생이 ${KINDNAME[kind]}를 냈어요. [서류함]에서 보고 인쇄하세요.</p>`;
+    if (cs.req && cs.req.kind === kind) return `<p class="hint">${KINDNAME[kind]} 요청함 (${+cs.req.at.slice(4, 6)}/${+cs.req.at.slice(6)}) · <button class="textbtn" data-sfreq="${esc(cs.id)}">다시 요청</button></p>`;
+    return `<div class="row"><button class="btn small" data-sfreq="${esc(cs.id)}">학생에게 ${KINDNAME[kind]} 요청</button></div>`;
+  }
+  async function requestDoc(cs) {
+    const c = cs && S.classes.find((x) => x.id === cs.classId);
+    const s = c && c.students.find((x) => x.no === cs.no);
+    if (!s) return;
+    try {
+      const SFm = await loadForms();
+      await syncClass(c);
+      const kind = isTrip(cs) ? 'field-report' : 'absence';
+      const h = await SFm.stuHash(c.sk, s.no, s.name);
+      const j = await sfApi({ a: 'request', c: c.name, h, no: s.no, kind, att: cs.type, from: isoOf(cs.from), to: isoOf(cs.to) });
+      if (cs.req && cs.req.id) sfApi({ a: 'unrequest', id: cs.req.id }).catch(() => {});
+      cs.req = { id: j.id, kind, at: ymdOf(new Date()) };
+      save(true);
+      toast(`${s.name} 학생에게 ${KINDNAME[kind]}를 요청했어요`);
+    } catch (e) { toast(e.message); }
+  }
+  // 제출된 서류 → 그 학생 출결 기록(요청한 기록, 아니면 날짜가 겹치는 기록)의 서류 체크
+  function caseFor(sub) {
+    const c = S.classes.find((x) => x.name === sub.c && isHome(x)) || S.classes.find((x) => x.name === sub.c);
+    if (!c) return null;
+    const all = Object.values(S.cases).filter((cs) => cs.classId === c.id && cs.no === String(sub.no));
+    if (sub.req) { const r = all.find((cs) => cs.req && cs.req.id === sub.req); if (r) return r; }
+    const f = isoDate(sub.from), t = isoDate(sub.to) || f;
+    if (!f) return null;
+    const trip = sub.kind !== 'absence';
+    return all.find((cs) => isTrip(cs) === trip && cs.from <= t && cs.to >= f) || null;
+  }
+  function linkSubs(subs) {
+    let n = 0, ch = false;
+    for (const sub of subs) {
+      const cs = caseFor(sub);
+      if (!cs) continue;
+      const k = SUB_DOC[sub.kind];
+      let got = false;
+      if (k && !cs.docs[k]) { cs.docs[k] = true; got = true; }
+      if (sub.kind === 'field-report' && sub.n) { const want = Math.min(docState(cs).days, sub.n); if ((cs.docs.photo || 0) < want) { cs.docs.photo = want; got = true; } }
+      cs.sf = cs.sf || {};
+      if (cs.sf[sub.kind] !== sub.id) { cs.sf[sub.kind] = sub.id; ch = true; }
+      if (got) n++;
+    }
+    if (n || ch) save(true);
+    return n;
+  }
+  const isNewSub = (s) => !s.seen || s.seen < s.up;
+  function paintBadge() {
+    const n = BOX.subs.filter(isNewSub).length, b = $('#boxBadge');
+    if (b) { b.hidden = !n; b.textContent = n > 9 ? '9+' : String(n); }
+  }
+  async function refreshBox(quiet) {
+    if (!S.cfg.sf || BOX.busy) return;
+    if (quiet && !bridgeOpen()) { if (tab === 'box') renderBox(); return; } // 연결 창은 버튼을 누를 때만 연다
+    BOX.busy = true;
+    if (tab === 'box') renderBox();
+    try {
+      const j = await sfApi({ a: 'list' });
+      BOX.subs = j.subs || []; BOX.reqs = j.reqs || []; BOX.blocked = j.blocked || []; BOX.binds = j.binds || []; BOX.at = nowHM(); BOX.err = '';
+      const n = linkSubs(BOX.subs);
+      if (n) toast(`출결 기록 ${n}건에 '서류 받음'을 체크했어요`);
+    } catch (e) { BOX.err = e.message; if (!quiet) toast(e.message); }
+    BOX.busy = false;
+    paintBadge();
+    if (tab === 'box') renderBox();
+  }
+  const stuName = (cname, no) => (S.classes.find((x) => x.name === cname && isHome(x)) || S.classes.find((x) => x.name === cname))?.students.find((s) => s.no === String(no))?.name || '';
+  const qrClasses = () => { const h = S.classes.filter(isHome); return (h.length ? h : S.classes).filter((c) => /^\d-\d{1,2}$/.test(c.name)); };
+  function boxSetupHtml() {
+    return `
+      <div class="card">
+        <h2 class="sec">서류함 — 학생이 폰으로 내는 서류</h2>
+        <p class="hint">반 카톡방에 올린 링크로 학생이 <b>학교 구글 계정으로 로그인</b>해 결석신고서·교외체험학습 신청서(대리 인솔 위임장)·결과보고서를 칸 채우기·서명·사진으로 내면, 여기서 <b>학교 서식 그대로</b> 보고 A4로 인쇄해요. 서류는 <b>선생님 교육청 구글 드라이브</b>의 폴더 하나에만 저장되고, 인쇄한 뒤 선생님이 지워요.</p>
+      </div>
+      <div class="card">
+        <h2 class="sec">처음 한 번: 받는 곳 만들기</h2>
+        ${MAKER_URL ? `<p class="hint">[받는 곳 만들기]를 누르면 작은 창에서 <b>선생님 교육청 구글 계정</b>에 '학생 서류 받는 곳'이 저절로 만들어지고 여기에 연결돼요(이미 있으면 그대로). 처음에는 구글이 권한을 물어요 — '확인되지 않은 앱'이 보이면 [고급] → [이동] → [허용]. 'Apps Script API를 켜 주세요'가 나오면 그 창의 링크에서 켠 뒤 [켜고 다시].</p>
+        <div class="row"><button class="btn main" id="bxMake" ${BOX.making ? 'disabled' : ''}>${BOX.making ? '만드는 중…(작은 창을 확인해 주세요)' : '받는 곳 만들기'}</button></div>
+        ${BOX.err ? `<div class="warnbox">${esc(BOX.err)}</div>` : ''}
+        <p class="hint dim">업무 도우미 패널 [출석부 웹앱 만들기]로 만든 QR로 열었다면 이미 연결돼 있어요.</p>` : ''}
+        <details${MAKER_URL ? '' : ' open'}><summary class="hint">직접 만들기(자동 만들기가 안 될 때)</summary>
+        <ol class="steps">
+          <li>PC에서 <b>교육청 구글 계정</b>만 로그인한 채로 <b>script.google.com</b> → <b>새 프로젝트</b>.</li>
+          <li><b>[Code.gs 복사]</b> → 편집기의 Code.gs 내용을 모두 지우고 붙여넣기.</li>
+          <li>왼쪽 파일 <b>+ → HTML</b>로 <b>Student</b>, <b>Teacher</b> 두 파일을 만들고 각각 <b>[Student 복사]</b>·<b>[Teacher 복사]</b>를 붙여넣기 → 저장.</li>
+          <li>(권장) 왼쪽 <b>서비스 +</b> → <b>Drive API</b> 추가. 지울 때 휴지통을 거치지 않고 바로 지워져요.</li>
+          <li>오른쪽 위 <b>배포 → 새 배포</b> → 유형 <b>웹 앱</b> → 실행 사용자 <b>나</b>, 액세스 권한 <b>Google 계정이 있는 모든 사용자</b> → 배포 → 권한 허용(내 계정 → 고급 → 이동 → 허용).</li>
+          <li>나온 <b>웹 앱 URL</b>을 아래에 붙여넣고 [연결] → 작은 '서류함 연결 창'이 열리면 선생님 계정으로 로그인돼 있는지 확인.</li>
+        </ol>
+        <div class="row"><button class="btn small" data-copy="Code.gs.txt">Code.gs 복사</button><button class="btn small" data-copy="Student.html.txt">Student 복사</button><button class="btn small" data-copy="Teacher.html.txt">Teacher 복사</button></div>
+        <label class="field"><span>웹 앱 URL</span><input id="bxUrl" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off" spellcheck="false"></label>
+        <div class="row"><button class="btn main" id="bxConnect">연결</button></div>
+        <p class="hint" id="bxMsg"></p>
+        <p class="hint dim">PC에서 먼저 연결했다면 PC 서류함의 [다른 기기 연결] QR을 이 폰 카메라로 찍으면 돼요. 서류함을 쓸 때는 이 기기 브라우저에 선생님 교육청 계정이 로그인돼 있어야 해요.</p>
+        </details>
+      </div>`;
+  }
+  function renderBox() {
+    if (!S.cfg.sf) { $('#main').innerHTML = boxSetupHtml(); return; }
+    const subs = BOX.subs;
+    const open = BOX.reqs.filter((r) => !r.done);
+    const qcs = qrClasses();
+    $('#main').innerHTML = `
+      <div class="card">
+        <h2 class="sec">학생이 낸 서류</h2>
+        ${BOX.err ? `<div class="warnbox" style="margin:0 0 8px">${esc(BOX.err)}</div>` : ''}
+        ${subs.length ? `<ul class="docs bx">${subs.map((s) => `<li><span><b>${esc(KINDNAME[s.kind] || s.kind)}</b> · ${esc(s.c)} ${esc(s.no)}번 ${esc(s.name)}<br><small class="dim">${esc(rangeIso(s.from, s.to))}${s.kind === 'absence' && s.att ? ` ${esc(s.att)}` : ''}${s.proxy ? ' · 대리 인솔 위임장' : ''}${s.n ? ` · 사진 ${s.n}장` : ''} · ${esc(whenOf(s.up))} 제출</small></span>${isNewSub(s) ? `<span class="badge late">${s.seen ? '고침' : '새 서류'}</span>` : s.lock ? '<span class="badge ok">인쇄함</span>' : ''}<button class="btn small" data-sub="${esc(s.id)}">보기</button></li>`).join('')}</ul>`
+          : `<p class="empty" style="padding:16px">${BOX.busy ? '받는 중…' : BOX.at ? '아직 낸 서류가 없어요.' : '[새로 받기]를 눌러 주세요.'}</p>`}
+        <div class="row"><button class="btn small" id="bxRefresh" ${BOX.busy ? 'disabled' : ''}>${BOX.busy ? '받는 중…' : '새로 받기'}</button></div>
+        <p class="hint dim">${BOX.at ? `${esc(BOX.at)}에 받음. ` : ''}[새로 받기]를 누르면 작은 '서류함 연결 창'이 열려요(선생님 구글 계정). 인쇄한 서류는 [보기 → 삭제]로 지워 주세요(구글 드라이브 파일까지 지워져요).</p>
+      </div>
+      <div class="card">
+        <h2 class="sec">학생에게 보낸 요청</h2>
+        ${open.length ? `<ul class="docs">${open.map((r) => `<li><span>${esc(KINDNAME[r.kind])} · ${esc(r.c)} ${esc(r.no)}번 ${esc(stuName(r.c, r.no))} <small class="dim">${esc(rangeIso(r.from, r.to))}</small></span><button class="btn small" data-unreq="${esc(r.id)}">취소</button></li>`).join('')}</ul>` : '<p class="hint">기다리는 요청이 없어요.</p>'}
+        <p class="hint dim">요청은 [출석]에서 학생을 눌러 기록을 연 뒤, 또는 [서류] 목록에서 [학생에게 … 요청]으로 보내요. 학생 화면에는 서류 종류와 날짜만 보여요.</p>
+      </div>
+      ${BOX.blocked.length ? `<div class="card">
+        <h2 class="sec">잠긴 학생 (다른 계정·기기에서 열려고 함)</h2>
+        <ul class="docs">${BOX.blocked.map((x) => `<li><span>${esc(x.c)} ${esc(x.no)}번 ${esc(stuName(x.c, x.no))} <small class="dim">마지막 시도 ${esc(whenOf(x.at))} · ${+x.n || 1}번</small></span><button class="btn small" data-unbind="${esc(x.c)}|${esc(x.no)}">풀기</button></li>`).join('')}</ul>
+        <p class="hint dim">학번은 처음 연 구글 계정(또는 그 폰)으로만 쓸 수 있어요. 학생이 폰·계정을 바꿨으면 확인한 뒤 [풀기] — 다음에 처음 여는 계정·기기로 다시 묶여요. 모르는 시도면 풀지 마세요.</p>
+      </div>` : ''}
+      <div class="card">
+        <h2 class="sec">학생용 링크 (반 카톡방에 올리기)</h2>
+        <p class="hint">[링크 복사]를 눌러 반 카톡방에 붙여 넣으세요. 링크에는 반 이름·반 비밀값·받는 곳 주소만 있어요. 그래도 들어오려면 <b>구글 로그인</b>과 <b>명단의 학번·이름</b>이 맞아야 해요. 링크가 다른 곳에 퍼졌으면 [반 링크 새로 만들기]로 옛 링크를 막으세요.</p>
+        ${qcs.length ? `<ul class="docs">${qcs.map((c) => `<li><span><b>${esc(c.name)}</b>${c.sk ? '' : ' <small class="dim">아직 안 만듦</small>'}</span><button class="btn small main" data-scopy="${esc(c.id)}">링크 복사</button><button class="btn small" data-sqr="${esc(c.id)}">QR</button><button class="btn small" data-snew="${esc(c.id)}">반 링크 새로 만들기</button></li>`).join('')}</ul>` : '<p class="hint">[설정]에서 반을 먼저 추가해 주세요.</p>'}
+        <div id="sqrBox" class="qrbox"></div>
+        <p class="hint dim">학생이 로그인이 안 되면: 오른쪽 위 메뉴 → 다른 브라우저로 열기${BOX.binds.length ? ` · 계정·기기에 묶인 학생 ${BOX.binds.length}명(계정 ${BOX.binds.filter((x) => x.by === 'account').length} · 기기 ${BOX.binds.filter((x) => x.by === 'device').length})` : ''}</p>
+      </div>
+      <div class="card">
+        <h2 class="sec">연결</h2>
+        <p class="hint">받는 곳: <span class="dim" style="word-break:break-all">${esc(S.cfg.sf.u.replace(/\/s\/([\w-]{6})[\w-]+(\w{4})\/exec$/, '/s/$1…$2/exec'))}</span> · 연결 창 ${bridgeOpen() ? '열림' : '닫힘'}</p>
+        <div class="row"><button class="btn small" id="bxDev">다른 기기 연결</button>${MAKER_URL ? '<button class="btn small" id="bxUpdate">받는 곳 업데이트</button>' : ''}<button class="btn small" id="bxOff">연결 끊기</button></div>
+        <div id="devBox" class="qrbox"></div>
+        <div class="row"><button class="btn small danger" id="bxWipe">구글 쪽 서류·요청 모두 지우기</button></div>
+        <p class="hint dim">학년도가 끝나면 모두 지워 주세요. '학생 서류 제출 (출석부)' 폴더는 다른 사람과 공유하지 마세요.</p>
+      </div>`;
+    if (BOX.qr) paintStudentQr(BOX.qr);
+    if (BOX.dev) paintDevQr();
+  }
+  async function qrImg(text, alt, px = 220) {
+    const qrcode = await loadQr();
+    const q = qrcode(0, 'M'); q.addData(text); q.make();
+    const n = q.getModuleCount() + 8, cell = Math.max(2, Math.floor(px / n));
+    return `<img src="${q.createDataURL(cell, cell * 4)}" width="${n * cell}" height="${n * cell}" alt="${esc(alt)}">`;
+  }
+  // 반 링크: 명단 값을 다리에 맞춘 뒤(처음이면 반 비밀값을 만듦) 링크를 돌려준다
+  async function classLink(c) { await syncClass(c); return studentLink(c); }
+  async function paintStudentQr(cid) {
+    const box = $('#sqrBox'), c = S.classes.find((x) => x.id === cid);
+    if (!box || !c) return;
+    box.innerHTML = '<p class="hint">명단을 맞추는 중…</p>';
+    try {
+      const url = await classLink(c);
+      box.innerHTML = `${await qrImg(url, `${c.name} 학생 서류 제출 QR`, 180)}<div class="dim" style="font-size:12px">${esc(c.name)} 학생 서류 제출(교실 게시용)</div>`;
+      box.dataset.link = url;
+    } catch (e) { box.innerHTML = `<p class="hint" style="color:var(--res)">${esc(e.message)}</p>`; }
+  }
+  async function copyLink(c) {
+    try {
+      await classLink(c);
+      const text = linkText(c);
+      BOX.lastCopy = text;
+      try { await navigator.clipboard.writeText(text); toast(`${c.name} 링크를 복사했어요. 반 카톡방에 붙여 넣으세요.`); }
+      catch { prompt('이 글을 복사해 반 카톡방에 붙여 넣으세요.', text); }
+      if (tab === 'box') renderBox();
+    } catch (e) { toast(e.message); }
+  }
+  async function paintDevQr() {
+    const box = $('#devBox');
+    if (!box) return;
+    const ks = Object.fromEntries(S.classes.filter((c) => c.sk).map((c) => [c.name, c.sk]));
+    const link = `${location.href.split('#')[0]}#sf=${b64u(new TextEncoder().encode(JSON.stringify({ u: S.cfg.sf.u, ks })))}`;
+    try { box.innerHTML = `${await qrImg(link, '다른 기기 연결 QR', 240)}<p class="hint">선생님의 다른 기기(PC·폰) 카메라로 찍으면 같은 서류함이 연결돼요. 서류를 보려면 그 기기에서도 선생님 구글 계정 로그인이 필요해요.</p>`; }
+    catch { box.textContent = 'QR을 그리지 못했어요.'; }
+  }
+  // 다른 기기에서 만든 연결(#sf=…)을 이 기기에 넣는다
+  function sfApply(b64) {
+    try {
+      const o = JSON.parse(new TextDecoder().decode(unb64u(b64)));
+      if (!SF_URL_RE.test(o.u)) throw new Error();
+      if (!S.cfg.sf || S.cfg.sf.u !== o.u) { S.cfg.sf = { u: o.u }; for (const c of S.classes) delete c.skSig; }
+      for (const c of S.classes) if (o.ks && /^[A-Za-z0-9_-]{16,64}$/.test(o.ks[c.name] || '')) { c.sk = o.ks[c.name]; delete c.skSig; }
+      save(true);
+      return true;
+    } catch { return false; }
+  }
+  function sfFromLink() {
+    const m = /^#sf=([A-Za-z0-9_-]+)$/.exec(location.hash);
+    if (!m) return false;
+    history.replaceState(null, '', `${location.pathname}${location.search}`);
+    const ok = sfApply(m[1]);
+    toast(ok ? '서류함을 연결했어요' : '연결 링크를 읽지 못했어요');
+    return ok;
+  }
+  // ── 받는 곳 자동 만들기(교사 결정 2026-10-28): 공용 '만들기 다리'(gas/forms-maker, 선생님 본인 계정으로 실행)가
+  // 선생님 구글 계정에 받는 곳을 만들고(있으면 그대로) 주소를 이 창으로 보낸다. 만들기 다리 주소는 배포 뒤 채운다.
+  const MAKER_URL = 'https://script.google.com/macros/s/AKfycbwirnDn9IGP4Ebaew2HZ2RTQsKFklc_CGVc1IiTXcUt3gcWxoAn4AF2NjhVFeTI1xR0/exec'; // gas/forms-maker 배포(2026-10-28)
+  function makeForms(update) {
+    if (!MAKER_URL) { toast('자동 만들기가 아직 준비 중이에요. 아래 [직접 만들기]로 해 주세요.'); return; }
+    const w = window.open(`${MAKER_URL}?${new URLSearchParams({ origin: location.origin, ...(update ? { update: '1' } : {}) })}`, 'chulseokbu-forms-maker', 'width=460,height=560');
+    if (!w) { toast('팝업이 막혔어요. 주소창의 팝업 허용을 누른 뒤 다시 해 주세요.'); return; }
+    BOX.making = true;
+    if (tab === 'box') renderBox();
+  }
+  window.addEventListener('message', (e) => {
+    if (!/^https:\/\/[a-z0-9-]+-script\.googleusercontent\.com$/.test(e.origin) && e.origin !== 'https://script.google.com') return;
+    const d = e.data;
+    if (!d || d.type !== 'sf-made' || !d.res) return;
+    const r = d.res;
+    if (!r.ok) { if (r.err !== 'api-off') { BOX.making = false; BOX.err = r.msg || '받는 곳을 만들지 못했어요.'; if (tab === 'box') renderBox(); } return; }
+    if (!SF_URL_RE.test(String(r.url))) return;
+    BOX.making = false; BOX.err = '';
+    if (!S.cfg.sf || S.cfg.sf.u !== r.url) { S.cfg.sf = { u: r.url }; for (const c of S.classes) delete c.skSig; }
+    save(true);
+    toast(r.made ? '받는 곳을 만들었어요' : r.updated ? '받는 곳을 새 버전으로 올렸어요' : '받는 곳을 연결했어요');
+    if (tab === 'box') renderBox();
+  });
+  // [연결]: 주소를 기억하고 연결 창을 열어 선생님 계정인지 확인(ping)
+  async function connectBox() {
+    const u = $('#bxUrl').value.trim(), msg = $('#bxMsg');
+    if (!SF_URL_RE.test(u)) { msg.textContent = 'Apps Script 웹 앱 주소(https://script.google.com/…/exec)를 붙여 넣어 주세요.'; return; }
+    const prev = S.cfg.sf;
+    S.cfg.sf = { u };
+    if (BR.win && !BR.win.closed) BR.win.close();
+    BR.win = null;
+    if (!sfWake()) { S.cfg.sf = prev; msg.textContent = '팝업이 막혔어요. 팝업을 허용한 뒤 다시 눌러 주세요.'; return; }
+    msg.textContent = '연결 창에서 확인하는 중… (선생님 구글 계정 로그인이 필요하면 그 창에서 로그인)';
+    try { await sfApi({ a: 'ping' }); } catch (e) { S.cfg.sf = prev; msg.textContent = e.message; return; }
+    for (const c of S.classes) delete c.skSig;
+    save(true);
+    toast('서류함을 연결했어요');
+    renderBox();
+    refreshBox(true);
+  }
+  async function openSub(id) {
+    let SFm, j;
+    try { SFm = await loadForms(); j = await sfApi({ a: 'get', id }); }
+    catch (e) { toast(e.message); if (e.code === 'gone') refreshBox(true); return; }
+    const doc = j.doc || {}, sub = BOX.subs.find((s) => s.id === id) || { id };
+    sub.seen = new Date().toISOString();
+    paintBadge();
+    const v = { kind: doc.kind, cls: doc.c, no: doc.no, name: doc.name, f: doc.f || {} };
+    const m = SFm.meta(v);
+    const cs = caseFor({ ...sub, ...m, kind: doc.kind, c: doc.c, no: doc.no });
+    if (cs) linkSubs([{ ...sub, ...m, kind: doc.kind, c: doc.c, no: doc.no }]);
+    const box = document.createElement('div');
+    box.className = 'sfv';
+    const caseLine = () => {
+      if (cs) return `출결 기록: <b>${esc(cs.from === cs.to ? showDay(cs.from) : `${showDay(cs.from)} ~ ${showDay(cs.to)}`)} ${esc(labelOf(cs))}</b> — ${esc(DOC[SUB_DOC[doc.kind]].split(' (')[0])} 받음 체크함`;
+      if (doc.kind !== 'absence' && v.f.unit !== 'half' && m.from && S.classes.some((c) => c.name === doc.c)) return `맞는 출결 기록이 없어요. <button class="textbtn" id="svMake">출석인정 교외체험학습으로 기록하기</button>`;
+      return '맞는 출결 기록이 없어요(날짜를 확인해 주세요).';
+    };
+    box.innerHTML = `
+      <div class="sfv-bar"><button class="btn small" id="svClose">닫기</button><span class="sp"><b>${esc(KINDNAME[doc.kind] || '')}</b> ${esc(doc.c)} ${esc(doc.no)}번 ${esc(doc.name)}</span><button class="btn small main" id="svPrint">인쇄</button><button class="btn small danger" id="svDel">삭제</button></div>
+      <div class="sfv-info"><div>제출 ${esc(whenOf(doc.at))}${doc.up && doc.up !== doc.at ? ` · 고침 ${esc(whenOf(doc.up))}` : ''}${j.lock ? ' · <b>인쇄함(학생은 더 못 고침)</b>' : ''}</div><div id="svCase">${caseLine()}</div><div id="svNote"></div></div>
+      <div class="sfv-pages" id="svPages"></div>`;
+    document.body.append(box);
+    document.body.classList.add('sfv-open');
+    const mnt = SFm.mount($('#svPages', box), v, { school: schoolCfg() });
+    const onResize = () => mnt.fit();
+    window.addEventListener('resize', onResize);
+    const close = () => { box.remove(); document.body.classList.remove('sfv-open', 'sf-printing'); window.removeEventListener('resize', onResize); if (tab === 'box') renderBox(); };
+    $('#svClose', box).addEventListener('click', close);
+    $('#svPrint', box).addEventListener('click', async () => {
+      if (!sfWake()) return;
+      try { const r = await sfApi({ a: 'lock', id }); sub.lock = r.lock; } catch (e) { if (!confirm(`학생이 더 고치지 못하게 잠그지 못했어요(${e.message}). 그래도 인쇄할까요?`)) return; }
+      const done = () => { document.body.classList.remove('sf-printing'); window.removeEventListener('afterprint', done); };
+      window.addEventListener('afterprint', done);
+      document.body.classList.add('sf-printing');
+      window.print();
+      $('#svNote', box).textContent = '인쇄했으면 [삭제]로 지워 주세요. 학생은 이제 이 서류를 고칠 수 없어요.';
+    });
+    $('#svDel', box).addEventListener('click', async () => {
+      if (!confirm('이 서류를 지울까요? 선생님 구글 드라이브의 파일까지 지워지고 되돌릴 수 없어요.')) return;
+      if (!sfWake()) return;
+      try { await sfApi({ a: 'delete', id }); } catch (e) { toast(e.message); return; }
+      BOX.subs = BOX.subs.filter((s) => s.id !== id);
+      paintBadge();
+      close();
+      toast('지웠어요(구글 드라이브 파일까지)');
+    });
+    box.addEventListener('click', (e) => {
+      if (e.target.id !== 'svMake') return;
+      const c = S.classes.find((x) => x.name === doc.c && isHome(x)) || S.classes.find((x) => x.name === doc.c);
+      const ncs = { id: uid(), classId: c.id, no: String(doc.no), type: '결석', kind: '출석인정', sub: '교외체험학습', reason: `${v.f.form || ''} ${v.f.dest || ''}`.trim().slice(0, 100), period: '', from: isoDate(m.from), to: isoDate(m.to), docs: {} };
+      S.cases[ncs.id] = ncs;
+      place(ncs);
+      linkSubs([{ ...sub, ...m, kind: doc.kind, c: doc.c, no: doc.no }]);
+      save(true);
+      $('#svCase', box).innerHTML = `출결 기록을 만들었어요: <b>${esc(showDay(ncs.from))} ~ ${esc(showDay(ncs.to))} ${esc(labelOf(ncs))}</b>`;
+    });
+  }
+  $('#main').addEventListener('click', async (e) => {
+    if (tab !== 'box') return;
+    const id = e.target.id;
+    if (id === 'bxConnect') { connectBox(); return; }
+    if (id === 'bxMake') { makeForms(false); return; }
+    if (id === 'bxUpdate') { makeForms(true); return; }
+    const cp = e.target.closest('[data-copy]');
+    if (cp) {
+      const f = `student-forms/${cp.dataset.copy}`;
+      try {
+        const code = await (await fetch(f)).text();
+        await navigator.clipboard.writeText(code);
+        toast(`${cp.textContent.replace(' 복사', '')} 내용을 복사했어요. 편집기에 붙여 넣으세요.`);
+      } catch { window.open(f, '_blank'); }
+      return;
+    }
+    // 아래 버튼들은 서류함 연결 창이 필요하다 → 누른 순간에 창을 연다(팝업 차단 피함)
+    const needs = ['bxRefresh', 'bxWipe'].includes(id) || e.target.closest('[data-sub], [data-unreq], [data-scopy], [data-sqr], [data-snew], [data-unbind]');
+    if (needs && !sfWake()) return;
+    if (id === 'bxRefresh') { refreshBox(false); return; }
+    if (id === 'bxDev') { BOX.dev = !BOX.dev; renderBox(); return; }
+    if (id === 'bxOff' && confirm('이 기기에서 서류함 연결을 끊을까요? 구글 쪽 서류는 그대로 있어요.')) { delete S.cfg.sf; if (bridgeOpen()) BR.win.close(); BOX.subs = []; BOX.reqs = []; BOX.at = ''; save(true); paintBadge(); renderBox(); return; }
+    if (id === 'bxWipe' && confirm('구글 드라이브에 있는 학생 서류와 요청을 모두 지울까요? 되돌릴 수 없어요.') && confirm('정말 모두 지울까요?')) {
+      try { const j = await sfApi({ a: 'deleteAll' }); BOX.subs = []; BOX.reqs = []; paintBadge(); renderBox(); toast(`서류 ${j.n}건을 지웠어요`); } catch (err) { toast(err.message); }
+      return;
+    }
+    const ub = e.target.closest('[data-unbind]');
+    if (ub) {
+      const [c, no] = ub.dataset.unbind.split('|');
+      if (!confirm(`${c} ${no}번 학생의 잠김을 풀까요? 다음에 처음 여는 계정·기기로 다시 묶여요.`)) return;
+      try { await sfApi({ a: 'unbind', c, no }); } catch (err) { toast(err.message); return; }
+      BOX.blocked = BOX.blocked.filter((x) => !(x.c === c && String(x.no) === no));
+      BOX.binds = BOX.binds.filter((x) => !(x.c === c && String(x.no) === no));
+      renderBox(); toast(`${c} ${no}번 잠김을 풀었어요`); return;
+    }
+    const b = e.target.closest('[data-sub], [data-unreq], [data-sqr], [data-scopy], [data-snew]');
+    if (!b) return;
+    const c = S.classes.find((x) => x.id === (b.dataset.sqr || b.dataset.scopy || b.dataset.snew));
+    if (b.dataset.sub) { openSub(b.dataset.sub); return; }
+    if (b.dataset.unreq) {
+      try { await sfApi({ a: 'unrequest', id: b.dataset.unreq }); } catch (err) { toast(err.message); return; }
+      BOX.reqs = BOX.reqs.filter((r) => r.id !== b.dataset.unreq);
+      for (const cs of Object.values(S.cases)) if (cs.req && cs.req.id === b.dataset.unreq) delete cs.req;
+      save(true); renderBox(); return;
+    }
+    if (b.dataset.sqr) { BOX.qr = BOX.qr === b.dataset.sqr ? '' : b.dataset.sqr; renderBox(); return; }
+    if (b.dataset.scopy && c) { copyLink(c); return; }
+    if (b.dataset.snew && c && confirm(`${c.name} 반 링크를 새로 만들까요? 예전 링크(카톡방에 올린 것)로는 더 낼 수 없어요. 새 링크를 다시 올려 주세요.`)) {
+      const old = c.sk;
+      c.sk = randKey(12); delete c.skSig;
+      try { await syncClass(c); } catch (err) { c.sk = old; delete c.skSig; toast(err.message); return; }
+      save(true);
+      if (BOX.qr === c.id) paintStudentQr(c.id);
+      copyLink(c);
+    }
+  });
+
   // ── 탭 ────────────────────────────────────────────────
   function switchTab(t) {
     tab = t;
     editing = null;
     document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === t));
-    $('#dateNav').style.visibility = t === 'setup' || t === 'docs' ? 'hidden' : '';
+    $('#dateNav').style.visibility = t === 'setup' || t === 'docs' || t === 'box' ? 'hidden' : '';
     if (t === 'check') renderCheck();
     if (t === 'export') { exp = { from: '', to: '' }; renderExport(); }
     if (t === 'setup') renderSetup();
     if (t === 'docs') renderDocs();
+    if (t === 'box') { renderBox(); refreshBox(true); } // 연결 창이 열려 있을 때만 바로 받음
     window.scrollTo(0, 0);
   }
   $('#tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) switchTab(b.dataset.tab); });
 
   paintDate();
-  switchTab(S.classes.length ? 'check' : 'setup');
+  const sfLinked = sfFromLink();
+  switchTab(sfLinked ? 'box' : S.classes.length ? 'check' : 'setup');
+  if (S.cfg.sf && !sfLinked) setTimeout(() => refreshBox(true), 600);
   rosterFromLink().then((msg) => {
     if (!msg) return;
     switchTab('check');
