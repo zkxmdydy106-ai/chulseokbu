@@ -218,6 +218,7 @@ body.sfv-open { overflow: hidden; }
   let S = loadState();
   let saveTimer = null;
   function save(now = false) {
+    syncBoxTab();
     clearTimeout(saveTimer);
     const write = () => {
       try { localStorage.setItem(KEY, JSON.stringify(S)); return true; } catch { toast('저장 공간이 부족해요. 오래된 기록을 내보내고 지워 주세요.'); return false; }
@@ -1553,7 +1554,10 @@ body.sfv-open { overflow: hidden; }
     if (tab === 'box') renderBox();
   }
   const stuName = (cname, no) => (S.classes.find((x) => x.name === cname && isHome(x)) || S.classes.find((x) => x.name === cname))?.students.find((s) => s.no === String(no))?.name || '';
-  const qrClasses = () => { const h = S.classes.filter(isHome); return (h.length ? h : S.classes).filter((c) => /^\d-\d{1,2}$/.test(c.name)); };
+  // 학생 서류는 담임 반만(교사 결정 2026-10-28) — 수업 반에는 학생 링크를 만들지 않음
+  const qrClasses = () => S.classes.filter(isHome).filter((c) => /^\d-\d{1,2}$/.test(c.name));
+  // [서류함] 탭은 담임 반이 있을 때만 보임
+  const syncBoxTab = () => { const b = document.querySelector('#tabs [data-tab="box"]'); if (b) b.hidden = !S.classes.some(isHome); };
   function boxSetupHtml() {
     return `
       <div class="card">
@@ -1837,6 +1841,8 @@ body.sfv-open { overflow: hidden; }
 
   // ── 탭 ────────────────────────────────────────────────
   function switchTab(t) {
+    syncBoxTab();
+    if (t === 'box' && !S.classes.some(isHome)) t = 'check';
     tab = t;
     editing = null;
     document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === t));
