@@ -144,6 +144,8 @@ table.list .c { text-align: center; }
 .contact { display: flex; align-items: center; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line-2); font-size: 14px; }
 .contact span { flex: 1; color: var(--text-2); }
 .contact b { color: var(--text); font-variant-numeric: tabular-nums; }
+.qrbox { display: flex; flex-direction: column; align-items: center; gap: 4px; margin: 10px 0 4px; text-align: center; }
+.qrbox img { image-rendering: pixelated; background: #fff; }
 .contact .btn { display: inline-flex; align-items: center; text-decoration: none; color: var(--text); }
 .toast { position: fixed; left: 50%; bottom: calc(76px + var(--safe-b)); z-index: 30; transform: translateX(-50%); padding: 9px 14px; border-radius: 4px; background: #2b313b; color: #fff; font-size: 13.5px; white-space: nowrap; animation: up .16s ease-out; }
 .empty { padding: 28px 10px; text-align: center; color: var(--text-2); }
@@ -383,7 +385,7 @@ table.list .c { text-align: center; }
         ${st.need.length ? `<p class="lab">필요 서류</p><ul class="docs">${st.need.map((d) => d === 'photo'
           ? `<li class="${(cs.docs.photo || 0) >= st.days ? 'done' : ''}"><span>${DOC[d]}</span><div class="cnt"><button data-ph="-1">−</button><b>${cs.docs.photo || 0}/${st.days}</b><button data-ph="1">+</button></div></li>`
           : `<li class="${cs.docs[d] ? 'done' : ''}"><input type="checkbox" data-doc="${d}" ${cs.docs[d] ? 'checked' : ''}><span>${DOC[d]}</span></li>`).join('')}</ul>` : '<p class="hint dim">이 구분은 따로 받을 서류가 없어요.</p>'}`}
-        ${contactRow('학생', s.phone)}${contactRow('보호자', s.parent)}
+        ${contactsHtml(s, cls())}
         <div class="row"><button class="btn" id="dsClose">닫기</button><button class="btn main" id="dsSave">저장</button></div>`;
     }
     function keep() {
@@ -510,6 +512,54 @@ table.list .c { text-align: center; }
     if (!t) return '';
     return `<div class="contact"><span>${who} <b>${esc(showTel(t))}</b></span><a class="btn small" href="tel:${t}" target="_top">전화</a><a class="btn small" href="sms:${t}" target="_top">문자</a></div>`;
   }
+  // 연락처 칸(이 폰에만): phone 학생, parent 주 보호자 전화, addr 주소, g 보호자 [{rel, tel}], main 주 연락처(g의 몇 번째)
+  const CONTACT_KEYS = ['phone', 'parent', 'addr', 'g', 'main'];
+  const keepContacts = (s, o) => { if (o) for (const k of CONTACT_KEYS) if (o[k] !== undefined) s[k] = o[k]; return s; };
+  const hasContact = (s) => !!(s.phone || s.parent || s.addr || (s.g && s.g.length));
+  function guardians(s) {
+    if (s.g && s.g.length) return s.g.map((g, i) => ({ ...g, main: i === (s.main || 0) })).sort((a, b) => b.main - a.main);
+    return s.parent ? [{ rel: '보호자', tel: s.parent, main: true }] : [];
+  }
+  function contactsHtml(s, c) {
+    if (!c || !hasContact(s)) return '';
+    const gs = guardians(s);
+    return `${contactRow('학생', s.phone)}${gs.map((g) => contactRow(`${esc(g.rel || '보호자')}${g.main && gs.length > 1 ? '(주)' : ''}`, g.tel)).join('')}
+      ${s.addr ? `<p class="hint" style="margin:8px 0 0">주소 ${esc(s.addr)}</p>` : ''}
+      <div class="row" style="margin-top:8px"><button class="btn small" data-vcf="${esc(c.id)}|${esc(s.no)}">폰 연락처에 추가</button></div>`;
+  }
+  // 폰 연락처에 추가: vCard 파일을 만들어 폰의 연락처 앱이 받게 한다(이 앱은 아무 데도 보내지 않음)
+  function vcards(c, list) {
+    const v = (x) => String(x || '').replace(/([,;\\])/g, '\\$1').replace(/\n/g, ' ');
+    const out = [];
+    for (const s of list) {
+      const org = `${c.name} ${s.no}번`;
+      const card = (fn, tel) => ['BEGIN:VCARD', 'VERSION:3.0', `FN:${v(fn)}`, `N:${v(fn)};;;;`, `TEL;TYPE=CELL:${tel}`, s.addr ? `ADR;TYPE=HOME:;;${v(s.addr)};;;;` : '', `ORG:${v(org)}`, 'END:VCARD'].filter(Boolean).join('\r\n');
+      if (telOf(s.phone)) out.push(card(`${s.name} 학생`, telOf(s.phone)));
+      for (const g of guardians(s)) if (telOf(g.tel)) out.push(card(`${s.name} ${g.rel || '보호자'}${g.main ? '(주)' : ''}`, telOf(g.tel)));
+    }
+    return out.join('\r\n');
+  }
+  async function saveVcf(text, name) {
+    if (!text) { toast('연락처가 없어요'); return; }
+    const file = new File([text + '\r\n'], name, { type: 'text/vcard' });
+    const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+    const url = URL.createObjectURL(file);
+    if (ios) { location.href = url; setTimeout(() => URL.revokeObjectURL(url), 60000); return; }
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file] }); URL.revokeObjectURL(url); return; } catch (e) { if (e.name === 'AbortError') { URL.revokeObjectURL(url); return; } }
+    }
+    const a = document.createElement('a'); a.href = url; a.download = name; document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  }
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-vcf]');
+    if (!b) return;
+    const [cid, no] = b.dataset.vcf.split('|');
+    const c = S.classes.find((x) => x.id === cid);
+    const list = c ? (no ? c.students.filter((x) => x.no === no) : c.students.filter(hasContact)) : [];
+    if (!list.length) { toast('연락처가 없어요'); return; }
+    saveVcf(vcards(c, list), no ? `${c.name}_${no}번.vcf` : `${c.name}_연락처.vcf`);
+  });
 
   function openSheet(no) {
     const s = cls().students.find((x) => x.no === no);
@@ -524,7 +574,7 @@ table.list .c { text-align: center; }
       <div class="marks">${Object.entries(MARK).map(([m, l]) => `<button data-m="${m}" class="${e.m === m ? 'on' : ''}">${l}</button>`).join('')}</div>
       <label class="field"><span>사유</span><input id="shReason" maxlength="100" value="${esc(e.r)}" placeholder="예: 병원 진료"></label>
       <div class="reasons">${REASONS.map((r) => `<button data-r="${esc(r)}">${esc(r)}</button>`).join('')}</div>
-      ${contactRow('학생', s.phone)}${contactRow('보호자', s.parent)}
+      ${contactsHtml(s, cls())}
       <div class="row"><button class="btn" id="shClose">닫기</button><button class="btn main" id="shSave">저장</button></div>`;
     document.body.append(bg, sh);
     let m = e.m || '/';
@@ -811,15 +861,21 @@ table.list .c { text-align: center; }
         ${S.classes.length ? `<table class="list"><thead><tr><th>반</th><th>과목</th><th class="c">학생</th><th></th></tr></thead><tbody>${S.classes.map((c) => `<tr><td><b>${esc(c.name)}</b></td><td>${esc(c.subject || '-')}</td><td class="c">${c.students.length}</td><td class="c"><button class="textbtn" data-edit="${c.id}">고치기</button></td></tr>`).join('')}</tbody></table>` : '<p class="hint">아직 반이 없어요.</p>'}
         <div class="row"><button class="btn main" data-edit="new">반 추가</button></div>
       </div>
+      ${formCard()}
       <div class="card">
         <h2 class="sec">명단·연락처 불러오기</h2>
-        <p class="hint">업무 도우미의 [출석부 명단 만들기] 파일을 넣으면 반과 명단이 한 번에 채워져요. 연락처는 엑셀·CSV나 구글 시트에서 불러와 이 폰에만 저장해요.</p>
+        <p class="hint">나이스 명단은 PC 업무 도우미의 [출석부 웹앱 만들기]에서 나온 QR을 이 폰 카메라로 찍으면 들어가요(파일로 받았다면 아래 [명단 파일 넣기]). 연락처는 엑셀·CSV나 구글 시트에서 불러와 이 폰에만 저장해요.</p>
         <div class="row"><label class="btn small" style="display:flex;align-items:center;justify-content:center">명단 파일 넣기<input type="file" id="rsLoad" accept=".json" hidden></label></div>
         <div class="row"><label class="btn small" style="display:flex;align-items:center;justify-content:center">연락처 엑셀·CSV 넣기<input type="file" id="ctLoad" accept=".xlsx,.csv,.txt" hidden></label><button class="btn small" id="ctGoogle">구글 시트에서 불러오기</button></div>
         <p class="hint dim">연락처 칸 예시: 반 · 번호 · 이름 · 학생 연락처 · 보호자 연락처. 반 칸이 없으면 지금 고른 반에 넣어요.</p>
         <p class="hint" id="ctMsg"></p>
-        ${contactCount() ? `<p class="hint">연락처가 있는 학생 ${contactCount()}명 · <button class="textbtn" id="ctWipe">연락처만 지우기</button></p>` : ''}
+        ${contactCount() ? `<p class="hint">연락처가 있는 학생 ${contactCount()}명 · <button class="textbtn" id="ctWipe">연락처만 지우기</button></p>
+        <div class="row">${S.classes.filter((c) => c.students.some(hasContact)).map((c) => `<button class="btn small" data-vcf="${esc(c.id)}|">${esc(c.name)} 연락처 폰에 모두 추가</button>`).join('')}</div>` : ''}
       </div>
+      ${standalone() ? '' : `<div class="card">
+        <h2 class="sec">홈 화면에 추가</h2>
+        <p class="hint">${homeGuide()} 다음부터는 홈 화면 아이콘으로 여세요.</p>
+      </div>`}
       <div class="card">
         <h2 class="sec">백업</h2>
         <p class="hint">폰을 바꾸거나 브라우저 자료를 지우기 전에 백업 파일을 받아 두세요. 백업 파일에도 학생 이름이 들어 있어요.</p>
@@ -829,8 +885,9 @@ table.list .c { text-align: center; }
         <h2 class="sec">자료 지우기</h2>
         <p class="hint">이 폰에 저장된 반·명단·출석 기록을 모두 지워요. 되돌릴 수 없어요.</p>
         <div class="row"><button class="btn small danger" id="wipe">전체 지우기</button></div>
-        <p class="hint dim">학생 자료는 이 폰의 브라우저 안에만 저장되고 어디로도 보내지 않아요.</p>
+        <p class="hint dim">학생 자료는 이 폰의 브라우저 안에만 저장되고 어디로도 보내지 않아요. 연락처 설문지 응답은 선생님 구글 시트에 있으니 학년도가 끝나면 구글 드라이브에서 지워 주세요.</p>
       </div>`;
+    paintFormQr();
   }
   function renderEdit() {
     const c = editing === 'new' ? { name: '', subject: '', students: [] } : cls(editing);
@@ -877,7 +934,7 @@ table.list .c { text-align: center; }
       if (editing === 'new') { const nc = { id: uid(), name, subject, homeroom, students: r.students }; S.classes.push(nc); S.ui.classId = nc.id; } else {
         // 명단을 고쳐도 같은 번호 학생의 연락처는 그대로 둔다
         const old = cls(editing).students;
-        const keep = (s) => { const o = old.find((x) => x.no === s.no && x.name === s.name); return o ? { ...s, phone: o.phone, parent: o.parent } : s; };
+        const keep = (s) => keepContacts({ ...s }, old.find((x) => x.no === s.no && x.name === s.name));
         Object.assign(cls(editing), { name, subject, homeroom, students: r.students.map(keep) });
       }
       S.classes.sort((a, b) => a.name.localeCompare(b.name, 'ko', { numeric: true }));
@@ -921,7 +978,7 @@ table.list .c { text-align: center; }
       const subject = String(c.subject || '').slice(0, 20);
       const old = S.classes.find((x) => x.name === name && (x.subject || '') === subject);
       if (old) {
-        old.students = students.map((s) => { const o = old.students.find((x) => x.no === s.no && x.name === s.name); return o ? { ...s, phone: o.phone, parent: o.parent } : s; });
+        old.students = students.map((s) => keepContacts({ ...s }, old.students.find((x) => x.no === s.no && x.name === s.name)));
         updated++;
       } else { S.classes.push({ id: uid(), name, subject, students }); added++; }
     }
@@ -931,21 +988,89 @@ table.list .c { text-align: center; }
     return `반 ${added}개 추가, ${updated}개 새 명단으로 바꿈`;
   }
 
+  // ── 업무 도우미가 만든 링크(#cb=…): 나이스 명단(번호·이름)이 든 채로 열린다 ──
+  // '#' 뒤는 서버(깃허브)로 가지 않는다. 넣은 뒤에는 주소 뒤쪽을 '지금 이 폰의 전체 명단'으로 바꿔 둔다
+  // → 그 주소로 홈 화면에 추가하면, 홈 화면 앱이 따로 저장 공간을 써도 처음 열 때 명단이 들어간다.
+  const b64u = (u8) => { let b = ''; for (const x of u8) b += String.fromCharCode(x); return btoa(b).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
+  const unb64u = (s) => { s = s.replace(/-/g, '+').replace(/_/g, '/'); s += '='.repeat((4 - (s.length % 4)) % 4); return Uint8Array.from(atob(s), (c) => c.charCodeAt(0)); };
+  const squeeze = async (u8, how) => new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(how)).arrayBuffer());
+  const linkKey = (s) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return `${s.length}.${h >>> 0}`; };
+  function rosterText(classes) {
+    return ['v1', ...classes.flatMap((c) => [`@${c.name}|${c.subject || ''}`, ...c.students.map((s) => `${s.no} ${s.name}`)])].join('\n');
+  }
+  function parseRosterText(text) {
+    const lines = text.split('\n');
+    if (lines[0] !== 'v1') throw new Error('도우미 링크 모양이 달라요. 도우미에서 다시 만들어 주세요.');
+    const classes = [];
+    for (const l of lines.slice(1)) {
+      if (l.startsWith('@')) { const [name, subject] = l.slice(1).split('|'); classes.push({ name, subject: subject || '', students: [] }); continue; }
+      const m = /^(\d+) (.+)$/.exec(l);
+      if (m && classes.length) classes[classes.length - 1].students.push({ no: m[1], name: m[2] });
+    }
+    return classes;
+  }
+  async function rosterFromLink() {
+    const m = /^#cb=([A-Za-z0-9_-]+)$/.exec(location.hash);
+    if (!m || typeof DecompressionStream === 'undefined') return '';
+    const key = linkKey(m[1]);
+    if (S.ui.link === key) return '';
+    const text = new TextDecoder().decode(await squeeze(unb64u(m[1]), new DecompressionStream('deflate-raw')));
+    const got = parseRosterText(text);
+    importRoster({ kind: 'chulseokbu-roster', classes: got });
+    const msg = `반 ${got.length}개 · 학생 ${got.reduce((n, c) => n + c.students.length, 0)}명`;
+    try {
+      const all = b64u(await squeeze(new TextEncoder().encode(rosterText(S.classes)), new CompressionStream('deflate-raw')));
+      history.replaceState(null, '', `${location.pathname}${location.search}#cb=${all}`);
+      S.ui.link = linkKey(all);
+    } catch { S.ui.link = key; }
+    save(true);
+    return msg;
+  }
+
+  // ── 홈 화면에 추가 안내(앱처럼 쓰기) ───────────────────
+  const standalone = () => navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
+  function homeGuide() {
+    const ua = navigator.userAgent;
+    if (/KAKAOTALK|NAVER|Instagram|FBAN|FBAV|Line\//i.test(ua)) return '지금은 앱 안 브라우저예요. 오른쪽 아래(또는 위) ⋮·공유 → <b>Safari로 열기 / 다른 브라우저로 열기</b>를 누른 뒤 홈 화면에 추가하세요.';
+    if (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) return 'Safari 아래쪽 <b>공유(□↑)</b> → <b>홈 화면에 추가</b> → 추가.';
+    return 'Chrome 오른쪽 위 <b>⋮</b> → <b>홈 화면에 추가</b>(또는 앱 설치) → 추가.';
+  }
+  function showHomeSheet(msg) {
+    const bg = document.createElement('div');
+    bg.className = 'sheet-bg';
+    const sh = document.createElement('div');
+    sh.className = 'sheet';
+    sh.innerHTML = `
+      <h3>명단을 넣었어요</h3>
+      <div class="dim" style="font-size:13px">${esc(msg)} · 나이스에서 가져온 번호·이름</div>
+      ${standalone() ? '' : `<p class="hint" style="margin-top:12px"><b>홈 화면에 추가</b>해 두면 앱처럼 바로 열려요.<br>${homeGuide()}<br>다음부터는 홈 화면 아이콘으로 여세요. 출석 기록은 그 앱(이 폰)에만 저장돼요.</p>`}
+      <div class="row"><button class="btn main" id="hsOk">확인</button></div>`;
+    const close = () => { bg.remove(); sh.remove(); };
+    bg.addEventListener('click', close);
+    sh.querySelector('#hsOk').addEventListener('click', close);
+    document.body.append(bg, sh);
+  }
+
   // ── 연락처(표 → 학생에 붙이기) ─────────────────────────
-  const contactCount = () => S.classes.reduce((n, c) => n + c.students.filter((s) => s.phone || s.parent).length, 0);
+  const contactCount = () => S.classes.reduce((n, c) => n + c.students.filter(hasContact).length, 0);
   function applyContacts(rows) {
     rows = rows.filter((r) => r.some((x) => String(x).trim()));
     if (rows.length < 2) throw new Error('표에 내용이 없어요.');
     const head = rows[0].map((h) => String(h).replace(/\s+/g, ''));
     const find = (re) => head.findIndex((h) => re.test(h));
-    const iCls = find(/^(반|학반|학급)$/), iNo = find(/^(번호|번|학번)$/), iName = find(/^(이름|성명|학생명|학생)$/);
-    const iParent = find(/보호자|학부모|부모|어머니|아버지|모$|부$/);
-    const iPhone = head.findIndex((h, i) => i !== iParent && /(학생.*(연락|전화|폰|휴대))|^(연락처|전화번호|휴대폰|핸드폰|휴대전화)$/.test(h));
+    const iCls = find(/^(반|학반|학급)$/), iNo = find(/^(번호|번|학번)$/), iName = find(/^(이름|성명|학생명|학생|학생이름)$/);
+    // 연락처 폼(구글 설문지) 응답 칸: 동의 · 주소 · 보호자1·2 관계/휴대전화 · 주 연락처
+    const iAgree = find(/동의/), iAddr = find(/^주소$/), iMain = find(/^주연락처$/);
+    const gCols = [1, 2].map((n) => ({ n, rel: find(new RegExp(`^보호자${n}관계$`)), tel: find(new RegExp(`^보호자${n}(휴대전화|전화|연락처|휴대폰)$`)) })).filter((x) => x.tel >= 0);
+    const used = new Set([iAgree, iAddr, iMain, ...gCols.flatMap((x) => [x.rel, x.tel])]);
+    const iParent = head.findIndex((h, i) => !used.has(i) && /보호자|학부모|부모|어머니|아버지|모$|부$/.test(h));
+    const iPhone = head.findIndex((h, i) => !used.has(i) && i !== iParent && /(학생.*(연락|전화|폰|휴대))|^(연락처|전화번호|휴대폰|핸드폰|휴대전화)$/.test(h));
     if (iNo < 0 && iName < 0) throw new Error('번호나 이름 칸을 찾지 못했어요. 첫 줄에 "번호, 이름, 학생 연락처, 보호자 연락처"처럼 적어 주세요.');
-    if (iPhone < 0 && iParent < 0) throw new Error('연락처 칸을 찾지 못했어요. 첫 줄에 "학생 연락처", "보호자 연락처" 같은 이름을 적어 주세요.');
+    if (iPhone < 0 && iParent < 0 && !gCols.length) throw new Error('연락처 칸을 찾지 못했어요. 첫 줄에 "학생 연락처", "보호자 연락처" 같은 이름을 적어 주세요.');
     let ok = 0;
     const miss = [];
     for (const r of rows.slice(1)) {
+      if (iAgree >= 0 && !/동의합니다|^동의$|^예$/.test(String(r[iAgree] ?? '').trim())) continue; // 동의하지 않은 응답은 넣지 않음
       const raw = String(r[iNo] ?? '').replace(/\D/g, '');
       const no = raw.length >= 3 ? String(+raw.slice(-2)) : raw ? String(+raw) : '';
       const nm = String(r[iName] ?? '').replace(/\s+/g, '');
@@ -956,6 +1081,15 @@ table.list .c { text-align: center; }
       for (const s of hits) {
         if (iPhone >= 0 && telOf(r[iPhone])) s.phone = telOf(r[iPhone]);
         if (iParent >= 0 && telOf(r[iParent])) s.parent = telOf(r[iParent]);
+        if (iAddr >= 0 && String(r[iAddr] ?? '').trim()) s.addr = String(r[iAddr]).trim().slice(0, 120);
+        const gs = gCols.map((x) => ({ n: x.n, rel: x.rel >= 0 ? String(r[x.rel] ?? '').trim().slice(0, 10) : '', tel: telOf(r[x.tel]) })).filter((x) => x.tel);
+        if (gs.length) {
+          const want = iMain >= 0 && /2/.test(String(r[iMain] ?? '')) ? 2 : 1;
+          const mi = Math.max(0, gs.findIndex((x) => x.n === want));
+          s.g = gs.map((x) => ({ rel: x.rel || '보호자', tel: x.tel }));
+          s.main = mi;
+          s.parent = gs[mi].tel;
+        }
       }
       ok++;
     }
@@ -1020,12 +1154,69 @@ table.list .c { text-align: center; }
     });
   }
 
+  // ── 연락처 폼(구글 설문지): 선생님 구글 계정에 설문지·응답 시트를 만들고, 학생·보호자는 링크(QR)로 답한다 ──
+  // 이 폰에는 설문지·시트 주소만 둔다(개인정보 없음). 응답은 [응답 불러오기]로 다리를 거쳐 이 폰에만 넣는다.
+  const FORM_KEY = 'chulseokbu.form';
+  const formInfo = () => { try { return JSON.parse(localStorage.getItem(FORM_KEY) || 'null'); } catch { return null; } };
+  function ownerGuess() {
+    const home = S.classes.find((c) => isHome(c));
+    const m = home && /^(\d)-(\d{1,2})$/.exec(home.name);
+    return m ? `${m[1]}학년 ${m[2]}반 담임교사` : '교과 담당 교사';
+  }
+  function formCard() {
+    const F = formInfo();
+    return `<div class="card">
+        <h2 class="sec">연락처 받기 (구글 설문지)</h2>
+        ${F ? `<p class="hint">학생·보호자에게 이 QR이나 링크를 보여 주세요. 링크에는 개인정보가 없어서 학급 단톡방에 올려도 돼요. 응답은 선생님 구글 시트에 쌓여요.</p>
+        <div id="fmQr" class="qrbox"></div>
+        <div class="row"><button class="btn small" id="fmCopy">링크 복사</button><button class="btn small main" id="fmRead">응답 불러오기</button></div>
+        <p class="hint dim">${esc(F.title)} · ${esc(F.made)} · <button class="textbtn" id="fmNew">새로 만들기</button></p>`
+        : `<p class="hint">선생님 구글 계정에 연락처 설문지(맨 앞에 개인정보 수집·이용 동의)를 만들어요. 묻는 것: 번호·이름·학생 휴대전화·주소·보호자 1·2 관계와 휴대전화·주 연락처(먼저 연락할 보호자).</p>
+        <div class="row"><button class="btn small main" id="fmMake">연락처 폼 만들기</button></div>`}
+      </div>`;
+  }
+  let qrLib = null;
+  function loadQr() {
+    if (!qrLib) qrLib = new Promise((ok, no) => { const sc = document.createElement('script'); sc.src = 'qrcode.js'; sc.onload = () => ok(window.qrcode); sc.onerror = no; document.head.append(sc); });
+    return qrLib;
+  }
+  async function paintFormQr() {
+    const F = formInfo(), box = $('#fmQr');
+    if (!F || !box) return;
+    try {
+      const qrcode = await loadQr();
+      const q = qrcode(0, 'M');
+      q.addData(F.formUrl);
+      q.make();
+      const n = q.getModuleCount() + 8, cell = Math.max(3, Math.floor(220 / n));
+      box.innerHTML = `<img src="${q.createDataURL(cell, cell * 4)}" width="${n * cell}" height="${n * cell}" alt="연락처 설문지 QR"><div class="dim" style="font-size:12px;word-break:break-all">${esc(F.formUrl)}</div>`;
+    } catch { box.textContent = F.formUrl; }
+  }
+  function openBridge(params) {
+    let url = bridgeUrl();
+    if (!url) {
+      url = (prompt('구글 연결 주소(Apps Script 웹앱 주소)를 붙여 넣어 주세요.') || '').trim();
+      if (!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(url)) { if (url) toast('Apps Script 웹앱 주소가 아니에요'); return; }
+      try { localStorage.setItem('chulseokbu.bridge', url); } catch { /* 저장 못 해도 이번엔 쓴다 */ }
+    }
+    const q = new URLSearchParams({ origin: location.origin, ...params });
+    window.open(`${url}?${q}`, 'chulseokbu-bridge', 'width=480,height=680');
+  }
+
   // ── 구글 시트 → 연락처: 선생님 구글 계정에서만 도는 Apps Script '다리'가 시트를 읽어 이 창으로 보낸다 ──
   const BRIDGE_URL = 'https:' + '/' + '/script.google.com/macros/s/AKfycbxBYiMva__WRy6uNfupRcg-LCEK1s0CUWqkCTNkP8ub_sU2c5ETOBniXGFb9H2GYr8K/exec'; // 출석부 연락처 다리(교사 본인 계정으로 실행)
   const bridgeUrl = () => { try { return localStorage.getItem('chulseokbu.bridge') || BRIDGE_URL; } catch { return BRIDGE_URL; } };
   window.addEventListener('message', (e) => {
     if (!/^https:\/\/[a-z0-9-]+-script\.googleusercontent\.com$/.test(e.origin) && e.origin !== 'https://script.google.com') return;
     const d = e.data;
+    if (d && d.type === 'chulseokbu-form' && d.form) {
+      const f = d.form;
+      if (!/^https:\/\/(forms\.gle\/|docs\.google\.com\/forms\/)/.test(String(f.formUrl)) || !/^[\w-]{20,}$/.test(String(f.sheetId))) return;
+      try { localStorage.setItem(FORM_KEY, JSON.stringify({ formUrl: f.formUrl, sheetId: f.sheetId, title: String(f.title || '').slice(0, 60), made: new Date().toLocaleDateString('ko-KR') })); } catch { /* 저장 공간 */ }
+      if (tab === 'setup') renderSetup();
+      toast('연락처 설문지를 만들었어요');
+      return;
+    }
     if (!d || d.type !== 'chulseokbu-contacts' || !Array.isArray(d.rows)) return;
     try {
       const msg = applyContacts(d.rows);
@@ -1046,17 +1237,13 @@ table.list .c { text-align: center; }
   });
   $('#main').addEventListener('click', (e) => {
     if (tab !== 'setup') return;
-    if (e.target.id === 'ctGoogle') {
-      let url = bridgeUrl();
-      if (!url) {
-        url = (prompt('구글 시트 연결 주소(Apps Script 웹앱 주소)를 붙여 넣어 주세요.') || '').trim();
-        if (!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(url)) { if (url) toast('Apps Script 웹앱 주소가 아니에요'); return; }
-        try { localStorage.setItem('chulseokbu.bridge', url); } catch { /* 저장 못 해도 이번엔 쓴다 */ }
-      }
-      window.open(`${url}?origin=${encodeURIComponent(location.origin)}`, 'chulseokbu-bridge', 'width=480,height=640');
-    }
+    if (e.target.id === 'ctGoogle') openBridge({});
+    if (e.target.id === 'fmMake') openBridge({ mode: 'form', classes: [...new Set(S.classes.map((c) => c.name))].join(','), owner: ownerGuess() });
+    if (e.target.id === 'fmRead') { const F = formInfo(); if (F) openBridge({ sheet: F.sheetId }); }
+    if (e.target.id === 'fmCopy') { const F = formInfo(); if (F) navigator.clipboard.writeText(F.formUrl).then(() => toast('링크를 복사했어요'), () => toast(F.formUrl)); }
+    if (e.target.id === 'fmNew' && confirm('새 설문지를 만들까요? 지금 설문지와 응답 시트는 선생님 구글 드라이브에 그대로 남아요.')) { try { localStorage.removeItem(FORM_KEY); } catch { /* 없음 */ } renderSetup(); }
     if (e.target.id === 'ctWipe' && confirm('이 폰에 저장된 연락처만 모두 지울까요?')) {
-      S.classes.forEach((c) => c.students.forEach((s) => { delete s.phone; delete s.parent; }));
+      S.classes.forEach((c) => c.students.forEach((s) => CONTACT_KEYS.forEach((k) => delete s[k])));
       save(true);
       renderSetup();
       toast('연락처를 지웠어요');
@@ -1079,6 +1266,11 @@ table.list .c { text-align: center; }
 
   paintDate();
   switchTab(S.classes.length ? 'check' : 'setup');
+  rosterFromLink().then((msg) => {
+    if (!msg) return;
+    switchTab('check');
+    showHomeSheet(msg);
+  }).catch((err) => toast(err.message || '링크의 명단을 읽지 못했어요'));
 })();
 </script>
 </body>
