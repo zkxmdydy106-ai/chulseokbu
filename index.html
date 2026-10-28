@@ -178,8 +178,10 @@ table.list .c { text-align: center; }
   'use strict';
   // ── 저장(이 폰 안에만) ─────────────────────────────────
   const KEY = 'chulseokbu.v1';
+  // 교시 시각(쉬는 시간·점심·청소는 적지 않음). 종례는 마지막 교시 뒤로 본다
+  const BELLS_TEXT = ['조회 08:40-08:50', '1교시 08:50-09:40', '2교시 09:50-10:40', '3교시 10:50-11:40', '4교시 11:50-12:40', '5교시 13:30-14:20', '6교시 14:30-15:20', '7교시 15:40-16:30'].join('\n');
   // marks: 교과(교시별 / Ø), cases·daily·cleared: 담임 일일출결(사안 하나가 여러 날일 수 있음), cfg: 서류 기한·체험학습 최대 일수
-  const blank = () => ({ v: 1, classes: [], marks: {}, cases: {}, daily: {}, cleared: {}, cfg: { deadline: 7, tripMax: 15 }, ui: { pir: 1, classId: '' } });
+  const blank = () => ({ v: 1, classes: [], marks: {}, cases: {}, daily: {}, cleared: {}, cfg: { deadline: 7, tripMax: 15, bells: BELLS_TEXT }, ui: { pir: 1, classId: '' } });
   function loadState() {
     try {
       const s = JSON.parse(localStorage.getItem(KEY) || 'null');
@@ -254,6 +256,39 @@ table.list .c { text-align: center; }
   $('#dPick').addEventListener('change', (e) => { if (e.target.value) { day = e.target.value.replace(/-/g, ''); paintDate(); if (tab === 'check') renderCheck(); } });
 
   // ── 담임 일일출결: 나이스 구분 16가지(사유 분류 × 상태) + 세부 사유 + 필요 서류 ──
+  // ── 시각으로 교시 계산: 빠진 시간과 조금이라도 겹치는 교시를 모두 체크 ──
+  // 지각 = [첫 시간 시작, 등교), 조퇴 = [나간 시각, 끝) + 종례, 결과 = [나간 시각, 돌아온 시각)
+  const mins = (t) => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(t || '').trim()); return m ? +m[1] * 60 + +m[2] : null; };
+  function bells(text = S.cfg.bells) {
+    const out = [];
+    for (const line of String(text || '').split('\n')) {
+      const m = /^\s*(조회|종례|(\d{1,2})\s*교시)\s+(\d{1,2}:\d{2})\s*[-~]\s*(\d{1,2}:\d{2})\s*$/.exec(line);
+      if (m) out.push({ p: m[2] ? +m[2] : m[1] === '조회' ? 0 : 99, s: mins(m[3]), e: mins(m[4]) });
+    }
+    return out.filter((b) => b.s !== null && b.e !== null && b.e > b.s).sort((a, b) => a.s - b.s);
+  }
+  const pName = (p) => (p === 0 ? '조회' : p === 99 ? '종례' : `${p}교시`);
+  function periodsFor(type, t1, t2) {
+    const B = bells();
+    const a = mins(t1), b = mins(t2);
+    if (!B.length || a === null) return null;
+    let from, to;
+    if (type === '지각') { from = B[0].s; to = a; }
+    else if (type === '조퇴') { from = a; to = Infinity; }
+    else if (type === '결과') { if (b === null || b <= a) return null; from = a; to = b; }
+    else return null;
+    const hit = B.filter((x) => x.s < to && x.e > from).map((x) => x.p);
+    if (type === '조퇴' && !hit.includes(99)) hit.push(99);
+    if (!hit.length) return { list: [], text: '', token: '' };
+    // 나이스로 넘길 교시 칸: 조퇴는 'n~종례'(그날 있는 교시 전부), 나머지는 목록
+    const token = type === '조퇴' ? `${pName(hit[0]).replace('교시', '')}~종례` : hit.map((p) => pName(p).replace('교시', '')).join(',');
+    const idx = hit.map((p) => (p === 99 && !B.some((x) => x.p === 99) ? B.length : B.findIndex((x) => x.p === p)));
+    const run = hit.length > 2 && idx.every((v, i) => i === 0 || v === idx[i - 1] + 1);
+    const text = run ? `${pName(hit[0])}~${pName(hit[hit.length - 1])}` : hit.map(pName).join('·');
+    return { list: hit, text, token };
+  }
+  const nowHM = () => { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+
   const TYPES = ['결석', '지각', '조퇴', '결과'];
   const KINDS = ['질병', '미인정', '기타', '출석인정'];
   const SUBS = ['생리', '교외체험학습', '행사·교외활동', '그외'];
@@ -364,7 +399,8 @@ table.list .c { text-align: center; }
       const st = docState(cs);
       const trip = isTrip(cs);
       const used = trip ? tripDays(cs) : 0;
-      const periodLabel = cs.type === '지각' ? '등교한 교시' : cs.type === '조퇴' ? '조퇴한 교시' : '빠진 교시';
+      const t1Label = cs.type === '지각' ? '등교 시각' : '나간 시각';
+      const pf = cs.type !== '결석' ? periodsFor(cs.type, cs.t1, cs.t2) : null;
       sh.innerHTML = `
         <h3>${esc(s.no)}번 ${esc(s.name)}</h3>
         <div class="dim" style="font-size:13px">${esc(c.name)} · ${old ? '기록 고치기' : esc(showDay(day))}</div>
@@ -380,7 +416,11 @@ table.list .c { text-align: center; }
             <label class="field" style="flex:1;margin:0"><span>끝</span><input type="date" id="dsTo" value="${isoOf(cs.to)}"></label>
           </div>
           <p class="trip">평일 <b>${st.days}</b>일${trip ? ` · 올해 교외체험학습 <b class="${used + st.days > S.cfg.tripMax ? 'over' : ''}">${used + st.days}</b> / ${S.cfg.tripMax}일${used + st.days > S.cfg.tripMax ? ' — 최대 일수를 넘어요' : ''}` : ''}</p>` : `
-          <label class="field"><span>${periodLabel}</span><select id="dsPeriod">${['', '조회', '1교시', '2교시', '3교시', '4교시', '5교시', '6교시', '7교시', '8교시', '종례'].map((p) => `<option ${p === cs.period ? 'selected' : ''} value="${p}">${p || '선택 안 함'}</option>`).join('')}</select></label>`}
+          <div class="row">
+            <label class="field" style="flex:1;margin:0"><span>${t1Label}</span><input type="time" id="dsT1" value="${esc(cs.t1 || '')}"></label>
+            ${cs.type === '결과' ? `<label class="field" style="flex:1;margin:0"><span>돌아온 시각</span><input type="time" id="dsT2" value="${esc(cs.t2 || '')}"></label>` : ''}
+          </div>
+          <p class="hint">${pf && pf.text ? `나이스에 체크할 교시: <b>${esc(pf.text)}</b>` : pf ? '<span class="over">이 시각에는 겹치는 교시가 없어요. 시각을 확인해 주세요.</span>' : cs.type === '결과' ? '나간 시각과 돌아온 시각을 넣으면 교시를 계산해요.' : '시각을 넣으면 교시를 계산해요.'}${cs.period && !cs.t1 ? ` <span class="dim">(예전 기록: ${esc(cs.period)})</span>` : ''}</p>`}
         <label class="field"><span>사유${cs.kind === '기타' && cs.type === '결석' ? ' (필수)' : ''}</span><input id="dsReason" maxlength="100" value="${esc(cs.reason)}" placeholder="예: 감기로 병원 진료"></label>
         ${st.need.length ? `<p class="lab">필요 서류</p><ul class="docs">${st.need.map((d) => d === 'photo'
           ? `<li class="${(cs.docs.photo || 0) >= st.days ? 'done' : ''}"><span>${DOC[d]}</span><div class="cnt"><button data-ph="-1">−</button><b>${cs.docs.photo || 0}/${st.days}</b><button data-ph="1">+</button></div></li>`
@@ -389,11 +429,13 @@ table.list .c { text-align: center; }
         <div class="row"><button class="btn" id="dsClose">닫기</button><button class="btn main" id="dsSave">저장</button></div>`;
     }
     function keep() {
-      const f = $('#dsFrom', sh), t = $('#dsTo', sh), p = $('#dsPeriod', sh), r = $('#dsReason', sh);
+      const f = $('#dsFrom', sh), t = $('#dsTo', sh), t1 = $('#dsT1', sh), t2 = $('#dsT2', sh), r = $('#dsReason', sh);
       if (f && f.value) cs.from = f.value.replace(/-/g, '');
       if (t && t.value) cs.to = t.value.replace(/-/g, '');
       if (cs.to < cs.from) cs.to = cs.from;
-      if (p) cs.period = p.value;
+      if (t1) cs.t1 = t1.value;
+      if (t2) cs.t2 = t2.value;
+      if (cs.type !== '결석' && cs.t1) { const pf = periodsFor(cs.type, cs.t1, cs.t2); cs.period = pf?.text || ''; cs.pt = pf?.token || ''; }
       if (r) cs.reason = r.value.trim();
     }
     sh.addEventListener('change', () => { keep(); draw(); });
@@ -401,7 +443,7 @@ table.list .c { text-align: center; }
       const b = ev.target.closest('button, input[type=checkbox]');
       if (!b) return;
       keep();
-      if (b.dataset.type) { present = b.dataset.type === '출석'; if (!present) { cs.type = b.dataset.type; if (cs.type !== '결석') { cs.from = cs.to = old ? cs.from : day; if (cs.sub === '교외체험학습') cs.sub = ''; } } }
+      if (b.dataset.type) { present = b.dataset.type === '출석'; if (!present) { cs.type = b.dataset.type; if (cs.type !== '결석') { cs.from = cs.to = old ? cs.from : day; if (cs.sub === '교외체험학습') cs.sub = ''; if (!cs.t1 && day === ymdOf(new Date())) cs.t1 = nowHM(); if (cs.t1) { const pf = periodsFor(cs.type, cs.t1, cs.t2); cs.period = pf?.text || ''; cs.pt = pf?.token || ''; } } } }
       if (b.dataset.kind) { cs.kind = b.dataset.kind; if (cs.kind !== '출석인정') cs.sub = ''; else if (!cs.sub) cs.sub = '생리'; }
       if (b.dataset.sub) cs.sub = b.dataset.sub;
       if (b.dataset.doc) cs.docs[b.dataset.doc] = b.checked;
@@ -712,6 +754,12 @@ table.list .c { text-align: center; }
     rows.forEach((r) => { (byDay[r.ymd] = byDay[r.ymd] || []).push(r); });
     const drows = dailyRows(exp.from, exp.to);
     $('#main').innerHTML = `
+      <div class="card">
+        <h2 class="sec">PC로 보내기</h2>
+        <p class="hint">${exp.from === exp.to ? esc(showDay(exp.from)) : `${esc(showDay(exp.from))} ~ ${esc(showDay(exp.to))}`} 출결(담임 ${drows.length}줄 · 교과 ${rows.length}줄)을 선생님 구글 계정 시트에 올려요. PC 업무 도우미에서 <b>[폰 출결 가져오기]</b>를 누르면 바로 확인 표로 넘어가고, 시트는 비워져요.</p>
+        <div class="row"><button class="btn main full" id="exPush" ${drows.length || rows.length ? '' : 'disabled'}>PC로 보내기</button></div>
+        <p class="hint dim">폰과 PC 모두 같은 교육청 구글 계정으로 로그인해 두세요. 기간은 아래에서 바꿔요.</p>
+      </div>
       ${drows.length ? `<div class="card">
         <h2 class="sec">담임 일일출결 파일</h2>
         <p class="hint">${exp.from === exp.to ? esc(showDay(exp.from)) : `${esc(showDay(exp.from))} ~ ${esc(showDay(exp.to))}`} · ${drows.filter((r) => r.mark !== '출석').length}건${drows.some((r) => r.mark === '출석') ? ` · 출석으로 되돌림 ${drows.filter((r) => r.mark === '출석').length}건` : ''}</p>
@@ -762,7 +810,7 @@ table.list .c { text-align: center; }
     if (e.target.id === 'exCsv') download(new Blob(['﻿' + table().map((r) => r.map(csvCell).join(',')).join('\r\n')], { type: 'text/csv' }), `과목별출결_${exp.from}-${exp.to}.csv`);
   });
   const csvCell = (v) => (/[",\r\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
-  // 담임 일일출결: 날짜·번호·이름·구분·사유 — 업무 도우미 [일일출결]이 그대로 읽는 모양
+  // 담임 일일출결: 날짜·번호·이름·구분·교시·사유 — 업무 도우미 [일일출결]이 그대로 읽는 모양(교시: 조회~2 / 3~종례 / 2,3)
   function dailyRows(from, to) {
     const out = [];
     const push = (k, no, cs) => {
@@ -771,19 +819,28 @@ table.list .c { text-align: center; }
       const c = S.classes.find((x) => x.id === cid);
       const s = c?.students.find((x) => x.no === no);
       if (!c || !s || !isHome(c)) return;
-      const reason = cs ? [cs.sub && cs.kind === '출석인정' ? `[${cs.sub}]` : '', cs.period ? `${cs.period}${cs.type === '지각' ? ' 등교' : cs.type === '조퇴' ? ' 조퇴' : ''}` : '', cs.reason].filter(Boolean).join(' ') : '';
-      out.push({ ymd, cls: c.name, no: +no, name: s.name, mark: cs ? labelOf(cs) : '출석', reason });
+      const when = !cs || cs.type === '결석' ? '' : cs.t1 ? (cs.type === '지각' ? `${cs.t1} 등교` : cs.type === '조퇴' ? `${cs.t1} 조퇴` : `${cs.t1}~${cs.t2 || ''} 결과`) : cs.period ? `${cs.period}${cs.type === '지각' ? ' 등교' : cs.type === '조퇴' ? ' 조퇴' : ''}` : '';
+      const reason = cs ? [cs.sub && cs.kind === '출석인정' ? `[${cs.sub}]` : '', when, cs.reason].filter(Boolean).join(' ') : '';
+      out.push({ ymd, cls: c.name, no: +no, name: s.name, mark: cs ? labelOf(cs) : '출석', reason, pt: cs && cs.type !== '결석' && cs.t1 ? cs.pt || '' : '' });
     };
     for (const [k, rec] of Object.entries(S.daily)) for (const [no, id] of Object.entries(rec)) if (S.cases[id]) push(k, no, S.cases[id]);
     for (const [k, rec] of Object.entries(S.cleared)) for (const no of Object.keys(rec)) if (!(S.daily[k] || {})[no]) push(k, no, null);
     return out.sort((a, b) => a.ymd.localeCompare(b.ymd) || a.cls.localeCompare(b.cls, 'ko', { numeric: true }) || a.no - b.no);
   }
   $('#main').addEventListener('click', (e) => {
+    if (e.target.id === 'exPush') { pushToPc(); return; }
     if (e.target.id !== 'exDayXlsx') return;
-    const t = [['날짜', '번호', '이름', '구분', '사유'], ...dailyRows(exp.from, exp.to).map((r) => [isoOf(r.ymd), String(r.no), r.name, r.mark, r.reason])];
-    download(xlsx(t), `일일출결_${exp.from}-${exp.to}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    download(xlsx(dailyTable()), `일일출결_${exp.from}-${exp.to}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   });
 
+  const dailyTable = () => [['날짜', '번호', '이름', '구분', '교시', '사유'], ...dailyRows(exp.from, exp.to).map((r) => [isoOf(r.ymd), String(r.no), r.name, r.mark, r.pt, r.reason])];
+  // PC로 보내기: 다리 창을 열고, 다리가 '준비됨'을 알리면 그 창에만 출결 표를 건넨다(교사 결정 2026-10-28, 교육청 구글 계정)
+  let pushData = null;
+  function pushToPc() {
+    const daily = dailyTable(), subject = table();
+    pushData = { daily: daily.length > 1 ? daily : [], subject: subject.length > 1 ? subject : [], from: exp.from, to: exp.to };
+    openBridge({ mode: 'push' });
+  }
   function table() {
     return [['날짜', '교시', '반', '번호', '이름', '구분', '사유'],
       ...exportRows(exp.from, exp.to).map((r) => [isoOf(r.ymd), String(r.pir), r.cls, String(r.no), r.name, r.mark, r.reason])];
@@ -876,6 +933,13 @@ table.list .c { text-align: center; }
         <h2 class="sec">홈 화면에 추가</h2>
         <p class="hint">${homeGuide()} 다음부터는 홈 화면 아이콘으로 여세요.</p>
       </div>`}
+      <div class="card">
+        <h2 class="sec">우리 학교 교시 시각</h2>
+        <p class="hint">지각·조퇴·결과 시각으로 나이스에 체크할 교시를 계산할 때 써요. 한 줄에 하나씩, 쉬는 시간·점심·청소는 적지 않아요.</p>
+        <label class="field"><textarea id="bellText" rows="9" style="font-variant-numeric:tabular-nums">${esc(S.cfg.bells || '')}</textarea></label>
+        <div class="row"><button class="btn small main" id="bellSave">저장</button><button class="btn small" id="bellReset">처음 시각으로</button></div>
+        <p class="hint" id="bellMsg"></p>
+      </div>
       <div class="card">
         <h2 class="sec">백업</h2>
         <p class="hint">폰을 바꾸거나 브라우저 자료를 지우기 전에 백업 파일을 받아 두세요. 백업 파일에도 학생 이름이 들어 있어요.</p>
@@ -1209,6 +1273,8 @@ table.list .c { text-align: center; }
   window.addEventListener('message', (e) => {
     if (!/^https:\/\/[a-z0-9-]+-script\.googleusercontent\.com$/.test(e.origin) && e.origin !== 'https://script.google.com') return;
     const d = e.data;
+    if (d && d.type === 'chulseokbu-push-ready' && pushData && e.source) { e.source.postMessage({ type: 'chulseokbu-push', data: pushData }, e.origin); return; }
+    if (d && d.type === 'chulseokbu-pushed') { pushData = null; toast(`PC로 보냈어요 — PC 도우미에서 [폰 출결 가져오기]`); return; }
     if (d && d.type === 'chulseokbu-form' && d.form) {
       const f = d.form;
       if (!/^https:\/\/(forms\.gle\/|docs\.google\.com\/forms\/)/.test(String(f.formUrl)) || !/^[\w-]{20,}$/.test(String(f.sheetId))) return;
@@ -1238,6 +1304,15 @@ table.list .c { text-align: center; }
   $('#main').addEventListener('click', (e) => {
     if (tab !== 'setup') return;
     if (e.target.id === 'ctGoogle') openBridge({});
+    if (e.target.id === 'bellSave' || e.target.id === 'bellReset') {
+      const text = e.target.id === 'bellReset' ? BELLS_TEXT : $('#bellText').value.trim();
+      const n = bells(text).length;
+      if (!n) { $('#bellMsg').textContent = '읽을 수 있는 줄이 없어요. "1교시 08:50-09:40"처럼 적어 주세요.'; return; }
+      S.cfg.bells = text;
+      save(true);
+      renderSetup();
+      toast(`교시 시각 ${n}개를 저장했어요`);
+    }
     if (e.target.id === 'fmMake') openBridge({ mode: 'form', classes: [...new Set(S.classes.map((c) => c.name))].join(','), owner: ownerGuess() });
     if (e.target.id === 'fmRead') { const F = formInfo(); if (F) openBridge({ sheet: F.sheetId }); }
     if (e.target.id === 'fmCopy') { const F = formInfo(); if (F) navigator.clipboard.writeText(F.formUrl).then(() => toast('링크를 복사했어요'), () => toast(F.formUrl)); }
