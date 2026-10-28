@@ -205,6 +205,11 @@ body.sfv-open { overflow: hidden; }
   const APP = new URLSearchParams(location.search).get('app') === 'class' ? 'class' : 'home';
   const KEY = APP === 'class' ? 'chulseokbu.class.v1' : 'chulseokbu.v1';
   document.title = APP === 'class' ? '수업 출석부' : '담임 출석부';
+  // 수업 출석부에는 담임 일(서류·서류함·학교 서식·교시 시각·일일출결)이 없다(교사 결정 2026-10-28)
+  { // 머리글·탭은 이 스크립트 위에 이미 있음
+    const n = document.querySelector('.app-name'); if (n) n.textContent = document.title;
+    if (APP === 'class') document.querySelectorAll('#tabs [data-tab="docs"], #tabs [data-tab="box"]').forEach((b) => b.remove());
+  }
   // 교시 시각(쉬는 시간·점심·청소는 적지 않음). 종례는 마지막 교시 뒤로 본다
   const BELLS_TEXT = ['조회 08:40-08:50', '1교시 08:50-09:40', '2교시 09:50-10:40', '3교시 10:50-11:40', '4교시 11:50-12:40', '5교시 13:30-14:20', '6교시 14:30-15:20', '7교시 15:40-16:30'].join('\n');
   // marks: 교과(교시별 / Ø), cases·daily·cleared: 담임 일일출결(사안 하나가 여러 날일 수 있음), cfg: 서류 기한·체험학습 최대 일수
@@ -258,6 +263,8 @@ body.sfv-open { overflow: hidden; }
 
   // 반 이름: '1-3', '1학년 3반', '103' → '1-3'
   function normClass(s) {
+    // 수업 출석부: 선택과목 수업 반 이름을 그대로('3학년 302', '2학년 201(F)', '3학년 건강예술실(F)' — 2026-10-28 실제 나이스 모양)
+    if (APP === 'class') return String(s || '').trim().replace(/\s+/g, ' ').slice(0, 20);
     const t = String(s || '').replace(/\s+/g, '');
     let m = /^(\d)[-./](\d{1,2})$/.exec(t) || /^(\d)학년(\d{1,2})반$/.exec(t) || /^(\d)(\d{2})$/.exec(t);
     return m ? `${+m[1]}-${+m[2]}` : '';
@@ -791,7 +798,7 @@ body.sfv-open { overflow: hidden; }
     $('#main').innerHTML = `
       <div class="card">
         <h2 class="sec">PC로 보내기</h2>
-        <p class="hint">${exp.from === exp.to ? esc(showDay(exp.from)) : `${esc(showDay(exp.from))} ~ ${esc(showDay(exp.to))}`} 출결(담임 ${drows.length}줄 · 교과 ${rows.length}줄)을 선생님 구글 계정 시트에 올려요. PC 업무 도우미에서 <b>[폰 출결 가져오기]</b>를 누르면 바로 확인 표로 넘어가고, 시트는 비워져요.</p>
+        <p class="hint">${exp.from === exp.to ? esc(showDay(exp.from)) : `${esc(showDay(exp.from))} ~ ${esc(showDay(exp.to))}`} 출결(${APP === 'class' ? `${rows.length}줄` : `담임 ${drows.length}줄 · 교과 ${rows.length}줄`})을 선생님 구글 계정 시트에 올려요. PC 업무 도우미에서 <b>[폰 출결 가져오기]</b>를 누르면 바로 확인 표로 넘어가고, 시트는 비워져요.</p>
         <div class="row"><button class="btn main full" id="exPush" ${drows.length || rows.length ? '' : 'disabled'}>PC로 보내기</button></div>
         <p class="hint dim">폰과 PC 모두 같은 교육청 구글 계정으로 로그인해 두세요. 기간은 아래에서 바꿔요.</p>
       </div>
@@ -1018,15 +1025,15 @@ body.sfv-open { overflow: hidden; }
         <h2 class="sec">홈 화면에 추가</h2>
         <p class="hint">${homeGuide()} 다음부터는 홈 화면 아이콘으로 여세요.</p>
       </div>`}
-      ${schoolCard()}
-      <div class="card">
+      ${APP === 'class' ? '' : schoolCard()}
+      ${APP === 'class' ? '' : `<div class="card">
         <h2 class="sec">우리 학교 교시 시각</h2>
         ${S.cfg.bellsSet ? '' : '<div class="warnbox" style="margin:0 0 6px">아래는 예시 시각이에요. 우리 학교 시각으로 고친 뒤 [저장]을 눌러 주세요.</div>'}
         <p class="hint">지각·조퇴·결과 시각으로 나이스에 체크할 교시를 계산할 때 써요. 한 줄에 하나씩, 쉬는 시간·점심·청소는 적지 않아요.</p>
         <label class="field"><textarea id="bellText" rows="9" style="font-variant-numeric:tabular-nums">${esc(S.cfg.bells || '')}</textarea></label>
         <div class="row"><button class="btn small main" id="bellSave">저장</button><button class="btn small" id="bellReset">처음 시각으로</button></div>
         <p class="hint" id="bellMsg"></p>
-      </div>
+      </div>`}
       <div class="card">
         <h2 class="sec">백업</h2>
         <p class="hint">폰을 바꾸거나 브라우저 자료를 지우기 전에 백업 파일을 받아 두세요. 백업 파일에도 학생 이름이 들어 있어요.</p>
@@ -1562,7 +1569,7 @@ body.sfv-open { overflow: hidden; }
   // 학생 서류는 담임 반만(교사 결정 2026-10-28) — 수업 반에는 학생 링크를 만들지 않음
   const qrClasses = () => S.classes.filter(isHome).filter((c) => /^\d-\d{1,2}$/.test(c.name));
   // [서류함] 탭은 담임 반이 있을 때만 보임
-  const syncBoxTab = () => { const b = document.querySelector('#tabs [data-tab="box"]'); if (b) b.hidden = !S.classes.some(isHome); };
+  const syncBoxTab = () => { const b = document.querySelector('#tabs [data-tab="box"]'); if (b) b.hidden = APP === 'class' || !S.classes.some(isHome); };
   function boxSetupHtml() {
     return `
       <div class="card">
@@ -1847,7 +1854,7 @@ body.sfv-open { overflow: hidden; }
   // ── 탭 ────────────────────────────────────────────────
   function switchTab(t) {
     syncBoxTab();
-    if (t === 'box' && !S.classes.some(isHome)) t = 'check';
+    if ((t === 'box' && (APP === 'class' || !S.classes.some(isHome))) || (t === 'docs' && APP === 'class')) t = 'check';
     tab = t;
     editing = null;
     document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === t));
