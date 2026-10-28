@@ -201,7 +201,10 @@ body.sfv-open { overflow: hidden; }
 (() => {
   'use strict';
   // ── 저장(이 폰 안에만) ─────────────────────────────────
-  const KEY = 'chulseokbu.v1';
+  // 담임 출석부와 수업 출석부는 따로(교사 결정 2026-10-28) — 주소 ?app=class면 수업 출석부(따로 저장, 홈 화면 아이콘도 따로)
+  const APP = new URLSearchParams(location.search).get('app') === 'class' ? 'class' : 'home';
+  const KEY = APP === 'class' ? 'chulseokbu.class.v1' : 'chulseokbu.v1';
+  document.title = APP === 'class' ? '수업 출석부' : '담임 출석부';
   // 교시 시각(쉬는 시간·점심·청소는 적지 않음). 종례는 마지막 교시 뒤로 본다
   const BELLS_TEXT = ['조회 08:40-08:50', '1교시 08:50-09:40', '2교시 09:50-10:40', '3교시 10:50-11:40', '4교시 11:50-12:40', '5교시 13:30-14:20', '6교시 14:30-15:20', '7교시 15:40-16:30'].join('\n');
   // marks: 교과(교시별 / Ø), cases·daily·cleared: 담임 일일출결(사안 하나가 여러 날일 수 있음), cfg: 서류 기한·체험학습 최대 일수
@@ -870,7 +873,9 @@ body.sfv-open { overflow: hidden; }
   let pushData = null;
   function pushToPc() {
     const daily = dailyTable(), subject = table();
-    pushData = { daily: daily.length > 1 ? daily : [], subject: subject.length > 1 ? subject : [], from: exp.from, to: exp.to };
+    // kinds: 이 앱이 맡은 것만 시트에서 바꿈(담임·수업 앱이 따로 보내도 서로 덮지 않게)
+    const kinds = APP === 'class' ? ['subject'] : S.classes.some((c) => !isHome(c)) ? ['daily', 'subject'] : ['daily'];
+    pushData = { daily: daily.length > 1 ? daily : [], subject: subject.length > 1 ? subject : [], kinds, from: exp.from, to: exp.to };
     openBridge({ mode: 'push' });
   }
   function table() {
@@ -1304,7 +1309,7 @@ body.sfv-open { overflow: hidden; }
 
   // ── 연락처 폼(구글 설문지): 선생님 구글 계정에 설문지·응답 시트를 만들고, 학생·보호자는 링크(QR)로 답한다 ──
   // 이 폰에는 설문지·시트 주소만 둔다(개인정보 없음). 응답은 [응답 불러오기]로 다리를 거쳐 이 폰에만 넣는다.
-  const FORM_KEY = 'chulseokbu.form';
+  const FORM_KEY = APP === 'class' ? 'chulseokbu.class.form' : 'chulseokbu.form';
   const formInfo = () => { try { return JSON.parse(localStorage.getItem(FORM_KEY) || 'null'); } catch { return null; } };
   function ownerGuess() {
     const home = S.classes.find((c) => isHome(c));
