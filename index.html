@@ -1362,7 +1362,12 @@ body.sfv-open { overflow: hidden; }
     }
     // 고른 구글 계정으로(교사 요청 2026-10-28: 폰에 다른 계정이 로그인돼 있어 PC로 보내기가 엉뚱한 계정으로 감)
     // authuser로 그 계정을 고르고, 그 계정이 아직 로그인돼 있지 않으면 구글 계정 선택 화면에서 로그인한 뒤 이어서 연다
-    window.open(asAccount(url, { origin: location.origin, ...params }), 'chulseokbu-bridge', 'width=480,height=680');
+    bridgeWin = window.open(asAccount(url, { origin: location.origin, ...params }), 'chulseokbu-bridge', 'width=480,height=680');
+  }
+  // 구글 창 일이 끝나면 그 창을 닫고 출석부 화면으로 돌아옴(교사 요청 2026-10-28: 보내기가 끝나도 구글 창에 머물렀음)
+  let bridgeWin = null;
+  function closeBridge() {
+    setTimeout(() => { try { bridgeWin && !bridgeWin.closed && bridgeWin.close(); } catch { /* 이미 닫힘 */ } bridgeWin = null; try { window.focus(); } catch { /* 없음 */ } }, 900);
   }
   // 구글 창 주소를 고른 계정으로: authuser + (그 계정이 로그인돼 있지 않으면) 구글 계정 선택 화면을 먼저
   function asAccount(url, params) {
@@ -1404,6 +1409,7 @@ body.sfv-open { overflow: hidden; }
       pushData = null;
       const used = String(d.info?.email || '').toLowerCase(), want = gAccount();
       if (used) { S.ui.lastPushEmail = used; save(); }
+      closeBridge();
       toast(want && used && used !== want ? `${used} 계정으로 보냈어요 — 설정의 계정(${want})과 달라요` : `PC로 보냈어요${used ? `(${used})` : ''} — PC 도우미에서 [폰 출결 가져오기]`);
       return;
     }
@@ -1413,11 +1419,13 @@ body.sfv-open { overflow: hidden; }
       try { localStorage.setItem(FORM_KEY, JSON.stringify({ formUrl: f.formUrl, sheetId: f.sheetId, title: String(f.title || '').slice(0, 60), made: new Date().toLocaleDateString('ko-KR') })); } catch { /* 저장 공간 */ }
       if (tab === 'setup') renderSetup();
       toast('연락처 설문지를 만들었어요');
+      closeBridge();
       return;
     }
     if (!d || d.type !== 'chulseokbu-contacts' || !Array.isArray(d.rows)) return;
     try {
       const msg = applyContacts(d.rows);
+      closeBridge();
       if (tab === 'setup') renderSetup();
       toast(msg);
       const m = $('#ctMsg'); if (m) m.textContent = msg;
