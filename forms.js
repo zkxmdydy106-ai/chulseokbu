@@ -70,11 +70,12 @@
   const imgOk = (s) => typeof s === 'string' && s.length < 4e6 && /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(s);
 
   /* ── 서식 안의 칸(경로) ─────────────────────────────────── */
-  /* 경로: 맨 위 문단 'p3', 표 't0', 표 칸 문단 't0.r2c1.p0', 칸 안 표 't8.r0c0.t5.r0c0.p0' */
+  /* 경로: 맨 위 문단 'p3', 표 't0', 표 칸 문단 't0.r2c1.p0', 칸 안 표 't8.r0c0.t5.r0c0.p0', 글상자 안 문단 'x6.p0' */
   const FORMS = () => root.SCHOOL_FORMS || {};
   function walk(blocks, prefix, fn) {
     (blocks || []).forEach((b, i) => {
       if (b.t === 'tbl') { const tp = `${prefix}t${i}`; fn(b, tp); b.cells.forEach((c) => walk(c.body, `${tp}.r${c.r}c${c.c}.`, fn)); }
+      else if (b.t === 'box') { const xp = `${prefix}x${i}`; fn(b, xp); walk(b.body, `${xp}.`, fn); }
       else fn(b, `${prefix}p${i}`);
     });
   }
@@ -194,18 +195,32 @@
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const textHtml = (s) => esc(s).replace(/\t/g, '    ').replace(/\r?\n/g, '<br>');
   const V = (s) => `<span class="v">${textHtml(s)}</span>`;
+  /* 서식 글: 숫자·영문·기호는 한글보다 폭이 좁아 자간도 그만큼(.hn) */
+  const formText = (s) => String(s ?? '').split(/([!-~]+)/).map((x, i) => (i % 2 ? `<span class="hn">${esc(x)}</span>` : textHtml(x))).join('');
   const reEsc = (s) => s.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
-  const ON = '<span class="v">■</span>';
-  /* 원래 글의 □/▢ 중 label 앞의 것만 ■ */
+  const ON = '<span class="v">☑</span>';
+  /* 원래 글의 □/▢ 중 label 앞의 것만 ☑(체크 표시 — 까맣게 채운 칸 아님, 교사 요청 2026-10-29) */
   function ticks(text, labels) {
     let h = esc(text);
     for (const l of labels) h = h.replace(new RegExp(`[▢□](\\s?${reEsc(esc(l))})`), `${ON}$1`);
     return h;
   }
   const sigImg = (s) => (imgOk(s) ? `<img class="sf-sig" alt="서명" src="${s}">` : '');
-  const signLine = (before, name, mark, s) => ({ html: `${esc(before)}${name ? ` ${V(name)} ` : ''}<span class="sf-sign">${esc(mark)}${sigImg(s)}</span>` });
+  /* 서명 줄. src(원래 서식 글, 예: '학  생               (인)')가 있으면 빈칸 자리에 이름을 넣어 글 폭을 그대로 둔다(손으로 쓴 것처럼) */
+  function signLine(before, name, mark, s, src) {
+    const at = src ? src.lastIndexOf(mark) : -1;
+    if (at > 0 && name) {
+      const head = src.slice(0, at), label = head.replace(/\s+$/, ''), gap = head.length - label.length;
+      const w = [...String(name)].reduce((n, ch) => n + (/[\x20-\x7e]/.test(ch) ? 1 : 2), 0);
+      const rest = Math.max(2, gap - w), l = rest >> 1;
+      return { html: `${esc(label)}${' '.repeat(l)}${V(name)}${' '.repeat(rest - l)}<span class="sf-sign">${esc(mark)}${sigImg(s)}</span>` };
+    }
+    return { html: `${esc(before)}${name ? ` ${V(name)} ` : ''}<span class="sf-sign">${esc(mark)}${sigImg(s)}</span>` };
+  }
   const dateLine = (iso) => { const d = dateOf(iso); return d ? { html: `${V(d.getFullYear())}년 ${V(d.getMonth() + 1)}월 ${V(d.getDate())}일` } : undefined; };
   const left = (s) => ({ html: V(s), align: 'left' });
+  /* 연락처: 줄바꿈 없이 한 줄, 칸보다 길면 글자만 줄임(교사 요청 2026-10-29) */
+  const tel = (s, extra = '') => ({ html: `${V(s)}${extra}`, fit: true });
   const ymdLong = (iso) => { const d = dateOf(iso); return d ? `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일` : ''; };
   function gcn(cls, no) { const p = classParts(cls) || { g: '', c: '' }; return { g: p.g, c: p.c, no: no || '' }; }
   /* 칸의 빈 줄(쓰는 자리)을 내용 줄 수만큼 뺀다 */
@@ -284,14 +299,15 @@
     }
     if (LEARN.includes(f.form)) {
       let h = esc(orig(doc.kind, R.form));
-      h = h.replace(new RegExp(`(${reEsc(f.form)})\\(\\s*\\)`), `$1( ${ON.replace('■', '○')} )`);
+      /* 고른 학습형태 괄호 안에 동그라미(교사 요청 2026-10-29) — 괄호 안 빈칸 폭은 원본 그대로 */
+      h = h.replace(new RegExp(`(${reEsc(f.form)})\\((\\s*)\\)`), (m, a, sp) => { const k = Math.max(0, sp.length - 2), l = k >> 1; return `${a}(${' '.repeat(l)}<span class="v">○</span>${' '.repeat(k - l)})`; });
       O[R.form] = { html: h };
     }
     O[R.purpose] = { html: V(f.purpose) };
     O[R.dest] = { html: V(f.dest) };
-    O[R.gName] = { html: V(f.gName) }; O[R.gRel] = { html: V(f.gRel) }; O[R.gTel] = { html: V(f.gTel) };
+    O[R.gName] = { html: V(f.gName) }; O[R.gRel] = { html: V(f.gRel) }; O[R.gTel] = tel(f.gTel);
     const lead = doc.kind === 'field-apply' && !f.proxy ? { n: f.gName, r: f.gRel, t: f.gTel } : { n: f.lName, r: f.lRel, t: f.lTel };
-    O[R.lName] = { html: V(lead.n) }; O[R.lRel] = { html: V(lead.r) }; O[R.lTel] = { html: V(lead.t) };
+    O[R.lName] = { html: V(lead.n) }; O[R.lRel] = { html: V(lead.r) }; O[R.lTel] = tel(lead.t);
   }
   function fillApply(doc) {
     const f = doc.f || {}, O = {};
@@ -300,18 +316,18 @@
     O['t0.r11c1.p0'] = left(f.plan);
     if (f.agree) O['t0.r13c1.p0'] = { html: ticks(orig('field-apply', 't0.r13c1.p0'), ['동의']) };
     O.p2 = dateLine(f.date);
-    O.p3 = signLine('학  생', doc.name, '(인)', (f.sig || {}).stu);
-    O.p4 = signLine('보호자', f.gName, '(인)', (f.sig || {}).par);
+    O.p3 = signLine('학  생', doc.name, '(인)', (f.sig || {}).stu, orig('field-apply', 'p3'));
+    O.p4 = signLine('보호자', f.gName, '(인)', (f.sig || {}).par, orig('field-apply', 'p4'));
     return O;
   }
   function fillProxy(doc) {
     const f = doc.f || {}, px = f.px || {}, O = {}, n = gcn(doc.cls, doc.no);
     O['t0.r1c1.p0'] = { html: `${V(n.g)}학년 ${V(n.c)}반 ${V(n.no)}번` };
     O['t0.r1c3.p0'] = { html: V(doc.name) };
-    O['t0.r1c5.p0'] = { html: V(px.stuTel) };
+    O['t0.r1c5.p0'] = tel(px.stuTel);
     O['t0.r2c1.p0'] = { html: ` (${V(f.gRel)})`, align: 'left' };
     O['t0.r2c3.p0'] = { html: V(f.gName) };
-    O['t0.r2c5.p0'] = { html: V(f.gTel) };
+    O['t0.r2c5.p0'] = tel(f.gTel);
     const half = f.unit === 'half';
     const a = half ? f.halfDate : f.from, b = half ? f.halfDate : f.to;
     if (dateOf(a) && dateOf(b)) {
@@ -322,14 +338,14 @@
     O['t0.r4c4.p0'] = { html: V(px.stay || '없음(당일)') };
     O['t0.r5c1.p0'] = left(px.reason);
     O['t0.r6c2.p0'] = { html: V(f.lName) };
-    O['t0.r7c2.p0'] = { html: `${V(f.lTel)}${f.lRel ? ` (관계: ${V(f.lRel)})` : ''}`, align: 'center' };
+    O['t0.r7c2.p0'] = { ...tel(f.lTel, f.lRel ? ` (관계: ${V(f.lRel)})` : ''), align: 'center' };
     O['t0.r8c2.p0'] = { html: V(px.lAddr) };
     if (px.agree) O['t0.r9c5.p0'] = { html: `( <span class="v sf-circ">○</span> , × )` };
     O['t0.r10c0.p2'] = dateLine(f.date);
-    O['t0.r10c0.p3'] = signLine('학  생', doc.name, '(인)', (f.sig || {}).stu);
-    O['t0.r10c0.p4'] = signLine('보호자', f.gName, '(인)', (f.sig || {}).par);
+    O['t0.r10c0.p3'] = signLine('학  생', doc.name, '(인)', (f.sig || {}).stu, orig('field-proxy', 't0.r10c0.p3'));
+    O['t0.r10c0.p4'] = signLine('보호자', f.gName, '(인)', (f.sig || {}).par, orig('field-proxy', 't0.r10c0.p4'));
     O['t3.r0c0.p4'] = dateLine(f.date);
-    O['t3.r0c0.p5'] = signLine('대리 인솔자 :', f.lName, '(인)', px.sigLead);
+    O['t3.r0c0.p5'] = signLine('대리 인솔자 :', f.lName, '(인)', px.sigLead, orig('field-proxy', 't3.r0c0.p5'));
     return O;
   }
   function fillReport(doc) {
@@ -345,8 +361,8 @@
     const n = days.filter((d) => imgOk(d.photo)).length;
     if (n) O.p5 = { html: `※ 사진 증빙: 뒤쪽 붙임(날짜별 ${V(n)}장)` };
     O.p8 = dateLine(f.date);
-    O.p9 = signLine('학  생', doc.name, '(인)', (f.sig || {}).stu);
-    O.p10 = signLine('보호자', f.gName, '(인)', (f.sig || {}).par);
+    O.p9 = signLine('학  생', doc.name, '(인)', (f.sig || {}).stu, orig('field-report', 'p9'));
+    O.p10 = signLine('보호자', f.gName, '(인)', (f.sig || {}).par, orig('field-report', 'p10'));
     return O;
   }
   const FILL = { absence: fillAbsence, 'field-apply': fillApply, 'field-report': fillReport, 'field-proxy': fillProxy };
@@ -365,35 +381,111 @@
   const TO_SCHOOL = /^\s*\S*학교장\s*귀하\s*$/;
 
   /* ── 그리기(길잡이 HwpxEditor의 표 그리기 방식: 칸을 CSS grid로) ── */
-  function pHtml(b, path, O) {
+  /* 한글 서식 글꼴 → 이 기기 글꼴(한글이 깔린 PC는 원래 글꼴 그대로, 없으면 비슷한 글꼴) */
+  const FONT = {
+    '휴먼고딕': "'휴먼고딕', 'HYGothic-Medium', 'Malgun Gothic', '맑은 고딕', sans-serif",
+    'HY울릉도M': "'HY울릉도M', 'HYwulM', 'HYGothic-Medium', 'Malgun Gothic', sans-serif",
+    '굴림체': "'GulimChe', '굴림체', 'Gulim', '굴림', 'Malgun Gothic', sans-serif",
+    '굴림': "'Gulim', '굴림', 'Malgun Gothic', sans-serif",
+    '함초롬바탕': "'함초롬바탕', 'HCR Batang', 'Batang', '바탕', serif",
+    '함초롬돋움': "'함초롬돋움', 'HCR Dotum', 'Dotum', '돋움', 'Malgun Gothic', sans-serif",
+    '맑은 고딕': "'Malgun Gothic', '맑은 고딕', 'Apple SD Gothic Neo', sans-serif",
+  };
+  const fontCss = (f) => (f && FONT[f] ? `font-family:${FONT[f]}` : '');
+  /* 한컴 글자 놓기(한글 2018로 시험 문서를 그려 잰 규칙): 글자마다 (제 폭 × 장평) × (1 + 자간%), 빈칸은 늘 글자 크기의 반.
+     크롬은 글꼴의 제 폭 + letter-spacing이라 그 차이만큼 준다. FM: 이 PC 글꼴의 [한글 폭, 빈칸 폭](em) */
+  const FM = { '함초롬바탕': [0.97, 0.3], '함초롬돋움': [0.97, 0.3], '휴먼고딕': [1, 0.5], 'HY울릉도M': [1, 0.333], '굴림체': [1, 0.5], '굴림': [1, 0.333], '맑은 고딕': [1, 0.352] };
+  function spacingCss(font, sp, rt) {
+    const [hw, sw] = FM[font] || [1, 0.5];
+    const k = ((+rt || 100) / 100) * (1 + (+sp || 0) / 100);
+    const lh = hw * (k - 1), ln = 0.5 * (k - 1), ws = 0.5 * k - sw - lh; /* 한글 · 숫자·영문(폭 약 0.5) · 빈칸 */
+    return `letter-spacing:${lh.toFixed(3)}em;--sn:${ln.toFixed(3)}em;word-spacing:${ws.toFixed(3)}em`;
+  }
+  /* 글자 모양 한 묶음(크기·굵기·글꼴·자간) → style. 글자 색은 모두 검정(교사 요청 2026-10-29 — 원본의 파란 글씨도 검정) */
+  function runStyle(r, base) {
+    const st = [];
+    if (!base || r.size !== base.size) st.push(`font-size:calc(var(--fs, 1) * ${(r.size * 1.333).toFixed(1)}px)`);
+    if (!base || !!r.bold !== !!base.bold) st.push(`font-weight:${r.bold ? 700 : 400}`);
+    if (r.font && (!base || r.font !== base.font)) st.push(fontCss(r.font));
+    if (!base || r.font !== base.font || r.sp !== base.sp || r.rt !== base.rt) st.push(spacingCss(r.font, r.sp, r.rt));
+    return st.filter(Boolean).join(';');
+  }
+  /* 한글과 같은 자리에서 줄을 나눈다: 줄마다 한 덩이, 마지막 줄 말고는 양쪽 맞춤으로 폭을 꽉 채움 */
+  function linesHtml(b) {
+    const runs = b.runs || [{ ...b, text: b.text }];
+    const cuts = [0, ...b.brk, b.text.length];
+    const lines = [];
+    for (let k = 0; k + 1 < cuts.length; k++) {
+      let pos = 0, html = '';
+      const from = cuts[k], to = cuts[k + 1];
+      for (const r of runs) {
+        const a = Math.max(from, pos), z = Math.min(to, pos + r.text.length);
+        if (a < z) {
+          let t = r.text.slice(a - pos, z - pos);
+          if (k + 2 < cuts.length && z === to) t = t.replace(/\s+$/, '');
+          html += b.runs ? `<span style="${runStyle(r, b)}">${formText(t)}</span>` : formText(t);
+        }
+        pos += r.text.length;
+      }
+      lines.push(`<span class="ln${k + 2 < cuts.length && (b.align === 'justify' || b.align === 'distribute') ? ' jl' : ''}">${html || '&nbsp;'}</span>`);
+    }
+    return lines.join('');
+  }
+  function pHtml(b, path, O, cellW = 0) {
     let v = O[path];
     if (v === undefined && SCH.form === 'common' && TO_SCHOOL.test(b.text)) v = { html: esc(`${SCH.name || '학교'}장 귀하`) };
     if (v && v.skip) return '';
     let align = b.align === 'distribute' ? 'justify' : b.align, size = b.size, inner;
-    if (v === undefined) inner = textHtml(b.text);
+    const last = b.align === 'distribute' && v === undefined ? ';text-align-last:justify' : '';
+    if (v === undefined) inner = b.brk ? linesHtml(b) : b.runs ? b.runs.map((r) => `<span style="${runStyle(r, b)}">${formText(r.text)}</span>`).join('') : formText(b.text);
     else if (typeof v === 'string') inner = V(v);
     else { if (v.align) align = v.align; if (v.size) size = v.size; inner = v.html !== undefined ? v.html : V(v.text); }
-    const st = [`text-align:${align}`, `font-size:calc(var(--fs, 1) * ${(size * 1.333).toFixed(1)}px)`];
-    if (b.bold) st.push('font-weight:700');
-    if (b.left) st.push(`padding-left:${(+b.left).toFixed(1)}px`);
-    if (b.color && b.color !== '#000000' && v === undefined) st.push(`color:${b.color}`);
-    return `<div class="hp${b.serif ? ' serif' : ''}" style="${st.join(';')}">${inner || '&nbsp;'}</div>`;
+    const st = [`text-align:${align}${last}`, `font-size:calc(var(--fs, 1) * ${(size * 1.333).toFixed(1)}px)`, `font-weight:${b.bold ? 700 : 400}`];
+    if (b.font) st.push(fontCss(b.font));
+    st.push(spacingCss(b.font || '휴먼고딕', b.sp, b.rt));
+    /* 한글 줄 배치: 글자는 줄 맨 위, 줄 간격(%)만큼 아래를 띄움(칸 끝 줄의 띄움은 셈하지 않음 — CSS .hp). 줄 간격이 없는 옛 서식(결석신고서)은 그대로 */
+    if (b.ls) st.push(`line-height:${(b.ls / 100).toFixed(2)}`, `--h:${((b.ls - 100) / 200).toFixed(3)}em`);
+    const ind = +b.ind || 0, left = +b.left || 0;
+    if (left || ind < 0) st.push(`padding-left:${(left - Math.min(0, ind)).toFixed(1)}px`);
+    if (b.right) st.push(`padding-right:${(+b.right).toFixed(1)}px`);
+    if (ind) st.push(`text-indent:${ind.toFixed(1)}px`);
+    if (b.mt) st.push(`--mt:${(+b.mt).toFixed(1)}px`);
+    if (b.mb) st.push(`--mb:${(+b.mb).toFixed(1)}px`);
+    const fit = (v && v.fit) || (v === undefined && b.one) ? ' fit' : '';
+    return `<div class="hp${b.serif ? ' serif' : ''}${fit}" style="${st.join(';')}">${inner || '&nbsp;'}</div>`;
   }
   function blocksHtml(blocks, prefix, O, from = 0) {
-    return (blocks || []).map((b, j) => { const i = j + from; return b.t === 'tbl' ? tblHtml(b, `${prefix}t${i}`, O) : pHtml(b, `${prefix}p${i}`, O); }).join('');
+    return (blocks || []).map((b, j) => { const i = j + from; return b.t === 'tbl' ? tblHtml(b, `${prefix}t${i}`, O) : b.t === 'box' ? boxHtml(b, `${prefix}x${i}`, O) : pHtml(b, `${prefix}p${i}`, O); }).join('');
+  }
+  /* 글상자(※ 유의 사항 등): 원래 크기·안쪽 여백·선 그대로 */
+  function boxHtml(b, xp, O) {
+    const st = [`width:${(+b.w).toFixed(1)}px`, `min-height:${(+b.h).toFixed(1)}px`, `padding:${b.pad.map((x) => `${(+x).toFixed(1)}px`).join(' ')}`,
+      `justify-content:${b.va === 'center' ? 'center' : b.va === 'bottom' ? 'flex-end' : 'flex-start'}`];
+    if (b.line) st.push(`border:${(+b.line).toFixed(2)}px solid #000`);
+    if (b.fill) st.push(`background:${b.fill}`);
+    if (b.align === 'center') st.push('margin-left:auto;margin-right:auto');
+    else if (b.align === 'right') st.push('margin-left:auto');
+    if (b.mt) st.push(`margin-top:${(+b.mt).toFixed(1)}px`);
+    if (b.mb) st.push(`margin-bottom:${(+b.mb).toFixed(1)}px`);
+    return `<div class="hbox" style="${st.join(';')}">${blocksHtml(b.body, `${xp}.`, O)}</div>`;
   }
   /* skip: 공통 서식에서 위쪽 제목·결재 줄을 빼고 그린다(그 자리는 headHtml) */
   function tblHtml(t, tp, O, skip = 0) {
     const cols = t.cols.map((w) => `${(+w).toFixed(1)}px`).join(' ');
     const rows = t.rows.slice(skip).map((h) => `minmax(${Math.max(14, +h).toFixed(1)}px,auto)`).join(' ');
-    const bw = (n) => (n ? `${n >= 2 ? '2px' : '1px'} solid #111` : '0');
+    /* 테두리: 서식의 실제 굵기(mm → px)·종류(실선·점선). 옛 서식(bd 없음)은 가는 선 1px·굵은 선 2px */
+    const bw = (n) => (n ? `${n >= 2 ? '2px' : '1px'} solid #000` : '0');
+    const bd = (x) => (!x || !x.w || x.s === 'none' ? '0' : `${Math.max(0.5, +x.w).toFixed(2)}px ${x.s === 'double' ? 'double' : x.s} #000`);
     const cells = t.cells.filter((c) => c.r >= skip).map((c) => {
-      const st = [`grid-column:${c.c + 1}/span ${c.cs}`, `grid-row:${c.r - skip + 1}/span ${c.rs}`, `border-left:${bw(c.b.l)}`, `border-right:${bw(c.b.r)}`, `border-top:${bw(c.b.t)}`, `border-bottom:${bw(c.b.b)}`,
+      const side = (k) => (c.bd ? bd(c.bd[k]) : bw(c.b[k]));
+      const st = [`grid-column:${c.c + 1}/span ${c.cs}`, `grid-row:${c.r - skip + 1}/span ${c.rs}`, `border-left:${side('l')}`, `border-right:${side('r')}`, `border-top:${side('t')}`, `border-bottom:${side('b')}`,
         `justify-content:${c.va === 'top' ? 'flex-start' : c.va === 'bottom' ? 'flex-end' : 'center'}`];
+      if (c.pad) st.push(`padding:${c.pad.map((x) => `${(+x).toFixed(1)}px`).join(' ')}`);
       if (c.fill) st.push(`background:${c.fill}`);
       return `<div class="htc" style="${st.join(';')}">${blocksHtml(c.body, `${tp}.r${c.r}c${c.c}.`, O)}</div>`;
     }).join('');
-    return `<div class="htbl" style="grid-template-columns:${cols};grid-template-rows:${rows}">${cells}</div>`;
+    const mg = t.mt !== undefined ? `;--tmt:${(+t.mt).toFixed(1)}px;--tmb:${(+t.mb).toFixed(1)}px;--tob:${(+t.ob || 0).toFixed(1)}px` : '';
+    return `<div class="htbl" style="grid-template-columns:${cols};grid-template-rows:${rows}${mg}">${cells}</div>`;
   }
   /* 공통 서식 위쪽: 서식 제목(원래 제목 칸 글) + 설정한 결재 칸 */
   function headHtml(tpl) {
@@ -411,7 +503,7 @@
     const pg = tpl.page;
     const skip = SCH.form === 'common' ? HEAD_ROWS[kind] || 0 : 0;
     const body = skip ? headHtml(tpl) + tblHtml(tpl.blocks[0], 't0', O, skip) + blocksHtml(tpl.blocks.slice(1), '', O, 1) : blocksHtml(tpl.blocks, '', O);
-    return `<div class="sf-page" data-form="${esc(kind)}" data-h="${(Math.min(pg.h, 1122.5) - pg.mt - pg.mb - 24).toFixed(1)}" style="padding:${pg.mt}px ${pg.mr}px ${pg.mb}px ${pg.ml}px"><div class="sf-in">${body}</div></div>`;
+    return `<div class="sf-page" data-form="${esc(kind)}" data-h="${(Math.min(pg.h, 1122.5) - pg.mt - pg.mb - 4).toFixed(1)}" style="padding:${pg.mt}px ${pg.mr}px ${pg.mb}px ${pg.ml}px"><div class="sf-in">${body}</div></div>`;
   }
   function photoPages(doc) {
     const f = doc.f || {};
@@ -437,19 +529,30 @@
   const CSS = `
 .sf-pages { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 10px 0 24px; }
 .sf-scale { zoom: var(--sf-z, 1); }
-.sf-page { box-sizing: border-box; width: 793.7px; min-height: 1122.5px; background: #fff; color: #111; box-shadow: 0 1px 6px rgb(0 0 0 / .18); font-family: "Malgun Gothic", "맑은 고딕", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; line-height: 1.45; }
+.sf-page { box-sizing: border-box; width: 793.7px; min-height: 1122.5px; background: #fff; color: #000; box-shadow: 0 1px 6px rgb(0 0 0 / .18); font-family: "휴먼고딕", "Malgun Gothic", "맑은 고딕", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; line-height: 1.45; }
 .sf-page .serif { font-family: "Batang", "바탕", "AppleMyungjo", serif; }
-.sf-page .hp { min-height: 1.2em; white-space: pre-wrap; overflow-wrap: anywhere; }
+.sf-page .sf-in { display: flex; flex-direction: column; }
+.sf-page .sf-in > :last-child { margin-bottom: 0 !important; }
+.sf-page .hp { white-space: pre-wrap; overflow-wrap: anywhere; margin: calc(var(--mt, 0px) - var(--h, 0em)) 0 calc(var(--mb, 0px) + var(--h, 0em)); }
+.sf-page .htc > .hp:last-child, .sf-page .hbox > .hp:last-child { margin-bottom: calc(0px - var(--h, 0em)); }
+.sf-page .htbl { margin: var(--tmt, 0px) 0 var(--tmb, 0px); }
+.sf-page .htc > .htbl:last-child { margin-bottom: var(--tob, 0px); }
+.sf-page .hp.fit { white-space: pre; overflow-wrap: normal; }
 .sf-page .htbl { display: grid; }
 .sf-page .htc { display: flex; flex-direction: column; padding: 2px 4px; min-width: 0; overflow: hidden; }
-.sf-page .v { color: #0d2a6b; font-weight: 600; }
-.sf-page .sf-circ { display: inline-block; min-width: 1.3em; border: 1.5px solid #0d2a6b; border-radius: 50%; text-align: center; line-height: 1.2; }
-.sf-page .sf-sign { position: relative; display: inline-block; min-width: 4.5em; text-align: center; }
+.sf-page .v { color: #000; font-weight: inherit; letter-spacing: var(--sn, inherit); }
+.sf-page .hn { letter-spacing: var(--sn, inherit); }
+.sf-page .ln { display: block; }
+.sf-page .ln + .ln { text-indent: 0; }
+.sf-page .ln.jl { text-align: justify; text-align-last: justify; }
+.sf-page .hbox { box-sizing: border-box; display: flex; flex-direction: column; max-width: 100%; }
+.sf-page .sf-circ { display: inline-block; min-width: 1.3em; border: 1px solid #000; border-radius: 50%; text-align: center; line-height: 1.2; }
+.sf-page .sf-sign { position: relative; display: inline-block; text-align: center; }
 .sf-page .sf-sig { position: absolute; left: 50%; top: 50%; width: 7.5em; height: 3em; object-fit: contain; transform: translate(-50%, -55%); pointer-events: none; }
 .sf-head { display: flex; align-items: center; gap: 12px; margin: 0 auto 6px; }
-.sf-title { flex: 1; text-align: center; font-weight: 700; line-height: 1.3; }
-.sf-appr { border-collapse: collapse; }
-.sf-appr th, .sf-appr td { border: 1px solid #111; min-width: 58px; padding: 2px 4px; font-size: calc(var(--fs, 1) * 14.7px); font-weight: 700; text-align: center; }
+.sf-title { flex: 1; text-align: center; font-weight: 400; line-height: 1.3; font-family: "HY울릉도M", "HYwulM", "HYGothic-Medium", "Malgun Gothic", sans-serif; }
+.sf-appr { border-collapse: collapse; border: 1.51px solid #000; }
+.sf-appr th, .sf-appr td { border: 0.45px solid #000; min-width: 58px; padding: 2px 4px; font-size: calc(var(--fs, 1) * 14.7px); font-weight: 400; text-align: center; font-family: "GulimChe", "굴림체", "Gulim", "Malgun Gothic", sans-serif; }
 .sf-appr th.k { min-width: 26px; width: 26px; line-height: 1.4; }
 .sf-appr td { height: 52px; }
 .sf-photos { padding: 56px 64px; display: flex; flex-direction: column; gap: 18px; }
@@ -482,6 +585,11 @@
     const fit = () => sc.style.setProperty('--sf-z', String(Math.min(1, Math.max(0.3, (host.clientWidth - 8) / 794))));
     /* 한 쪽에 들어가게: 이 기기 글꼴이 한글 서식 글꼴보다 넓으면 글자만 조금씩 줄인다(표 칸 폭은 그대로, 최소 70%). A4 높이 기준 */
     sc.style.setProperty('--sf-z', '1');
+    host.querySelectorAll('.sf-page .hp.fit').forEach((el) => {
+      const room = el.clientWidth + 1; /* 넘치면(scrollWidth가 더 크면) 줄임 */
+      const base = parseFloat(getComputedStyle(el).fontSize) || 14;
+      for (let k = 1; k >= 0.6 && el.scrollWidth > room; k = Math.round((k - 0.05) * 100) / 100) el.style.fontSize = `${(base * (k - 0.05)).toFixed(1)}px`;
+    });
     host.querySelectorAll('.sf-page[data-h]').forEach((pg) => {
       const inner = pg.querySelector('.sf-in'), room = +pg.dataset.h;
       for (let fs = 1; fs >= 0.73 && inner.offsetHeight > room; fs = Math.round((fs - 0.03) * 100) / 100) pg.style.setProperty('--fs', String(fs - 0.03));
