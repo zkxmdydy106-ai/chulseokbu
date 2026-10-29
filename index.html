@@ -1629,7 +1629,7 @@ body.sfv-open { overflow: hidden; }
       </div>
       <div class="card">
         <h2 class="sec">처음 한 번: 받는 곳 만들기</h2>
-        ${MAKER_URL ? `<p class="hint">[받는 곳 만들기]를 누르면 작은 창에서 <b>선생님 교육청 구글 계정</b>에 '학생 서류 받는 곳'이 저절로 만들어지고 여기에 연결돼요(이미 있으면 그대로). 처음에는 구글이 권한을 물어요 — '확인되지 않은 앱'이 보이면 [고급] → [이동] → [허용]. 'Apps Script API를 켜 주세요'가 나오면 그 창의 링크에서 켠 뒤 [켜고 다시].</p>
+        ${MAKER_URL ? `<p class="hint">[받는 곳 만들기]를 누르면 작은 창에 <b>만들 구글 계정</b>이 먼저 보여요. 교육청 계정이 맞으면 [이 계정에 만들기], 아니면 [다른 계정으로 바꾸기]. 만들어지면 여기에 저절로 연결돼요(이미 있으면 그대로). 처음에는 구글이 권한을 물어요 — '확인되지 않은 앱'이 보이면 [고급] → [이동] → [허용]. 'Apps Script API를 켜 주세요'가 나오면 그 창의 링크에서 켠 뒤 [켜고 다시].</p>
         <div class="row"><button class="btn main" id="bxMake" ${BOX.making ? 'disabled' : ''}>${BOX.making ? '만드는 중…(작은 창을 확인해 주세요)' : '받는 곳 만들기'}</button></div>
         ${BOX.err ? `<div class="warnbox">${esc(BOX.err)}</div>` : ''}
         <p class="hint dim">업무 도우미 패널 [출석부 웹앱 만들기]로 만든 QR로 열었다면 이미 연결돼 있어요.</p>` : ''}
