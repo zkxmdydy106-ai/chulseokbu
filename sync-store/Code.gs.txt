@@ -1,0 +1,77 @@
+/**
+ * 출석부 저장소 — 선생님마다 본인 구글 계정에 하나(만들기 다리 gas/forms-maker가 만든다, 2026-10-29 교사 결정: 자동 저장).
+ *
+ * - 배포: 웹 앱 · 실행 '나(배포한 선생님)'(USER_DEPLOYING) · 액세스 '모든 사용자'(ANYONE_ANONYMOUS, 로그인 없이).
+ *   OAuth 권한이 없다(속성·잠금·해시만 씀) → 만들자마자 허락 없이 돈다.
+ * - 받는 것: 출석부 웹앱이 기기 안에서 압축·암호화(AES-GCM)한 덩어리뿐. 이 코드는 열쇠가 없어 내용을 풀 수 없다.
+ * - 확인: 요청에 든 비밀값 t → sha256('auth|'+t)가 AUTH와 같아야 한다. AUTH는 만들기 다리가 만들 때 넣는다.
+ * - 칸: h(담임 출석부)·c(수업 출석부). 속성 값 한도(9KB) 때문에 8000자씩 나눠 둔다. 전체 한도 약 480KB.
+ */
+var AUTH = '__AUTH__';
+var SLOTS = { h: 1, c: 1 };
+var CHUNK = 8000;
+var LIMIT = 480000;
+
+function doGet() { return out_({ ok: true, kind: 'chulseokbu-store', v: 1 }); }
+
+function doPost(e) {
+  var body;
+  try { body = JSON.parse((e && e.postData && e.postData.contents) || '{}'); } catch (err) { return out_({ ok: false, err: 'bad' }); }
+  if (!body.t || hash_('auth|' + body.t) !== AUTH) return out_({ ok: false, err: 'auth' });
+  if (body.a === 'ping') return out_({ ok: true });
+  if (!SLOTS[body.s]) return out_({ ok: false, err: 'slot' });
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var props = PropertiesService.getScriptProperties();
+    var meta = meta_(props, body.s);
+    if (body.a === 'get') return out_({ ok: true, rev: meta.rev, at: meta.at, blob: meta.rev ? read_(props, body.s, meta.n) : '' });
+    // 판만(웹앱이 켜 둔 동안 30초마다 바뀌었는지만 봄 — 덩어리는 바뀌었을 때만 받음)
+    if (body.a === 'head') return out_({ ok: true, rev: meta.rev, at: meta.at });
+    if (body.a === 'wipe') {
+      clear_(props, body.s, meta.n);
+      props.deleteProperty(body.s + '.m');
+      return out_({ ok: true, rev: 0 });
+    }
+    if (body.a === 'put') {
+      var blob = String(body.blob || '');
+      if (!/^[A-Za-z0-9_-]*$/.test(blob)) return out_({ ok: false, err: 'bad' });
+      // 다른 기기가 먼저 올렸으면 받지 않고 지금 것을 돌려준다(웹앱이 어느 쪽을 남길지 정함)
+      if (!body.force && Number(body.base || 0) !== meta.rev) return out_({ ok: false, err: 'conflict', rev: meta.rev, at: meta.at, blob: read_(props, body.s, meta.n) });
+      if (used_(props) - size_(props, body.s, meta.n) + blob.length > LIMIT) return out_({ ok: false, err: 'full' });
+      var n = Math.ceil(blob.length / CHUNK);
+      var put = {};
+      for (var i = 0; i < n; i++) put[body.s + '.' + i] = blob.slice(i * CHUNK, (i + 1) * CHUNK);
+      var next = { rev: meta.rev + 1, at: Number(body.at) || Date.now(), n: n };
+      put[body.s + '.m'] = JSON.stringify(next);
+      for (var j = n; j < meta.n; j++) props.deleteProperty(body.s + '.' + j);
+      props.setProperties(put);
+      return out_({ ok: true, rev: next.rev, at: next.at });
+    }
+    return out_({ ok: false, err: 'bad' });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function meta_(props, s) {
+  try { var m = JSON.parse(props.getProperty(s + '.m') || 'null'); if (m && m.rev) return m; } catch (err) { /* 깨졌으면 비었다고 봄 */ }
+  return { rev: 0, at: 0, n: 0 };
+}
+function read_(props, s, n) {
+  var parts = [];
+  for (var i = 0; i < n; i++) parts.push(props.getProperty(s + '.' + i) || '');
+  return parts.join('');
+}
+function clear_(props, s, n) { for (var i = 0; i < n; i++) props.deleteProperty(s + '.' + i); }
+function size_(props, s, n) { return read_(props, s, n).length; }
+function used_(props) {
+  var all = props.getProperties(), total = 0;
+  for (var k in all) total += String(all[k]).length;
+  return total;
+}
+function hash_(text) {
+  var b = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, text, Utilities.Charset.UTF_8);
+  return b.map(function (x) { return ('0' + ((x + 256) % 256).toString(16)).slice(-2); }).join('');
+}
+function out_(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }

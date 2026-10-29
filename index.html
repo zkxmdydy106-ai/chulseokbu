@@ -83,6 +83,7 @@ main { padding: 12px; }
 .btn.full { width: 100%; }
 .btn.small { height: 34px; padding: 0 12px; font-size: 13px; }
 .btn.danger { border-color: var(--res); color: var(--res); }
+.sy-ok { color: var(--ok); } .sy-bad { color: var(--res); } .textbtn.danger { color: var(--res); }
 .row { display: flex; gap: 6px; margin-top: 10px; }
 .row .btn { flex: 1; }
 .textbtn { padding: 0; border: 0; background: none; color: var(--blue); font-size: 13px; text-decoration: underline; text-underline-offset: 2px; }
@@ -224,9 +225,18 @@ body.sfv-open { overflow: hidden; }
     return blank();
   }
   let S = loadState();
+  // 구글 자동 저장(교사 결정 2026-10-29) — 열쇠·주소는 담임·수업 출석부가 같이 쓰고, 판(rev)·대기는 앱마다
+  const SYNC_KEY = 'chulseokbu.sync';
+  const SYNC_META = `${KEY}.sync`;
+  const SYNC_SLOT = APP === 'class' ? 'c' : 'h';
+  const readJson = (k) => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch { return null; } };
+  const writeJson = (k, v) => { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch { /* 저장 못 함 */ } };
+  const SY = { conf: readJson(SYNC_KEY), meta: readJson(SYNC_META) || { rev: 0, dirty: false, at: 0 }, busy: false, again: false, timer: null, status: '', making: false, sent: null, lastPull: 0 };
   let saveTimer = null;
-  function save(now = false) {
+  // remote: 구글에서 받은 자료를 넣을 때(다시 올리지 않음)
+  function save(now = false, { remote = false } = {}) {
     syncBoxTab();
+    if (!remote) { S.editedAt = Date.now(); syncMark(); }
     clearTimeout(saveTimer);
     const write = () => {
       try { localStorage.setItem(KEY, JSON.stringify(S)); return true; } catch { toast('저장 공간이 부족해요. 오래된 기록을 내보내고 지워 주세요.'); return false; }
@@ -1012,6 +1022,7 @@ body.sfv-open { overflow: hidden; }
   function renderSetup() {
     if (editing) return renderEdit();
     $('#main').innerHTML = `
+      ${syncCard()}
       <div class="card">
         <h2 class="sec">내 수업 반</h2>
         ${S.classes.length ? `<table class="list"><thead><tr><th>반</th><th>과목</th><th class="c">학생</th><th></th></tr></thead><tbody>${S.classes.map((c) => `<tr><td><b>${esc(c.name)}</b></td><td>${esc(c.subject || '-')}</td><td class="c">${c.students.length}</td><td class="c"><button class="textbtn" data-edit="${c.id}">고치기</button></td></tr>`).join('')}</tbody></table>` : '<p class="hint">아직 반이 없어요.</p>'}
@@ -1051,7 +1062,7 @@ body.sfv-open { overflow: hidden; }
         <h2 class="sec">자료 지우기</h2>
         <p class="hint">이 폰에 저장된 반·명단·출석 기록을 모두 지워요. 되돌릴 수 없어요.</p>
         <div class="row"><button class="btn small danger" id="wipe">전체 지우기</button></div>
-        <p class="hint dim">학생 자료는 이 폰의 브라우저 안에만 저장되고 어디로도 보내지 않아요. 연락처 설문지 응답은 선생님 구글 시트에 있으니 학년도가 끝나면 구글 드라이브에서 지워 주세요. 학생이 낸 서류는 선생님 구글 드라이브에 있어서 여기서 지워지지 않아요 — [서류함 → 구글 쪽 서류·요청 모두 지우기]로 지워 주세요.</p>
+        <p class="hint dim">학생 자료는 이 폰의 브라우저 안에 저장돼요${SY.conf ? '(구글 자동 저장이 켜져 있어 암호로 잠근 사본이 선생님 구글 계정의 출석부 저장소에도 있어요 — 위 [구글 자동 저장 → 더 보기]에서 지워요)' : '(구글 자동 저장을 켜지 않으면 어디로도 보내지 않아요)'}. 연락처 설문지 응답은 선생님 구글 시트에 있으니 학년도가 끝나면 구글 드라이브에서 지워 주세요. 학생이 낸 서류는 선생님 구글 드라이브에 있어서 여기서 지워지지 않아요 — [서류함 → 구글 쪽 서류·요청 모두 지우기]로 지워 주세요.</p>
       </div>`;
     paintFormQr();
   }
@@ -1117,7 +1128,7 @@ body.sfv-open { overflow: hidden; }
       renderSetup();
     }
     if (id === 'bkSave') download(new Blob([JSON.stringify(S)], { type: 'application/json' }), `출석부_백업_${ymdOf(new Date())}.json`);
-    if (id === 'wipe' && confirm('이 폰의 출석부 자료를 모두 지울까요? 되돌릴 수 없어요.')) { S = blank(); save(true); toast('모두 지웠어요'); renderSetup(); }
+    if (id === 'wipe' && confirm(SY.conf ? '이 폰의 출석부 자료를 모두 지우고 이 폰의 구글 자동 저장도 끌까요? 구글에 저장된 출석부는 그대로 있어요.' : '이 폰의 출석부 자료를 모두 지울까요? 되돌릴 수 없어요.')) { syncOff(); S = blank(); save(true); toast('모두 지웠어요'); renderSetup(); }
   });
   $('#main').addEventListener('change', async (e) => {
     if (e.target.id !== 'bkLoad' || !e.target.files[0]) return;
@@ -1176,9 +1187,11 @@ body.sfv-open { overflow: hidden; }
     return classes;
   }
   async function rosterFromLink() {
-    const m = /^#cb=([A-Za-z0-9_-]+)(?:&sf=([A-Za-z0-9_-]+))?$/.exec(location.hash);
+    const m = /^#cb=([A-Za-z0-9_-]+)(?:&sf=([A-Za-z0-9_-]+))?(?:&sy=([A-Za-z0-9_.-]+))?$/.exec(location.hash);
     if (!m || typeof DecompressionStream === 'undefined') return '';
-    const sfPart = m[2] ? `&sf=${m[2]}` : '';
+    // sy: 구글 자동 저장 열쇠 — 홈 화면 아이콘 주소에도 남겨 둔다(아이폰 홈 화면 앱은 저장 공간이 따로라 처음 열 때 다시 연결)
+    const sfPart = (m[2] ? `&sf=${m[2]}` : '') + (m[3] ? `&sy=${m[3]}` : '');
+    if (m[3]) SY.linked = m[3];
     if (m[2]) sfApply(m[2]); // 업무 도우미가 만든 학생 서류 받는 곳 → [서류함] 저절로 연결
     const key = linkKey(m[1]);
     if (S.ui.link === key) return '';
@@ -1762,7 +1775,11 @@ body.sfv-open { overflow: hidden; }
     const d = e.data;
     if (!d || d.type !== 'sf-made' || !d.res) return;
     const r = d.res;
-    if (!r.ok) { if (r.err !== 'api-off') { BOX.making = false; BOX.err = r.msg || '받는 곳을 만들지 못했어요.'; if (tab === 'box') renderBox(); } return; }
+    if (!r.ok) {
+      if (r.err !== 'api-off') { BOX.making = false; BOX.err = r.msg || '받는 곳을 만들지 못했어요.'; if (SY.making) { SY.making = false; SY.status = r.msg || '출석부 저장소를 만들지 못했어요.'; } if (tab === 'box') renderBox(); if (tab === 'setup') renderSetup(); }
+      return;
+    }
+    if (r.store) { SY.making = false; syncConnect(r.store).catch((err) => { SY.status = err.message; paintSync(); }); }
     if (!SF_URL_RE.test(String(r.url))) return;
     BOX.making = false; BOX.err = '';
     if (!S.cfg.sf || S.cfg.sf.u !== r.url) { S.cfg.sf = { u: r.url }; for (const c of S.classes) delete c.skSig; }
@@ -1902,6 +1919,239 @@ body.sfv-open { overflow: hidden; }
     }
   });
 
+  // ── 구글 자동 저장 ───────────────────────────────────────
+  // 선생님 구글 계정의 '출석부 저장소'(gas/sync-store, 만들기 다리가 만듦)에 출석부를 저절로 올리고 받는다.
+  // 보내기 전에 이 기기에서 압축 + AES-GCM 암호화(열쇠 = sha256('key|'+t)) → 구글에는 알아볼 수 없는 글자만 남는다.
+  // 기기마다 다른 것(ui: 고른 반·교시)은 보내지 않는다. 두 기기가 거의 동시에 고치면 나중에 고친 쪽을 남기고 다른 쪽은 이 기기에 보관
+  const STORE_RE = /^https:\/\/script\.google\.com\/macros\/s\/[\w-]{20,}\/exec$/;
+  const syncable = () => { const { ui, editedAt, ...rest } = S; return rest; };
+  const hhmm = (t) => { const d = new Date(t); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+  async function syncKeyOf(t) {
+    const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`key|${t}`));
+    return crypto.subtle.importKey('raw', d, 'AES-GCM', false, ['encrypt', 'decrypt']);
+  }
+  async function seal(obj, t) {
+    const z = await squeeze(new TextEncoder().encode(JSON.stringify(obj)), new CompressionStream('deflate-raw'));
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await syncKeyOf(t), z));
+    const all = new Uint8Array(iv.length + ct.length);
+    all.set(iv); all.set(ct, iv.length);
+    return b64u(all);
+  }
+  async function unseal(blob, t) {
+    const u8 = unb64u(blob);
+    let pt;
+    try { pt = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: u8.slice(0, 12) }, await syncKeyOf(t), u8.slice(12))); }
+    catch { throw new Error('구글 저장소 열쇠가 맞지 않아요. [구글 자동 저장 → 켜기]를 다시 눌러 주세요.'); }
+    return JSON.parse(new TextDecoder().decode(await squeeze(pt, new DecompressionStream('deflate-raw'))));
+  }
+  async function storeCall(body) {
+    const r = await fetch(SY.conf.u, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ ...body, t: SY.conf.t, s: SYNC_SLOT }) });
+    if (!r.ok) throw new Error(`구글 저장소가 대답하지 않아요(${r.status}).`);
+    return r.json();
+  }
+  const SYNC_ERR = { auth: '구글 저장소 열쇠가 맞지 않아요. [구글 자동 저장 → 켜기]를 다시 눌러 주세요.', full: '구글 저장소가 가득 찼어요. 지난 학기 자료를 백업 받고 지워 주세요.' };
+  const syncErr = (code) => SYNC_ERR[code] || `구글 저장소 오류(${code || '알 수 없음'})`;
+  function syncMark() {
+    if (!SY.conf) return;
+    SY.meta.dirty = true;
+    writeJson(SYNC_META, SY.meta);
+    clearTimeout(SY.timer);
+    SY.timer = setTimeout(() => syncPush(), 2500);
+  }
+  function setMeta(m) { SY.meta = { ...SY.meta, ...m }; writeJson(SYNC_META, SY.meta); }
+  // 구글 자료를 이 기기에 넣음(고른 반·교시는 이 기기 것 그대로)
+  function syncApply(box, rev) {
+    const ui = S.ui;
+    const loaded = { ...blank(), ...box.data, cfg: { ...blank().cfg, ...(box.data.cfg || {}) }, ui };
+    loaded.editedAt = box.editedAt || 0;
+    if (!loaded.classes.some((c) => c.id === ui.classId)) loaded.ui = { ...ui, classId: loaded.classes[0]?.id || '' };
+    S = loaded;
+    save(true, { remote: true });
+    setMeta({ rev, dirty: false, at: Date.now() });
+    SY.sent = JSON.stringify(syncable());
+    switchTab(tab);
+  }
+  // 두 기기가 모두 고쳤을 때: 나중에 고친 쪽을 남기고, 진 쪽은 이 기기 '되돌리기'에 보관
+  async function syncResolve(r) {
+    const box = await unseal(r.blob, SY.conf.t);
+    const mine = { v: 1, data: syncable(), editedAt: S.editedAt || 0 };
+    if ((box.editedAt || 0) > (S.editedAt || 0)) {
+      writeJson(`${KEY}.conflict`, { at: Date.now(), box: mine });
+      syncApply(box, r.rev);
+      toast('다른 기기에서 더 나중에 고친 출석부로 바꿨어요. 이 기기 자료는 [설정 → 구글 자동 저장 → 더 보기]에서 되돌릴 수 있어요.');
+      return;
+    }
+    writeJson(`${KEY}.conflict`, { at: Date.now(), box });
+    setMeta({ rev: r.rev });
+    SY.busy = false;
+    await syncPush();
+  }
+  async function syncPush({ force = false } = {}) {
+    if (!SY.conf) return;
+    if (SY.busy) { SY.again = true; return; }
+    const data = syncable();
+    const j = JSON.stringify(data);
+    if (!force && j === SY.sent) { setMeta({ dirty: false }); paintSync(); return; }
+    SY.busy = true;
+    if (!S.editedAt) S.editedAt = Date.now(); // 자동 저장 전에 만든 자료
+    const stamp = S.editedAt;
+    try {
+      const blob = await seal({ v: 1, data, editedAt: stamp }, SY.conf.t);
+      const r = await storeCall({ a: 'put', base: SY.meta.rev, blob, at: stamp, force });
+      if (r.ok) { SY.sent = j; SY.status = ''; setMeta({ rev: r.rev, dirty: S.editedAt !== stamp, at: Date.now() }); }
+      else if (r.err === 'conflict') { SY.busy = false; await syncResolve(r); return; }
+      else SY.status = syncErr(r.err);
+    } catch (e) {
+      SY.status = /열쇠/.test(e.message) ? e.message : '저장 대기 — 인터넷이 되면 올려요';
+    } finally {
+      SY.busy = false;
+      paintSync();
+    }
+    if (SY.again || (SY.meta.dirty && !SY.status)) { SY.again = false; clearTimeout(SY.timer); SY.timer = setTimeout(() => syncPush(), 1500); }
+  }
+  async function syncPull() {
+    if (!SY.conf || SY.busy) return;
+    SY.busy = true;
+    SY.lastPull = Date.now();
+    let r;
+    try { r = await storeCall({ a: 'get' }); }
+    catch { SY.busy = false; SY.status = '구글 저장소에 닿지 못했어요 — 이 기기 자료로 계속해요'; paintSync(); return; }
+    SY.busy = false;
+    if (!r.ok) { SY.status = syncErr(r.err); paintSync(); return; }
+    SY.status = '';
+    try {
+      if (r.rev > SY.meta.rev) {
+        if (SY.meta.dirty) await syncResolve(r);
+        else { syncApply(await unseal(r.blob, SY.conf.t), r.rev); toast('다른 기기에서 고친 출석부를 받았어요'); }
+      } else if (SY.meta.dirty) await syncPush();
+      else setMeta({ at: Date.now() });
+    } catch (e) { SY.status = e.message; }
+    paintSync();
+  }
+  // 켜기(만들기 다리에서 열쇠를 받음) / 다른 기기 QR·링크(#sy=…)
+  async function syncConnect(conf) {
+    if (!conf || !STORE_RE.test(String(conf.u)) || !/^[0-9a-f]{64}$/.test(String(conf.t))) throw new Error('구글 저장소 연결 정보 모양이 달라요.');
+    const same = SY.conf && SY.conf.u === conf.u && SY.conf.t === conf.t;
+    SY.conf = { u: conf.u, t: conf.t };
+    writeJson(SYNC_KEY, SY.conf);
+    if (!same) setMeta({ rev: 0, dirty: false, at: 0 });
+    SY.status = '';
+    paintSync();
+    const r = await storeCall({ a: 'get' });
+    if (!r.ok) throw new Error(syncErr(r.err));
+    if (r.rev > 0 && r.rev !== SY.meta.rev) {
+      const box = await unseal(r.blob, conf.t);
+      const n = (box.data.classes || []).length;
+      const mine = S.classes.length && (S.editedAt || 0) !== (box.editedAt || 0);
+      if (!mine || confirm(`구글에 저장된 출석부가 있어요(반 ${n}개, ${hhmm(r.at || box.editedAt)} 저장).\n그 자료로 바꿀까요?\n[취소]를 누르면 이 기기 자료를 구글에 올려요.`)) {
+        syncApply(box, r.rev);
+        toast('구글에 저장된 출석부를 받았어요');
+        return;
+      }
+      setMeta({ rev: r.rev });
+    }
+    if (S.classes.length) { await syncPush({ force: true }); toast('구글 자동 저장을 켰어요'); }
+    else { setMeta({ rev: r.rev, at: Date.now() }); toast('구글 자동 저장을 켰어요'); }
+    paintSync();
+  }
+  function syncOff() {
+    SY.conf = null; SY.status = '';
+    writeJson(SYNC_KEY, null); writeJson(SYNC_META, null);
+    SY.meta = { rev: 0, dirty: false, at: 0 };
+  }
+  function makeStore() {
+    if (!MAKER_URL) { toast('자동 저장이 아직 준비 중이에요.'); return; }
+    // 구글 '계정 고르기' 화면은 Apps Script에 안 먹혀서(2026-10-29) 그 창 안에서 계정 번호로 고른다(설정한 계정이 있으면 authuser로)
+    const acc = gAccount();
+    const w = window.open(`${MAKER_URL}?${new URLSearchParams({ origin: location.origin, w: 'store', ...(APP === 'class' ? { app: 'class' } : {}), ...(acc ? { authuser: acc } : {}) })}`, 'chulseokbu-store-maker', 'width=460,height=600');
+    if (!w) { toast('팝업이 막혔어요. 주소창의 팝업 허용을 누른 뒤 다시 해 주세요.'); return; }
+    SY.making = true; SY.status = '';
+    paintSync();
+  }
+  // 링크·QR의 열쇠: '배포ID.열쇠'(짧게 — QR이 덜 빽빽)
+  const syShort = (c) => `${c.u.split('/s/')[1].split('/')[0]}.${c.t}`;
+  const syncLink = () => `${location.origin}${location.pathname}${location.search}#sy=${syShort(SY.conf)}`;
+  function syncCard() {
+    const on = !!SY.conf;
+    const st = SY.making ? '작은 창에서 계정을 확인하고 [이 계정에 켜기]를 눌러 주세요'
+      : SY.status ? SY.status
+        : !on ? '' : SY.busy ? '구글과 맞추는 중…' : SY.meta.dirty ? '저장 대기' : SY.meta.at ? `저장됨 · ${hhmm(SY.meta.at)}` : '켜짐';
+    const bad = !!SY.status && !/대기/.test(SY.status);
+    const back = readJson(`${KEY}.conflict`);
+    return `<div class="card" id="syncCard">
+        <h2 class="sec">구글 자동 저장</h2>
+        ${on ? `<p class="hint"><b class="${bad ? 'sy-bad' : 'sy-ok'}">${esc(st)}</b></p>
+          <p class="hint dim">출결을 누르면 몇 초 뒤 선생님 구글 계정의 출석부 저장소에 저절로 저장되고, 같은 계정으로 켠 다른 기기(폰·PC)가 받아 가요. 이 기기에서 암호로 잠근 뒤 보내요.</p>
+          <div class="row"><button class="btn small" id="syNow">지금 맞추기</button><button class="btn small" id="syQr">다른 기기 연결 QR</button><button class="btn small" id="syOff">이 기기에서 끄기</button></div>
+          <div id="syQrBox"></div>
+          <details><summary class="hint">더 보기</summary>
+            ${back ? `<p class="hint">겹쳐서 바뀌기 전 자료(${hhmm(back.at)}) <button class="textbtn" id="syBack">그 자료로 되돌리기</button></p>` : ''}
+            <p class="hint">구글에 저장된 이 출석부를 지우려면 <button class="textbtn danger" id="syWipe">구글에 저장된 출석부 지우기</button> (이 기기 자료는 그대로)</p>
+          </details>`
+        : `<p class="hint">폰을 바꾸거나 PC에서 열어도 같은 출석부가 보이게, 선생님 <b>교육청 구글 계정</b>에 저절로 저장해요. 이 기기에서 암호로 잠근 뒤 보내서 구글에는 알아볼 수 없는 글자로만 남아요.</p>
+          ${st ? `<p class="hint"><b class="${bad ? 'sy-bad' : 'sy-ok'}">${esc(st)}</b></p>` : ''}
+          <div class="row"><button class="btn small main" id="syOn">켜기</button></div>
+          <p class="hint dim">처음 한 번 작은 창에서 학교 구글 계정을 확인하고 [이 계정에 켜기]를 누르면 돼요. 다른 기기도 같은 계정으로 [켜기]만 누르면 같은 출석부가 들어와요.</p>`}
+      </div>`;
+  }
+  function paintSync() {
+    const c = document.getElementById('syncCard');
+    if (c) c.outerHTML = syncCard();
+  }
+  document.addEventListener('click', async (e) => {
+    const id = e.target.id;
+    if (id === 'syOn') { makeStore(); return; }
+    if (id === 'syNow') { await syncPull(); if (SY.meta.dirty) await syncPush(); paintSync(); return; }
+    if (id === 'syQr') {
+      const box = $('#syQrBox');
+      if (box.innerHTML) { box.innerHTML = ''; return; }
+      try { box.innerHTML = `${await qrImg(syncLink(), '다른 기기 연결 QR', 240)}<p class="hint">선생님의 다른 기기 카메라로 찍으면 같은 출석부가 들어와요. 이 QR에는 출석부 열쇠가 들어 있어요 — 다른 사람에게 보여 주지 마세요.</p>`; }
+      catch { box.textContent = 'QR을 그리지 못했어요.'; }
+      return;
+    }
+    if (id === 'syOff' && confirm('이 기기에서 구글 자동 저장을 끌까요? 구글에 저장된 출석부와 이 기기 자료는 그대로 있어요.')) { syncOff(); renderSetup(); return; }
+    if (id === 'syWipe' && confirm('구글에 저장된 이 출석부를 지울까요? 다른 기기도 더는 받아 가지 못해요(각 기기 안의 자료는 그대로).')) {
+      try { const r = await storeCall({ a: 'wipe' }); if (!r.ok) throw new Error(syncErr(r.err)); setMeta({ rev: 0, dirty: false }); toast('구글에 저장된 출석부를 지웠어요'); }
+      catch (err) { toast(err.message); }
+      renderSetup();
+      return;
+    }
+    if (id === 'syBack') {
+      const back = readJson(`${KEY}.conflict`);
+      if (!back || !confirm('겹쳐서 바뀌기 전 자료로 되돌릴까요? 지금 자료는 덮어써져요.')) return;
+      const ui = S.ui;
+      S = { ...blank(), ...back.box.data, cfg: { ...blank().cfg, ...(back.box.data.cfg || {}) }, ui };
+      writeJson(`${KEY}.conflict`, null);
+      save(true);
+      toast('되돌렸어요');
+      renderSetup();
+    }
+  });
+  // 다른 기기 QR·만들기 창에서 돌아온 링크(#sy=…)
+  function syFromLink() {
+    const m = /^#sy=([A-Za-z0-9_.-]+)$/.exec(location.hash);
+    if (!m) return '';
+    history.replaceState(null, '', `${location.pathname}${location.search}`);
+    return m[1];
+  }
+  const syDecode = (v) => {
+    const m = /^([\w-]{20,})\.([0-9a-f]{64})$/.exec(v || '');
+    return m ? { u: `https://script.google.com/macros/s/${m[1]}/exec`, t: m[2] } : null;
+  };
+  document.addEventListener('visibilitychange', () => {
+    if (!SY.conf) return;
+    if (document.hidden) { if (SY.meta.dirty) syncPush(); return; }
+    if (Date.now() - SY.lastPull > 15000) syncPull();
+  });
+  window.addEventListener('online', () => { if (SY.conf && SY.meta.dirty) syncPush(); });
+  // 켜 둔 동안 30초마다 판만 보고, 다른 기기가 고쳤으면 받음(교사 요청 2026-10-29: PC·폰 어디서 체크하든 서로 따라오게)
+  setInterval(async () => {
+    if (!SY.conf || SY.busy || document.hidden || Date.now() - SY.lastPull < 25000) return;
+    SY.lastPull = Date.now();
+    try { const h = await storeCall({ a: 'head' }); if (h.ok && h.rev > SY.meta.rev) syncPull(); } catch { /* 다음에 */ }
+  }, 30000);
+
   // ── 탭 ────────────────────────────────────────────────
   function switchTab(t) {
     syncBoxTab();
@@ -1923,11 +2173,15 @@ body.sfv-open { overflow: hidden; }
   const sfLinked = sfFromLink();
   switchTab(sfLinked ? 'box' : S.classes.length ? 'check' : 'setup');
   if (S.cfg.sf && !sfLinked) setTimeout(() => refreshBox(true), 600);
+  const syLinked = syFromLink();
   rosterFromLink().then((msg) => {
-    if (!msg) return;
-    switchTab('check');
-    showHomeSheet(msg);
-  }).catch((err) => toast(err.message || '링크의 명단을 읽지 못했어요'));
+    if (msg) { switchTab('check'); showHomeSheet(msg); }
+  }).catch((err) => toast(err.message || '링크의 명단을 읽지 못했어요')).then(() => {
+    // 자동 저장: 링크에 열쇠가 있으면 연결(처음이면 구글 자료를 받아 옴), 아니면 최신 자료를 받음
+    const conf = syDecode(syLinked || SY.linked || '');
+    if (conf && !(SY.conf && SY.conf.u === conf.u && SY.conf.t === conf.t)) syncConnect(conf).catch((err) => toast(err.message));
+    else if (SY.conf) setTimeout(() => syncPull(), 300);
+  });
 })();
 </script>
 </body>
