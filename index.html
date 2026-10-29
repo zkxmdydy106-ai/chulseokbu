@@ -767,6 +767,9 @@ body.sfv-open { overflow: hidden; }
 
   // ── 내보내기 ──────────────────────────────────────────
   let exp = { from: '', to: '' };
+  const monthRange = (ymd) => ({ from: `${ymd.slice(0, 6)}01`, to: ymdOf(new Date(+ymd.slice(0, 4), +ymd.slice(4, 6), 0)) });
+  // 지금 고른 기간이 어느 버튼과 같은지(버튼 표시용)
+  const rangeIs = (k) => { const m = monthRange(day), w = weekRange(day); return k === 'today' ? exp.from === day && exp.to === day : k === 'week' ? exp.from === w[0] && exp.to === w[1] : exp.from === m.from && exp.to === m.to; };
   function weekRange(ymd) {
     const d = dateOf(ymd);
     const mon = new Date(d); mon.setDate(d.getDate() - ((d.getDay() + 6) % 7));
@@ -789,7 +792,7 @@ body.sfv-open { overflow: hidden; }
     return out.sort((a, b) => a.ymd.localeCompare(b.ymd) || a.pir - b.pir || a.cls.localeCompare(b.cls, 'ko', { numeric: true }) || a.no - b.no);
   }
   function renderExport() {
-    if (!exp.from) [exp.from, exp.to] = weekRange(day);
+    if (!exp.from) exp = { from: day, to: day }; // 기본은 오늘(교사 결정 2026-10-28) — 이번 주·이번 달·날짜 범위는 위 [기간]에서
     const rows = exportRows(exp.from, exp.to);
     const marked = rows.filter((r) => r.mark !== '출석');
     const byDay = {};
@@ -797,10 +800,23 @@ body.sfv-open { overflow: hidden; }
     const drows = dailyRows(exp.from, exp.to);
     $('#main').innerHTML = `
       <div class="card">
+        <h2 class="sec">기간</h2>
+        <div class="chips">
+          <button class="chip ${rangeIs('today') ? 'on' : ''}" data-range="today">오늘</button>
+          <button class="chip ${rangeIs('week') ? 'on' : ''}" data-range="week">이번 주</button>
+          <button class="chip ${rangeIs('month') ? 'on' : ''}" data-range="month">이번 달</button>
+        </div>
+        <div class="row">
+          <label class="field" style="flex:1;margin:0"><span>시작</span><input type="date" id="exFrom" value="${isoOf(exp.from)}"></label>
+          <label class="field" style="flex:1;margin:0"><span>끝</span><input type="date" id="exTo" value="${isoOf(exp.to)}"></label>
+        </div>
+        <p class="hint dim">날짜를 하나만 보내려면 시작과 끝을 같은 날로 고르세요. 아래 [PC로 보내기]·파일 모두 이 기간으로 만들어요.</p>
+      </div>
+      <div class="card">
         <h2 class="sec">PC로 보내기</h2>
         <p class="hint">${exp.from === exp.to ? esc(showDay(exp.from)) : `${esc(showDay(exp.from))} ~ ${esc(showDay(exp.to))}`} 출결(${APP === 'class' ? `${rows.length}줄` : `담임 ${drows.length}줄 · 교과 ${rows.length}줄`})을 선생님 구글 계정 시트에 올려요. PC 업무 도우미에서 <b>[폰 출결 가져오기]</b>를 누르면 바로 확인 표로 넘어가고, 시트는 비워져요.</p>
         <div class="row"><button class="btn main full" id="exPush" ${drows.length || rows.length ? '' : 'disabled'}>PC로 보내기</button></div>
-        <p class="hint dim">폰과 PC 모두 같은 교육청 구글 계정으로 로그인해 두세요. 기간은 아래에서 바꿔요.</p>
+        <p class="hint dim">폰과 PC 모두 같은 교육청 구글 계정으로 로그인해 두세요.</p>
       </div>
       ${drows.length ? `<div class="card">
         <h2 class="sec">담임 일일출결 파일</h2>
@@ -810,15 +826,6 @@ body.sfv-open { overflow: hidden; }
       </div>` : ''}
       <div class="card">
         <h2 class="sec">${drows.length ? '교과 과목별출결 파일' : '나이스용 파일 만들기'}</h2>
-        <div class="chips">
-          <button class="chip" data-range="today">오늘</button>
-          <button class="chip" data-range="week">이번 주</button>
-          <button class="chip" data-range="month">이번 달</button>
-        </div>
-        <div class="row">
-          <label class="field" style="flex:1;margin:0"><span>시작</span><input type="date" id="exFrom" value="${isoOf(exp.from)}"></label>
-          <label class="field" style="flex:1;margin:0"><span>끝</span><input type="date" id="exTo" value="${isoOf(exp.to)}"></label>
-        </div>
         <p class="hint">결과 <b>${marked.filter((r) => r.mark === '결과').length}</b>건 · 출석인정 <b>${marked.filter((r) => r.mark === '출석인정').length}</b>건${rows.length > marked.length ? ` · 출석으로 되돌림 ${rows.length - marked.length}건` : ''}</p>
         <div class="row"><button class="btn main full" id="exXlsx" ${rows.length ? '' : 'disabled'}>엑셀 파일 내려받기</button></div>
         <div class="row" style="margin-top:6px"><button class="btn small" id="exCsv" ${rows.length ? '' : 'disabled'}>CSV로 받기</button></div>
@@ -844,7 +851,7 @@ body.sfv-open { overflow: hidden; }
     if (r) {
       if (r.dataset.range === 'today') exp = { from: day, to: day };
       if (r.dataset.range === 'week') [exp.from, exp.to] = weekRange(day);
-      if (r.dataset.range === 'month') exp = { from: `${day.slice(0, 6)}01`, to: ymdOf(new Date(+day.slice(0, 4), +day.slice(4, 6), 0)) };
+      if (r.dataset.range === 'month') exp = monthRange(day);
       renderExport();
       return;
     }
