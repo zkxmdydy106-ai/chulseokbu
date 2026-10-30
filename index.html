@@ -906,7 +906,9 @@ body.sfv-open { overflow: hidden; }
     pushData = { daily: daily.length > 1 ? daily : [], subject: subject.length > 1 ? subject : [], kinds, from: exp.from, to: exp.to };
     // 자료는 구글 창 주소의 '#d=' 뒤에 실어 보낸다('#' 뒤는 서버로 가지 않음, 다리가 읽고 주소에서 지움).
     // 폰에서는 구글 창이 열리면 이 화면이 뒤로 가 멈춰 다리의 '준비됨'에 대답하지 못했음(2026-10-30 교사 제보: '자료를 기다리는 중…'에서 멈춤)
-    openBridge({ mode: 'push' }, `#d=${b64u(new TextEncoder().encode(JSON.stringify(pushData)))}`);
+    // wv: 이 판(표를 '#'에 실음)을 다리에 알림 — 다리가 옛 판 출석부를 알아보고 '다시 열어 주세요'라고 함
+    // direct: 계정 고르기 화면(accounts.google.com)을 거치지 않고 authuser로만 — 그 화면을 거치면 '#'와 출석부 창 연결이 끊김(2026-10-30 폰 실제)
+    openBridge({ mode: 'push', wv: '2' }, `#d=${b64u(new TextEncoder().encode(JSON.stringify(pushData)))}`, { direct: true });
   }
   function table() {
     return [['날짜', '교시', '반', '번호', '이름', '구분', '사유'],
@@ -1379,7 +1381,7 @@ body.sfv-open { overflow: hidden; }
       box.innerHTML = `<img src="${q.createDataURL(cell, cell * 4)}" width="${n * cell}" height="${n * cell}" alt="연락처 설문지 QR"><div class="dim" style="font-size:12px;word-break:break-all">${esc(F.formUrl)}</div>`;
     } catch { box.textContent = F.formUrl; }
   }
-  function openBridge(params, hash = '') {
+  function openBridge(params, hash = '', { direct = false } = {}) {
     let url = bridgeUrl();
     if (!url) {
       url = (prompt('구글 연결 주소(Apps Script 웹앱 주소)를 붙여 넣어 주세요.') || '').trim();
@@ -1389,7 +1391,9 @@ body.sfv-open { overflow: hidden; }
     // 고른 구글 계정으로(교사 요청 2026-10-28: 폰에 다른 계정이 로그인돼 있어 PC로 보내기가 엉뚱한 계정으로 감)
     // authuser로 그 계정을 고르고, 그 계정이 아직 로그인돼 있지 않으면 구글 계정 선택 화면에서 로그인한 뒤 이어서 연다
     // hash: 계정 선택 화면(accounts.google.com)을 거쳐도 넘겨받는 주소 뒤 '#'(브라우저가 이어 붙임 — 서버로는 안 감)
-    bridgeWin = window.open(asAccount(url, { origin: location.origin, ...params }) + hash, 'chulseokbu-bridge', 'width=480,height=680');
+    const acc = gAccount();
+    const to = direct ? `${url}?${new URLSearchParams({ origin: location.origin, ...params, ...(acc ? { authuser: acc } : {}) })}` : asAccount(url, { origin: location.origin, ...params });
+    bridgeWin = window.open(to + hash, 'chulseokbu-bridge', 'width=480,height=680');
   }
   // 구글 창 일이 끝나면 그 창을 닫고 출석부 화면으로 돌아옴(교사 요청 2026-10-28: 보내기가 끝나도 구글 창에 머물렀음)
   let bridgeWin = null;
