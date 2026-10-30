@@ -45,6 +45,9 @@ main { padding: 12px; }
 .sec::before { content: ""; position: absolute; left: 0; top: 4px; width: 4px; height: 16px; background: var(--blue); }
 .sub { margin: 12px 0 6px; font-size: 13px; font-weight: 700; color: var(--text-2); }
 .hint { margin: 8px 0 0; font-size: 13px; color: var(--text-2); }
+.hint.warn { color: var(--res); }
+.acc-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 8px 0 2px; font-size: 13px; overflow-wrap: anywhere; }
+.acc-line b { color: var(--text); }
 .dim { color: var(--text-3); }
 
 /* 고르기 칩 */
@@ -825,6 +828,7 @@ body.sfv-open { overflow: hidden; }
       <div class="card">
         <h2 class="sec">PC로 보내기</h2>
         <p class="hint">${exp.from === exp.to ? esc(showDay(exp.from)) : `${esc(showDay(exp.from))} ~ ${esc(showDay(exp.to))}`} 출결(${APP === 'class' ? `${rows.length}줄` : `담임 ${drows.length}줄 · 교과 ${rows.length}줄`})을 선생님 구글 계정 시트에 올려요. PC 업무 도우미에서 <b>[폰 출결 가져오기]</b>를 누르면 바로 확인 표로 넘어가고, 시트는 비워져요.</p>
+        ${pushAccountLine()}
         <div class="row"><button class="btn main full" id="exPush" ${drows.length || rows.length ? '' : 'disabled'}>PC로 보내기</button></div>
         <p class="hint dim">폰과 PC 모두 같은 교육청 구글 계정으로 로그인해 두세요.</p>
       </div>
@@ -1395,6 +1399,31 @@ body.sfv-open { overflow: hidden; }
     const target = `${url}?${new URLSearchParams({ ...params, ...(acc ? { authuser: acc } : {}) })}`;
     return acc ? `https://accounts.google.com/AccountChooser?${new URLSearchParams({ Email: acc, continue: target })}` : target;
   }
+  // [PC로 보내기] 바로 위 '보낼 계정' 줄(교사 요청 2026-10-30: PC 크롬에서 계정을 안 적어 개인 계정으로 보내짐 — 설정 화면까지 가지 않게)
+  // 적은 계정은 설정의 '구글 계정' 칸과 같은 것(이 기기 브라우저에만 저장). 지난번에 개인 계정(gmail.com)으로 보냈으면 빨간 안내
+  let accEditing = false;
+  function pushAccountLine() {
+    const acc = gAccount(), last = S.ui.lastPushEmail || '';
+    const personal = /@gmail\.com$/i.test(last);
+    const warn = last && (personal || (acc && last !== acc))
+      ? `<p class="hint warn">지난번엔 <b>${esc(last)}</b>${personal ? '(개인 계정)' : ''}으로 보냈어요${acc && last !== acc ? ` — 적은 계정(${esc(acc)})과 달라요` : ''}. 교육청 계정으로 다시 보내 주세요.</p>` : '';
+    if (acc && !accEditing) return `<div class="acc-line"><span>보낼 계정 <b>${esc(acc)}</b></span><button class="btn small" id="exAccEdit">바꾸기</button></div>${warn}`;
+    return `<label class="field"><span>보낼 구글 계정(교육청)</span><input type="email" id="exAccInput" placeholder="예: teacher@school.cnehs.kr" value="${esc(acc)}" autocomplete="email"></label>
+        <div class="row"><button class="btn small main" id="exAccSave">저장</button>${acc ? '<button class="btn small" id="exAccCancel">그대로</button>' : ''}</div>
+        ${acc ? '' : '<p class="hint warn">계정을 안 적으면 이 브라우저에 <b>처음 로그인한 구글 계정</b>으로 보내져요(개인 계정일 수 있어요).</p>'}${warn}`;
+  }
+  document.addEventListener('click', (e) => {
+    if (e.target.id === 'exAccEdit') { accEditing = true; renderExport(); setTimeout(() => $('#exAccInput')?.focus(), 0); return; }
+    if (e.target.id === 'exAccCancel') { accEditing = false; renderExport(); return; }
+    if (e.target.id === 'exAccSave') {
+      const v = String($('#exAccInput').value || '').trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) { toast('계정 주소를 적어 주세요(예: teacher@school.cnehs.kr)'); return; }
+      try { localStorage.setItem(ACC_KEY, v); } catch { /* 저장 못 함 */ }
+      accEditing = false;
+      toast(/@gmail\.com$/i.test(v) ? '개인 계정(gmail.com)이에요 — 교육청 계정인지 확인해 주세요' : '이 계정으로 보낼게요');
+      renderExport();
+    }
+  });
   // 이 폰에서 PC로 보내기·연락처에 쓸 구글 계정(주소만, 이 폰에만 저장)
   const ACC_KEY = 'chulseokbu.gaccount';
   const gAccount = () => { try { return localStorage.getItem(ACC_KEY) || ''; } catch { return ''; } };
@@ -1430,6 +1459,7 @@ body.sfv-open { overflow: hidden; }
       const used = String(d.info?.email || '').toLowerCase(), want = gAccount();
       if (used) { S.ui.lastPushEmail = used; save(); }
       closeBridge();
+      if (tab === 'export') renderExport();
       toast(want && used && used !== want ? `${used} 계정으로 보냈어요 — 설정의 계정(${want})과 달라요` : `PC로 보냈어요${used ? `(${used})` : ''} — PC 도우미에서 [폰 출결 가져오기]`);
       return;
     }
