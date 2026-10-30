@@ -228,7 +228,107 @@
     let i = from;
     for (let n = 0; n < count; i++) { const t = orig(kind, `${cell}.p${i}`); if (t === undefined) break; if (!t.trim()) { O[`${cell}.p${i}`] = { skip: true }; n++; } }
   }
-  const linesOf = (s, per = 44) => String(s || '').split('\n').reduce((n, l) => n + Math.max(1, Math.ceil(l.length / per)), 0);
+
+  /* ── 결과보고서 별지(교사 요청 2026-10-29): 1쪽 학습내용·소감 칸에 다 안 들어가면 원본 서식의 별지 쪽에 이어 쓴다 ──
+     줄 수는 글자 폭으로 어림한다. 크롬에서 잰 10pt 글자 폭(em): 한글 1, 빈칸 0.5, 숫자 0.5, 영문·기호 약 0.43 → 영문·숫자·기호는 0.6으로 넉넉히.
+     줄을 나누는 자리는 빈칸 뒤와 한글·한자 사이만(크롬이 나누는 자리의 일부) — 그래서 크롬이 그린 줄 수는 어림보다 늘 같거나 적다.
+     W: 한 줄 폭(em) — 1쪽 칸 538px, 별지 줄 칸 625px을 10pt(13.3px)로 나눈 값(40.4, 47)보다 조금 좁게.
+     CAP: 칸이 커지지 않고 들어가는 10pt 줄 수 — 학습내용 칸 181px, 소감 칸 89px ÷ 한 줄 14.7px */
+  const RW = { p1: 39, more: 46 };
+  const RCAP = { day: 12, feel: 6 };
+  const HANCHAR = /[\u1100-\u11ff\u3130-\u318f\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7a3\uf900-\ufaff]/; /* 한글 자모·음절, 한자 */
+  const chW = (s, i) => { const c = s.charCodeAt(i); return c === 32 ? [0.5, 1] : c > 32 && c < 127 ? [0.6, 1] : c >= 0xd800 && c < 0xdc00 ? [1.3, 2] : [1, 1]; };
+  /* 글 → 줄마다 [시작, 끝) 글자 위치(줄 끝 빈칸은 뺌). 줄바꿈은 그대로 새 줄 */
+  function wrapAt(s, W) {
+    const out = [];
+    let seg = 0;
+    for (const part of s.split('\n')) {
+      const end = seg + part.length;
+      let a = seg;
+      if (a === end) out.push([a, a]);
+      while (a < end) {
+        let i = a, w = 0, opp = -1;
+        while (i < end) {
+          if (i > a && (s[i - 1] === ' ' ? s[i] !== ' ' : HANCHAR.test(s[i - 1]) && HANCHAR.test(s[i]))) opp = i;
+          const [cw, n] = chW(s, i);
+          if (s[i] !== ' ' && w + cw > W) break;
+          w += cw; i += n;
+        }
+        const b = i >= end ? end : opp > a ? opp : Math.max(i, a + chW(s, a)[1]);
+        let e = b;
+        while (e > a && s[e - 1] === ' ') e--;
+        out.push([a, e]);
+        a = b;
+        while (a < end && s[a] === ' ') a++;
+      }
+      seg = end + 1;
+    }
+    return out;
+  }
+  const cleanText = (t) => String(t || '').replace(/\r\n?/g, '\n').replace(/\t/g, '    ').replace(/\s+$/, '');
+  const lead = (it) => `${it.head} ${it.pre || ''}${it.text}`;
+  const CONT = '<span class="ln sf-cont" style="text-align:right">(별지에 이어서)</span>';
+  /* 1쪽에 넣을 것과 별지로 넘길 것: 날짜는 통째로 들어가는 만큼 1쪽에, 남는 날짜는 별지에(1쪽에 3줄 이상 남으면 그 날짜를 나눠 1쪽을 채움).
+     소감도 6줄이 넘으면 5줄까지 1쪽, 나머지는 별지에. 별지가 생기면 1쪽 칸 끝 한 줄에 '(별지에 이어서)' */
+  function reportFlow(doc) {
+    const f = doc.f || {}, can = !!FORMS()['field-report-more'];
+    const items = [].concat(f.days || []).filter((d) => dateOf(d.date)).sort((x, y) => x.date.localeCompare(y.date))
+      .map((d) => ({ head: `${md(d.date)}(${dayName(d.date)})`, text: cleanText(d.text) }));
+    const nl = (it) => wrapAt(lead(it), RW.p1).length;
+    const all = items.reduce((n, it) => n + nl(it), 0);
+    const r = { days: items, dayLines: all, daysCont: false, feel: cleanText(f.feel), feelLines: 0, feelCont: false, more: [] };
+    if (can && all > RCAP.day) {
+      let room = RCAP.day - 1, i = 0;
+      r.days = [];
+      while (i < items.length && nl(items[i]) <= room) { room -= nl(items[i]); r.days.push(items[i++]); }
+      if (i < items.length && (!r.days.length || room >= 3)) {
+        const it = items[i++], cut = Math.max(0, wrapAt(lead(it), RW.p1)[room - 1][1] - it.head.length - 1);
+        r.days.push({ ...it, text: it.text.slice(0, cut).replace(/\s+$/, '') });
+        r.more.push({ head: it.head, pre: '(이어서) ', text: it.text.slice(cut).replace(/^\s+/, '') });
+        room = 0;
+      }
+      r.more.push(...items.slice(i));
+      r.dayLines = RCAP.day - room;
+      r.daysCont = true;
+    }
+    const fl = r.feel ? wrapAt(r.feel, RW.p1) : [];
+    r.feelLines = fl.length;
+    if (can && fl.length > RCAP.feel) {
+      const cut = fl[RCAP.feel - 2][1];
+      r.more.push({ head: '소감', pre: '(이어서) ', text: r.feel.slice(cut).replace(/^\s+/, '') });
+      r.feel = r.feel.slice(0, cut).replace(/\s+$/, '');
+      r.feelLines = RCAP.feel;
+      r.feelCont = true;
+    }
+    return r;
+  }
+  /* 별지 쪽들: 줄 칸마다 한 줄(날짜 굵게 + 내용, 1쪽과 같은 휴먼고딕 10pt). 줄 칸이 모자라면 별지를 한 쪽 더 */
+  function fillMore(doc) {
+    const T = FORMS()['field-report-more'], flow = reportFlow(doc);
+    if (!T || !flow.more.length) return [];
+    const tb = T.blocks[1];
+    const slots = tb.cells.filter((c) => c.r > 0 && c.cs === tb.cols.length).sort((x, y) => x.r - y.r).map((c) => `t1.r${c.r}c${c.c}.p0`);
+    const font = `${fontCss('휴먼고딕')};font-weight:400;${spacingCss('휴먼고딕', 0, 100)}`; /* 마지막 줄 칸은 원본이 굵은 글씨라 보통 굵기로 */
+    const rows = [];
+    for (const it of flow.more) {
+      const s = lead(it), H = it.head.length;
+      for (const [a, b] of wrapAt(s, RW.more)) {
+        const bold = s.slice(a, Math.min(b, H)), rest = s.slice(Math.max(a, H), b);
+        rows.push(`<span style="${font}">${bold ? `<b>${esc(bold)}</b>` : ''}${rest ? V(rest) : ''}</span>`);
+      }
+    }
+    const n = gcn(doc.cls, doc.no), pages = Math.ceil(rows.length / slots.length), out = [];
+    const gaps = (src, vals) => { let k = 0; return esc(src).replace(/ +(?=\S)/g, (sp) => {
+      const v = String(vals[k++] ?? ''), w = [...v].reduce((x, ch) => x + (/[\x20-\x7e]/.test(ch) ? 1 : 2), 0), rest = Math.max(2, sp.length - w), l = rest >> 1;
+      return `${' '.repeat(l)}${V(v)}${' '.repeat(rest - l)}`; }); };
+    for (let k = 0; k < pages; k++) {
+      const O = { 't1.r0c1.p0': { html: gaps(orig('field-report-more', 't1.r0c1.p0'), [n.g, n.c, n.no]), fit: true }, 't1.r0c3.p0': { html: V(doc.name), fit: true } };
+      rows.slice(k * slots.length, (k + 1) * slots.length).forEach((h, j) => { O[slots[j]] = { html: h, align: 'left', size: 10, fit: true }; });
+      if (pages > 1) O.p2 = { html: `별지 ${V(k + 1)}/${V(pages)}`, align: 'right' };
+      out.push(O);
+    }
+    return out;
+  }
 
   function fillAbsence(doc) {
     const f = doc.f || {}, O = {}, K = 'absence';
@@ -352,13 +452,14 @@
     const f = doc.f || {}, O = {}, K = 'field-report';
     fillFieldTop(doc, O, { day: 't0.r4c4.p0', halfTotal: 't0.r6c4.p1', half: 't0.r6c8.p0', form: 't0.r8c1.p0', purpose: 't0.r9c1.p0', dest: 't0.r9c12.p0', gName: 't0.r10c1.p0', gRel: 't0.r10c5.p0', gTel: 't0.r10c12.p0', lName: 't0.r11c1.p0', lRel: 't0.r11c5.p0', lTel: 't0.r11c12.p0' });
     O['t2.r0c1.p0'] = { html: `▸ ${V(f.place)}`, align: 'left' };
-    const days = [].concat(f.days || []).filter((d) => dateOf(d.date)).sort((x, y) => x.date.localeCompare(y.date));
-    if (days.length) {
-      O['t4.r0c1.p0'] = { html: days.map((d) => `<b>${esc(md(d.date))}(${esc(dayName(d.date))})</b> ${V(d.text || '')}`).join('<br>'), align: 'left', size: 10 };
-      dropBlanks(O, K, 't4.r0c1', 1, Math.min(8, days.reduce((n, d) => n + linesOf(d.text), 0)));
+    /* 칸에 들어갈 만큼만(글자를 줄이지 않게), 남는 것은 별지(fillMore) */
+    const flow = reportFlow(doc);
+    if (flow.days.length) {
+      O['t4.r0c1.p0'] = { html: flow.days.map((d) => `<b>${esc(d.head)}</b> ${V(d.text)}`).join('<br>') + (flow.daysCont ? CONT : ''), align: 'left', size: 10 };
+      dropBlanks(O, K, 't4.r0c1', 1, Math.min(8, flow.dayLines));
     }
-    if (!blank(f.feel)) { O['t4.r1c1.p0'] = { html: V(f.feel), align: 'left', size: 10 }; dropBlanks(O, K, 't4.r1c1', 1, Math.min(4, linesOf(f.feel))); }
-    const n = days.filter((d) => imgOk(d.photo)).length;
+    if (!blank(flow.feel)) { O['t4.r1c1.p0'] = { html: V(flow.feel) + (flow.feelCont ? CONT : ''), align: 'left', size: 10 }; dropBlanks(O, K, 't4.r1c1', 1, Math.min(4, flow.feelLines)); }
+    const n = [].concat(f.days || []).filter((d) => dateOf(d.date) && imgOk(d.photo)).length;
     if (n) O.p5 = { html: `※ 사진 증빙: 뒤쪽 붙임(날짜별 ${V(n)}장)` };
     O.p8 = dateLine(f.date);
     O.p9 = signLine('학  생', doc.name, '(인)', (f.sig || {}).stu, orig('field-report', 'p9'));
@@ -517,12 +618,12 @@
     }
     return out.join('');
   }
-  /* 제출 한 건 → 인쇄할 쪽들(신청서+위임장, 보고서+사진) */
+  /* 제출 한 건 → 인쇄할 쪽들(신청서+위임장, 보고서+별지+사진) */
   function pagesHtml(doc, opts) {
     SCH = school(opts && opts.school);
     const out = [pageHtml(doc.kind, fill(doc.kind, doc))];
     if (doc.kind === 'field-apply' && doc.f && doc.f.proxy) out.push(pageHtml('field-proxy', fill('field-proxy', doc)));
-    if (doc.kind === 'field-report') out.push(photoPages(doc));
+    if (doc.kind === 'field-report') out.push(...fillMore(doc).map((O) => pageHtml('field-report-more', O)), photoPages(doc));
     return out.join('');
   }
 
@@ -656,6 +757,6 @@
     dateOf, isoOf, today, addDays, isWeekend, weekdays, nextSchoolDay, dayName, md, range, submitDateProblem,
     normName, classParts, hakbunOf, parseHakbun, stuHash, telOk, imgOk,
     proofGroup, proofsFor, needsGuardianNote, problems, meta, summary,
-    paths, fill, pagesHtml, mount, ensureStyle, sigPad, shrinkPhoto, esc, school, APPR,
+    paths, fill, fillMore, reportFlow, wrapAt, pagesHtml, mount, ensureStyle, sigPad, shrinkPhoto, esc, school, APPR,
   };
 })(typeof window !== 'undefined' ? window : globalThis);
