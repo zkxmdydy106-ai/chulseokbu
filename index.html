@@ -904,7 +904,9 @@ body.sfv-open { overflow: hidden; }
     // kinds: 이 앱이 맡은 것만 시트에서 바꿈(담임·수업 앱이 따로 보내도 서로 덮지 않게)
     const kinds = APP === 'class' ? ['subject'] : S.classes.some((c) => !isHome(c)) ? ['daily', 'subject'] : ['daily'];
     pushData = { daily: daily.length > 1 ? daily : [], subject: subject.length > 1 ? subject : [], kinds, from: exp.from, to: exp.to };
-    openBridge({ mode: 'push' });
+    // 자료는 구글 창 주소의 '#d=' 뒤에 실어 보낸다('#' 뒤는 서버로 가지 않음, 다리가 읽고 주소에서 지움).
+    // 폰에서는 구글 창이 열리면 이 화면이 뒤로 가 멈춰 다리의 '준비됨'에 대답하지 못했음(2026-10-30 교사 제보: '자료를 기다리는 중…'에서 멈춤)
+    openBridge({ mode: 'push' }, `#d=${b64u(new TextEncoder().encode(JSON.stringify(pushData)))}`);
   }
   function table() {
     return [['날짜', '교시', '반', '번호', '이름', '구분', '사유'],
@@ -1377,7 +1379,7 @@ body.sfv-open { overflow: hidden; }
       box.innerHTML = `<img src="${q.createDataURL(cell, cell * 4)}" width="${n * cell}" height="${n * cell}" alt="연락처 설문지 QR"><div class="dim" style="font-size:12px;word-break:break-all">${esc(F.formUrl)}</div>`;
     } catch { box.textContent = F.formUrl; }
   }
-  function openBridge(params) {
+  function openBridge(params, hash = '') {
     let url = bridgeUrl();
     if (!url) {
       url = (prompt('구글 연결 주소(Apps Script 웹앱 주소)를 붙여 넣어 주세요.') || '').trim();
@@ -1386,7 +1388,8 @@ body.sfv-open { overflow: hidden; }
     }
     // 고른 구글 계정으로(교사 요청 2026-10-28: 폰에 다른 계정이 로그인돼 있어 PC로 보내기가 엉뚱한 계정으로 감)
     // authuser로 그 계정을 고르고, 그 계정이 아직 로그인돼 있지 않으면 구글 계정 선택 화면에서 로그인한 뒤 이어서 연다
-    bridgeWin = window.open(asAccount(url, { origin: location.origin, ...params }), 'chulseokbu-bridge', 'width=480,height=680');
+    // hash: 계정 선택 화면(accounts.google.com)을 거쳐도 넘겨받는 주소 뒤 '#'(브라우저가 이어 붙임 — 서버로는 안 감)
+    bridgeWin = window.open(asAccount(url, { origin: location.origin, ...params }) + hash, 'chulseokbu-bridge', 'width=480,height=680');
   }
   // 구글 창 일이 끝나면 그 창을 닫고 출석부 화면으로 돌아옴(교사 요청 2026-10-28: 보내기가 끝나도 구글 창에 머물렀음)
   let bridgeWin = null;
@@ -1809,7 +1812,7 @@ body.sfv-open { overflow: hidden; }
       if (r.err !== 'api-off') { BOX.making = false; BOX.err = r.msg || '받는 곳을 만들지 못했어요.'; if (SY.making) { SY.making = false; SY.status = r.msg || '출석부 저장소를 만들지 못했어요.'; } if (tab === 'box') renderBox(); if (tab === 'setup') renderSetup(); }
       return;
     }
-    if (r.store) { SY.making = false; syncConnect(r.store).catch((err) => { SY.status = err.message; paintSync(); }); }
+    if (r.store) { SY.making = false; syncConnect({ ...r.store, email: r.email }).catch((err) => { SY.status = err.message; paintSync(); }); }
     if (!SF_URL_RE.test(String(r.url))) return;
     BOX.making = false; BOX.err = '';
     if (!S.cfg.sf || S.cfg.sf.u !== r.url) { S.cfg.sf = { u: r.url }; for (const c of S.classes) delete c.skSig; }
@@ -2063,7 +2066,9 @@ body.sfv-open { overflow: hidden; }
   async function syncConnect(conf) {
     if (!conf || !STORE_RE.test(String(conf.u)) || !/^[0-9a-f]{64}$/.test(String(conf.t))) throw new Error('구글 저장소 연결 정보 모양이 달라요.');
     const same = SY.conf && SY.conf.u === conf.u && SY.conf.t === conf.t;
-    SY.conf = { u: conf.u, t: conf.t };
+    // 어느 계정 저장소인지(만들기 다리가 알려 준 계정 — QR·링크로 붙으면 모름) — PC·폰이 같은 저장소인지 견줘 보게(교사 2026-10-30: PC·폰이 안 맞춰짐)
+    const email = /^[^\s@]+@[^\s@]+$/.test(String(conf.email || '')) ? String(conf.email).toLowerCase() : same ? SY.conf.email || '' : '';
+    SY.conf = { u: conf.u, t: conf.t, ...(email ? { email } : {}) };
     writeJson(SYNC_KEY, SY.conf);
     if (!same) setMeta({ rev: 0, dirty: false, at: 0 });
     SY.status = '';
@@ -2102,6 +2107,8 @@ body.sfv-open { overflow: hidden; }
   // 링크·QR의 열쇠: '배포ID.열쇠'(짧게 — QR이 덜 빽빽)
   const syShort = (c) => `${c.u.split('/s/')[1].split('/')[0]}.${c.t}`;
   const syncLink = () => `${location.origin}${location.pathname}${location.search}#sy=${syShort(SY.conf)}`;
+  // 저장소 번호: 배포 ID 끝 5자리 — 같은 계정으로 켠 기기는 모두 같은 번호(계정마다 저장소 하나)
+  const syTag = (c) => c.u.split('/s/')[1].split('/')[0].slice(-5);
   function syncCard() {
     const on = !!SY.conf;
     const st = SY.making ? '작은 창에서 계정을 확인하고 [이 계정에 켜기]를 눌러 주세요'
@@ -2112,6 +2119,8 @@ body.sfv-open { overflow: hidden; }
     return `<div class="card" id="syncCard">
         <h2 class="sec">구글 자동 저장</h2>
         ${on ? `<p class="hint"><b class="${bad ? 'sy-bad' : 'sy-ok'}">${esc(st)}</b></p>
+          <p class="hint sy-tag">저장소 번호 <b>${esc(syTag(SY.conf))}</b>${SY.conf.email ? ` · ${esc(SY.conf.email)}${/@gmail\.com$/i.test(SY.conf.email) ? ' <b class="sy-bad">(개인 계정)</b>' : ''}` : ''}</p>
+          <p class="hint dim">PC와 폰에서 이 <b>저장소 번호</b>가 같아야 서로 맞춰져요. 다르면 맞는 기기에서 [다른 기기 연결 QR]을 띄워 다른 기기로 찍거나, 그 기기에서 [이 기기에서 끄기] 뒤 같은 교육청 계정으로 [켜기]를 눌러 주세요.</p>
           <p class="hint dim">출결을 누르면 몇 초 뒤 선생님 구글 계정의 출석부 저장소에 저절로 저장되고, 같은 계정으로 켠 다른 기기(폰·PC)가 받아 가요. 이 기기에서 암호로 잠근 뒤 보내요.</p>
           <div class="row"><button class="btn small" id="syNow">지금 맞추기</button><button class="btn small" id="syQr">다른 기기 연결 QR</button><button class="btn small" id="syOff">이 기기에서 끄기</button></div>
           <div id="syQrBox"></div>
