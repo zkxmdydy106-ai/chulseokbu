@@ -823,14 +823,14 @@ body.sfv-open { overflow: hidden; }
           <label class="field" style="flex:1;margin:0"><span>시작</span><input type="date" id="exFrom" value="${isoOf(exp.from)}"></label>
           <label class="field" style="flex:1;margin:0"><span>끝</span><input type="date" id="exTo" value="${isoOf(exp.to)}"></label>
         </div>
-        <p class="hint dim">날짜를 하나만 보내려면 시작과 끝을 같은 날로 고르세요. 아래 [PC로 보내기]·파일 모두 이 기간으로 만들어요.</p>
+        <p class="hint dim">날짜를 하나만 보내려면 시작과 끝을 같은 날로 고르세요. 아래 파일은 이 기간으로 만들어요.</p>
       </div>
-      <div class="card">
-        <h2 class="sec">PC로 보내기</h2>
-        <p class="hint">${exp.from === exp.to ? esc(showDay(exp.from)) : `${esc(showDay(exp.from))} ~ ${esc(showDay(exp.to))}`} 출결(${APP === 'class' ? `${rows.length}줄` : `담임 ${drows.length}줄 · 교과 ${rows.length}줄`})을 선생님 구글 계정 시트에 올려요. PC 업무 도우미에서 <b>[폰 출결 가져오기]</b>를 누르면 바로 확인 표로 넘어가고, 시트는 비워져요.</p>
-        ${pushAccountLine()}
-        <div class="row"><button class="btn main full" id="exPush" ${drows.length || rows.length ? '' : 'disabled'}>PC로 보내기</button></div>
-        <p class="hint dim">폰과 PC 모두 같은 교육청 구글 계정으로 로그인해 두세요.</p>
+      <div class="card" id="exPc">
+        <h2 class="sec">PC 업무 도우미로</h2>
+        ${SY.conf ? `<p class="hint">PC 업무 도우미가 이 출석부를 <b>구글 자동 저장</b>에서 저절로 읽어요(저장소 번호 <b>${esc(syTag(SY.conf))}</b>). 체크하면 몇 초 안에 올라가니, PC 패널에서 <b>[${APP === 'class' ? '과목별출결' : '일일출결'}]</b>만 누르세요.</p>
+        <p class="hint dim">PC 패널에 보이는 저장소 번호가 이 번호와 같아야 해요.${SY.meta.dirty ? ' 지금 저장 대기 중이에요.' : SY.meta.at ? ` 마지막 저장 ${hhmm(SY.meta.at)}.` : ''}</p>`
+    : `<p class="hint warn">PC 업무 도우미로 출결이 가려면 <b>[설정 → 구글 자동 저장 → 켜기]</b>를 교육청 구글 계정으로 켜 주세요. 켜 두면 체크할 때마다 저절로 올라가고, PC 패널에서 [${APP === 'class' ? '과목별출결' : '일일출결'}]만 누르면 들어와요.</p>
+        <div class="row"><button class="btn small main" id="exGoSync">설정 열기</button></div>`}
       </div>
       ${drows.length ? `<div class="card">
         <h2 class="sec">담임 일일출결 파일</h2>
@@ -891,25 +891,12 @@ body.sfv-open { overflow: hidden; }
     return out.sort((a, b) => a.ymd.localeCompare(b.ymd) || a.cls.localeCompare(b.cls, 'ko', { numeric: true }) || a.no - b.no);
   }
   $('#main').addEventListener('click', (e) => {
-    if (e.target.id === 'exPush') { pushToPc(); return; }
+    if (e.target.id === 'exGoSync') { switchTab('setup'); setTimeout(() => document.getElementById('syncCard')?.scrollIntoView({ block: 'start' }), 0); return; }
     if (e.target.id !== 'exDayXlsx') return;
     download(xlsx(dailyTable()), `일일출결_${exp.from}-${exp.to}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   });
 
   const dailyTable = () => [['날짜', '번호', '이름', '구분', '교시', '사유'], ...dailyRows(exp.from, exp.to).map((r) => [isoOf(r.ymd), String(r.no), r.name, r.mark, r.pt, r.reason])];
-  // PC로 보내기: 다리 창을 열고, 다리가 '준비됨'을 알리면 그 창에만 출결 표를 건넨다(교사 결정 2026-10-28, 교육청 구글 계정)
-  let pushData = null;
-  function pushToPc() {
-    const daily = dailyTable(), subject = table();
-    // kinds: 이 앱이 맡은 것만 시트에서 바꿈(담임·수업 앱이 따로 보내도 서로 덮지 않게)
-    const kinds = APP === 'class' ? ['subject'] : S.classes.some((c) => !isHome(c)) ? ['daily', 'subject'] : ['daily'];
-    pushData = { daily: daily.length > 1 ? daily : [], subject: subject.length > 1 ? subject : [], kinds, from: exp.from, to: exp.to };
-    // 자료는 구글 창 주소의 '#d=' 뒤에 실어 보낸다('#' 뒤는 서버로 가지 않음, 다리가 읽고 주소에서 지움).
-    // 폰에서는 구글 창이 열리면 이 화면이 뒤로 가 멈춰 다리의 '준비됨'에 대답하지 못했음(2026-10-30 교사 제보: '자료를 기다리는 중…'에서 멈춤)
-    // wv: 이 판(표를 '#'에 실음)을 다리에 알림 — 다리가 옛 판 출석부를 알아보고 '다시 열어 주세요'라고 함
-    // direct: 계정 고르기 화면(accounts.google.com)을 거치지 않고 authuser로만 — 그 화면을 거치면 '#'와 출석부 창 연결이 끊김(2026-10-30 폰 실제)
-    openBridge({ mode: 'push', wv: '2' }, `#d=${b64u(new TextEncoder().encode(JSON.stringify(pushData)))}`, { direct: true });
-  }
   function table() {
     return [['날짜', '교시', '반', '번호', '이름', '구분', '사유'],
       ...exportRows(exp.from, exp.to).map((r) => [isoOf(r.ymd), String(r.pir), r.cls, String(r.no), r.name, r.mark, r.reason])];
@@ -1381,19 +1368,16 @@ body.sfv-open { overflow: hidden; }
       box.innerHTML = `<img src="${q.createDataURL(cell, cell * 4)}" width="${n * cell}" height="${n * cell}" alt="연락처 설문지 QR"><div class="dim" style="font-size:12px;word-break:break-all">${esc(F.formUrl)}</div>`;
     } catch { box.textContent = F.formUrl; }
   }
-  function openBridge(params, hash = '', { direct = false } = {}) {
+  function openBridge(params) {
     let url = bridgeUrl();
     if (!url) {
       url = (prompt('구글 연결 주소(Apps Script 웹앱 주소)를 붙여 넣어 주세요.') || '').trim();
       if (!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(url)) { if (url) toast('Apps Script 웹앱 주소가 아니에요'); return; }
       try { localStorage.setItem('chulseokbu.bridge', url); } catch { /* 저장 못 해도 이번엔 쓴다 */ }
     }
-    // 고른 구글 계정으로(교사 요청 2026-10-28: 폰에 다른 계정이 로그인돼 있어 PC로 보내기가 엉뚱한 계정으로 감)
+    // 고른 구글 계정으로(교사 요청 2026-10-28: 폰에 다른 계정이 로그인돼 있어 엉뚱한 계정으로 감)
     // authuser로 그 계정을 고르고, 그 계정이 아직 로그인돼 있지 않으면 구글 계정 선택 화면에서 로그인한 뒤 이어서 연다
-    // hash: 계정 선택 화면(accounts.google.com)을 거쳐도 넘겨받는 주소 뒤 '#'(브라우저가 이어 붙임 — 서버로는 안 감)
-    const acc = gAccount();
-    const to = direct ? `${url}?${new URLSearchParams({ origin: location.origin, ...params, ...(acc ? { authuser: acc } : {}) })}` : asAccount(url, { origin: location.origin, ...params });
-    bridgeWin = window.open(to + hash, 'chulseokbu-bridge', 'width=480,height=680');
+    bridgeWin = window.open(asAccount(url, { origin: location.origin, ...params }), 'chulseokbu-bridge', 'width=480,height=680');
   }
   // 구글 창 일이 끝나면 그 창을 닫고 출석부 화면으로 돌아옴(교사 요청 2026-10-28: 보내기가 끝나도 구글 창에 머물렀음)
   let bridgeWin = null;
@@ -1406,42 +1390,16 @@ body.sfv-open { overflow: hidden; }
     const target = `${url}?${new URLSearchParams({ ...params, ...(acc ? { authuser: acc } : {}) })}`;
     return acc ? `https://accounts.google.com/AccountChooser?${new URLSearchParams({ Email: acc, continue: target })}` : target;
   }
-  // [PC로 보내기] 바로 위 '보낼 계정' 줄(교사 요청 2026-10-30: PC 크롬에서 계정을 안 적어 개인 계정으로 보내짐 — 설정 화면까지 가지 않게)
-  // 적은 계정은 설정의 '구글 계정' 칸과 같은 것(이 기기 브라우저에만 저장). 지난번에 개인 계정(gmail.com)으로 보냈으면 빨간 안내
-  let accEditing = false;
-  function pushAccountLine() {
-    const acc = gAccount(), last = S.ui.lastPushEmail || '';
-    const personal = /@gmail\.com$/i.test(last);
-    const warn = last && (personal || (acc && last !== acc))
-      ? `<p class="hint warn">지난번엔 <b>${esc(last)}</b>${personal ? '(개인 계정)' : ''}으로 보냈어요${acc && last !== acc ? ` — 적은 계정(${esc(acc)})과 달라요` : ''}. 교육청 계정으로 다시 보내 주세요.</p>` : '';
-    if (acc && !accEditing) return `<div class="acc-line"><span>보낼 계정 <b>${esc(acc)}</b></span><button class="btn small" id="exAccEdit">바꾸기</button></div>${warn}`;
-    return `<label class="field"><span>보낼 구글 계정(교육청)</span><input type="email" id="exAccInput" placeholder="예: teacher@school.cnehs.kr" value="${esc(acc)}" autocomplete="email"></label>
-        <div class="row"><button class="btn small main" id="exAccSave">저장</button>${acc ? '<button class="btn small" id="exAccCancel">그대로</button>' : ''}</div>
-        ${acc ? '' : '<p class="hint warn">계정을 안 적으면 이 브라우저에 <b>처음 로그인한 구글 계정</b>으로 보내져요(개인 계정일 수 있어요).</p>'}${warn}`;
-  }
-  document.addEventListener('click', (e) => {
-    if (e.target.id === 'exAccEdit') { accEditing = true; renderExport(); setTimeout(() => $('#exAccInput')?.focus(), 0); return; }
-    if (e.target.id === 'exAccCancel') { accEditing = false; renderExport(); return; }
-    if (e.target.id === 'exAccSave') {
-      const v = String($('#exAccInput').value || '').trim().toLowerCase();
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) { toast('계정 주소를 적어 주세요(예: teacher@school.cnehs.kr)'); return; }
-      try { localStorage.setItem(ACC_KEY, v); } catch { /* 저장 못 함 */ }
-      accEditing = false;
-      toast(/@gmail\.com$/i.test(v) ? '개인 계정(gmail.com)이에요 — 교육청 계정인지 확인해 주세요' : '이 계정으로 보낼게요');
-      renderExport();
-    }
-  });
-  // 이 폰에서 PC로 보내기·연락처에 쓸 구글 계정(주소만, 이 폰에만 저장)
+  // 이 기기에서 구글 자동 저장 켜기·연락처에 쓸 구글 계정(주소만, 이 기기에만 저장)
   const ACC_KEY = 'chulseokbu.gaccount';
   const gAccount = () => { try { return localStorage.getItem(ACC_KEY) || ''; } catch { return ''; } };
   function accountCard() {
     const acc = gAccount();
     return `<div class="card">
-        <h2 class="sec">구글 계정 (PC로 보내기·연락처)</h2>
-        <p class="hint">폰에 여러 구글 계정이 로그인돼 있으면 엉뚱한 계정으로 보내질 수 있어요. PC 도우미와 <b>같은 교육청 구글 계정</b> 주소를 적어 두면 그 계정으로 열어요(로그인돼 있지 않으면 구글 로그인 화면이 먼저 떠요).</p>
+        <h2 class="sec">구글 계정 (자동 저장·연락처)</h2>
+        <p class="hint">폰에 여러 구글 계정이 로그인돼 있으면 엉뚱한 계정으로 열릴 수 있어요. PC 도우미와 <b>같은 교육청 구글 계정</b> 주소를 적어 두면 그 계정으로 열어요(로그인돼 있지 않으면 구글 로그인 화면이 먼저 떠요).</p>
         <label class="field"><span>계정 주소</span><input type="email" id="gaInput" placeholder="예: teacher@school.cnehs.kr" value="${esc(acc)}" autocomplete="email"></label>
         <div class="row"><button class="btn small main" id="gaSave">저장</button>${acc ? '<button class="btn small" id="gaClear">지우기</button>' : ''}</div>
-        ${S.ui.lastPushEmail ? `<p class="hint dim">마지막으로 보낸 계정: ${esc(S.ui.lastPushEmail)}${acc && S.ui.lastPushEmail !== acc ? ' <b class="warn">← 위 계정과 달라요</b>' : ''}</p>` : ''}
       </div>`;
   }
   document.addEventListener('click', (e) => {
@@ -1449,7 +1407,7 @@ body.sfv-open { overflow: hidden; }
       const v = String($('#gaInput').value || '').trim().toLowerCase();
       if (v && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) { toast('계정 주소 모양이 달라요'); return; }
       try { v ? localStorage.setItem(ACC_KEY, v) : localStorage.removeItem(ACC_KEY); } catch { /* 저장 못 함 */ }
-      toast(v ? '이 계정으로 보낼게요' : '계정을 지웠어요'); renderSetup();
+      toast(v ? '이 계정으로 열게요' : '계정을 지웠어요'); renderSetup();
     }
     if (e.target.id === 'gaClear') { try { localStorage.removeItem(ACC_KEY); } catch { /* 없음 */ } renderSetup(); }
   });
@@ -1460,16 +1418,6 @@ body.sfv-open { overflow: hidden; }
   window.addEventListener('message', (e) => {
     if (!/^https:\/\/[a-z0-9-]+-script\.googleusercontent\.com$/.test(e.origin) && e.origin !== 'https://script.google.com') return;
     const d = e.data;
-    if (d && d.type === 'chulseokbu-push-ready' && pushData && e.source) { e.source.postMessage({ type: 'chulseokbu-push', data: pushData }, e.origin); return; }
-    if (d && d.type === 'chulseokbu-pushed') {
-      pushData = null;
-      const used = String(d.info?.email || '').toLowerCase(), want = gAccount();
-      if (used) { S.ui.lastPushEmail = used; save(); }
-      closeBridge();
-      if (tab === 'export') renderExport();
-      toast(want && used && used !== want ? `${used} 계정으로 보냈어요 — 설정의 계정(${want})과 달라요` : `PC로 보냈어요${used ? `(${used})` : ''} — PC 도우미에서 [폰 출결 가져오기]`);
-      return;
-    }
     if (d && d.type === 'chulseokbu-form' && d.form) {
       const f = d.form;
       if (!/^https:\/\/(forms\.gle\/|docs\.google\.com\/forms\/)/.test(String(f.formUrl)) || !/^[\w-]{20,}$/.test(String(f.sheetId))) return;
