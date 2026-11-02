@@ -270,7 +270,9 @@ function get_(b) {
   if (!m) fail_('gone', '이미 지운 서류예요.');
   var text = DriveApp.getFileById(m.file).getBlob().getDataAsString('UTF-8');
   if (!b.peek && (!m.seen || m.seen < m.up)) { m.seen = now_(); setJson_('sm:' + id, m); }
-  return { ok: true, doc: JSON.parse(text), lock: m.lock || '' };
+  var doc = JSON.parse(text);
+  /* 학교 이름·결재 칸·서식: 명단 없는 PC에서 인쇄해도 폰 설정과 같은 모양이 되게 */
+  return { ok: true, doc: doc, lock: m.lock || '', sch: (getJson_('cl:' + doc.c) || {}).sch || null };
 }
 function seen_(b) {
   var id = id_(b.id), m = getJson_('sm:' + id);

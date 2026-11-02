@@ -2135,6 +2135,7 @@ body.sfv-open { overflow: hidden; }
     const box = document.createElement('div');
     box.className = 'sfv';
     const caseLine = () => {
+      if (!S.classes.length) return ''; // 명단 없는 PC: 출결 기록은 폰에 있어 맞춰 보지 않음
       if (cs) return `출결 기록: <b>${esc(cs.from === cs.to ? showDay(cs.from) : `${showDay(cs.from)} ~ ${showDay(cs.to)}`)} ${esc(labelOf(cs))}</b> — ${esc(DOC[SUB_DOC[doc.kind]].split(' (')[0])} 받음 체크함`;
       if (doc.kind !== 'absence' && v.f.unit !== 'half' && m.from && S.classes.some((c) => c.name === doc.c)) return `맞는 출결 기록이 없어요. <button class="textbtn" id="svMake">출석인정 교외체험학습으로 기록하기</button>`;
       return '맞는 출결 기록이 없어요(날짜를 확인해 주세요).';
@@ -2145,7 +2146,8 @@ body.sfv-open { overflow: hidden; }
       <div class="sfv-pages" id="svPages"></div>`;
     document.body.append(box);
     document.body.classList.add('sfv-open');
-    const mnt = SFm.mount($('#svPages', box), v, { school: schoolCfg() });
+    // 명단 없는 PC(패널 [받은 서류함])에는 학교 설정이 없다 → 받는 곳에 실어 둔 폰 설정으로(2026-11-02 실제: 학교 이름·결재 칸이 기본값으로 나옴)
+    const mnt = SFm.mount($('#svPages', box), v, { school: S.classes.length ? schoolCfg() : (j.sch || schoolCfg()) });
     const onResize = () => mnt.fit();
     window.addEventListener('resize', onResize);
     const close = () => { box.remove(); document.body.classList.remove('sfv-open', 'sf-printing'); window.removeEventListener('resize', onResize); if (tab === 'box') renderBox(); };
