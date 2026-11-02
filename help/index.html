@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>업무 도우미 사용 설명서</title>
+<meta name="description" content="나이스·에듀파인 반복 입력을 줄여 주는 교사용 확장프로그램의 설치와 기능별 사용 방법을 영상으로 안내해요.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M12 8a4 4 0 0 1 4-4h24l14 14v38a4 4 0 0 1-4 4H16a4 4 0 0 1-4-4z' fill='%23fff' stroke='%232b2a33' stroke-width='4' stroke-linejoin='round'/%3E%3Cpath d='M40 4v10a4 4 0 0 0 4 4h10' fill='%23ffd166' stroke='%232b2a33' stroke-width='4' stroke-linejoin='round'/%3E%3Ccircle cx='25' cy='33' r='3.5' fill='%232b2a33'/%3E%3Ccircle cx='41' cy='33' r='3.5' fill='%232b2a33'/%3E%3Cpath d='M27 42c3 4 9 4 12 0' fill='none' stroke='%232b2a33' stroke-width='3.5' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gaegu:wght@700&family=Gowun+Dodum&family=Jua&display=swap" rel="stylesheet">
+<style>
+:root {
+  color-scheme: light;
+  --desk: #fff4df; --dot: #efdcbc; --paper: #fffefb; --grid: #eef1f4; --ink: #2b2a33; --sub: #5e5a66; --dim: #86818c; --memo: #fff4a8;
+  --title: "Jua", "Gowun Dodum", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --body: "Gowun Dodum", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --hand: "Gaegu", "Gowun Dodum", "Malgun Gothic", sans-serif;
+  --b: 2.5px solid var(--ink);
+}
+.tag, .talk, .say, .note { letter-spacing: -.035em; }
+/* 묶음마다 공책 색 하나: --c 탭·표지, --t 옅은 칸 */
+.c-start { --c: #ffd166; --t: #fff3cf; } .c-att { --c: #ff9b82; --t: #ffe7df; } .c-rec { --c: #6fd3ae; --t: #dff6ec; }
+.c-eval { --c: #84b9ff; --t: #e4efff; } .c-duty { --c: #c3dc6a; --t: #f2f8db; } .c-meet { --c: #5fcbd5; --t: #dcf4f6; }
+.c-app { --c: #ffa8c6; --t: #ffe8f0; } .c-learn { --c: #bfaef6; --t: #eeeafd; } .c-edu { --c: #a7b8cd; --t: #e9eef4; }
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; overflow-x: clip; }
+body { margin: 0; min-height: 100vh; background: var(--desk) radial-gradient(var(--dot) 1.3px, transparent 1.6px) 0 0 / 20px 20px; color: var(--ink); font: 17px/1.7 var(--body); word-break: keep-all; overflow-wrap: anywhere; overflow-x: clip; }
+a { color: inherit; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; border-radius: 6px; }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 0 20px; }
+
+/* 머리: 제목 + 말풍선 + 종이 친구(공책 위에 서 있음) */
+.mast { position: relative; display: flex; align-items: flex-end; gap: 16px; min-height: 96px; padding: 12px 0 12px; }
+.mast .tag { margin: 0; font: 700 19px/1.2 var(--hand); color: var(--sub); }
+.mast h1 { display: inline-block; margin: 2px 0 0; padding-bottom: 9px; font: 400 clamp(29px, 3.5vw, 40px)/1.15 var(--title); letter-spacing: -0.01em;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='8' viewBox='0 0 26 8'%3E%3Cpath d='M0 5c4-5 9-5 13 0s9 5 13 0' fill='none' stroke='%23ff9b82' stroke-width='3'/%3E%3C/svg%3E") left bottom / 26px 8px repeat-x; }
+.talk { position: relative; margin: 0 110px 16px auto; padding: 7px 16px; max-width: 340px; border: var(--b); border-radius: 18px; background: #fff; font: 700 19px/1.3 var(--hand); }
+.talk::after { content: ""; position: absolute; right: -11px; top: 50%; width: 16px; height: 16px; margin-top: -8px; background: #fff; border-top: var(--b); border-right: var(--b); transform: rotate(45deg) skew(10deg, 10deg); }
+.buddy { position: absolute; right: 18px; bottom: -48px; z-index: 4; width: 84px; pointer-events: none; }
+.buddy svg { display: block; width: 100%; height: auto; }
+.paper-b { fill: #fff; stroke: var(--ink); stroke-width: 3; stroke-linejoin: round; }
+.paper-f { fill: var(--c); stroke: var(--ink); stroke-width: 3; stroke-linejoin: round; transition: fill .25s; }
+.line-b { fill: none; stroke: var(--ink); stroke-width: 3; stroke-linecap: round; }
+
+/* 인덱스 탭 + 표지 + 속지 */
+.tabs { position: relative; z-index: 2; display: flex; align-items: flex-end; gap: 5px; padding: 0 118px 0 14px; margin-bottom: -2.5px; }
+.tab { flex: 0 1 auto; min-width: 0; padding: 7px 15px 6px; border: var(--b); border-bottom: 0; border-radius: 14px 14px 0 0; background: var(--t); font: 400 17px/1.3 var(--title); white-space: nowrap; cursor: pointer; transition: transform .14s, padding .14s, background .14s; }
+.tab:hover { transform: translateY(-3px); }
+.tab[aria-selected="true"] { padding: 12px 19px 9px; background: var(--c); transform: none; }
+.folder { position: relative; padding: 14px 16px 18px; border: var(--b); border-radius: 22px; background: var(--c); box-shadow: 6px 7px 0 var(--ink); transition: background-color .25s; }
+.pills { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 2px 12px; }
+.pill { padding: 3px 16px; border: var(--b); border-radius: 999px; background: #fff; font: 400 16.5px/1.5 var(--title); cursor: pointer; transition: transform .12s, box-shadow .12s; }
+.pill:hover { transform: translateY(-2px); }
+.pill[aria-selected="true"] { background: var(--ink); color: #fff; }
+.sheet { position: relative; padding: 36px 26px 26px; border: var(--b); border-radius: 16px; background-color: var(--paper); background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px); background-size: 24px 24px; }
+.sheet::before { content: ""; position: absolute; left: 16px; right: 16px; top: 9px; height: 16px; background: radial-gradient(circle at 8px 8px, var(--c) 0 4.5px, var(--ink) 4.6px 6.6px, transparent 7px) 0 0 / 40px 16px repeat-x; pointer-events: none; }
+.page { display: grid; grid-template-columns: minmax(0, 8fr) minmax(0, 5fr); gap: 28px; align-items: start; }
+
+/* 영상: 테이프로 붙인 사진처럼 */
+.frame { position: relative; }
+.frame::before, .frame::after { content: ""; position: absolute; z-index: 1; top: -10px; width: 74px; height: 22px; background: var(--c); opacity: .8; box-shadow: 0 1px 2px rgba(43, 42, 51, .25); pointer-events: none; }
+.frame::before { left: -14px; transform: rotate(-9deg); }
+.frame::after { right: -14px; transform: rotate(8deg); }
+video { display: block; width: 100%; aspect-ratio: 5 / 3; object-fit: contain; background: #20242c; border: var(--b); border-radius: 10px; }
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.bar .say { margin-right: auto; font: 700 17.5px/1.3 var(--hand); color: var(--sub); }
+.btn { display: inline-block; padding: 4px 15px; border: var(--b); border-radius: 999px; background: #fff; font: 400 15.5px/1.5 var(--title); text-decoration: none; box-shadow: 2px 3px 0 var(--ink); cursor: pointer; transition: transform .1s, box-shadow .1s; }
+.btn:hover { transform: translate(-1px, -1px); box-shadow: 3px 4px 0 var(--ink); }
+.btn:active { transform: translate(2px, 3px); box-shadow: 0 0 0 var(--ink); }
+.btn.go { padding: 7px 20px; background: var(--c); font-size: 17.5px; }
+.novid { display: grid; justify-items: center; align-content: center; gap: 4px; aspect-ratio: 5 / 3; padding: 16px; border: 2.5px dashed #b9b2a6; border-radius: 10px; background: #fff; text-align: center; color: var(--sub); }
+.novid svg { width: 62px; height: auto; }
+.novid b { font: 400 21px/1.3 var(--title); color: var(--ink); }
+
+/* 설명 쪽 */
+.side h2 { display: inline; margin: 0; font: 400 clamp(23px, 2.5vw, 29px)/1.35 var(--title); background: linear-gradient(transparent 64%, var(--c) 64%, var(--c) 94%, transparent 94%); -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.who { margin: 8px 0 14px; color: var(--sub); font-size: 15px; }
+ol.steps { margin: 0; padding: 0; list-style: none; counter-reset: s; }
+ol.steps li { position: relative; margin-bottom: 11px; padding-left: 40px; line-height: 1.6; counter-increment: s; }
+ol.steps li::before { content: counter(s); position: absolute; left: 0; top: 0; z-index: 1; display: grid; place-items: center; width: 29px; height: 29px; border: var(--b); border-radius: 50%; background: var(--c); font: 400 15.5px/1 var(--title); }
+ol.steps li:not(:last-child)::after { content: ""; position: absolute; left: 13.5px; top: 30px; bottom: -11px; border-left: 2.5px dotted #b9b2a6; }
+.note { position: relative; margin: 18px 4px 4px; padding: 13px 15px 11px; background: var(--memo); font: 700 18.5px/1.45 var(--hand); transform: rotate(-.7deg); box-shadow: 2px 3px 0 rgba(43, 42, 51, .22); }
+.note::before { content: ""; position: absolute; left: 50%; top: -9px; width: 72px; height: 18px; margin-left: -36px; background: var(--c); opacity: .75; box-shadow: 0 1px 2px rgba(43, 42, 51, .25); transform: rotate(2deg); }
+.note b { font: 400 16.5px/1.45 var(--title); }
+
+/* 약속 */
+.promise { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.promise div { padding: 16px 18px; border: var(--b); border-radius: 14px; background: var(--t); font-size: 16px; line-height: 1.6; box-shadow: 3px 4px 0 var(--ink); }
+.promise div:nth-child(1) { transform: rotate(-.6deg); } .promise div:nth-child(2) { transform: rotate(.5deg); background: #dff6ec; } .promise div:nth-child(3) { transform: rotate(.4deg); background: #e4efff; } .promise div:nth-child(4) { transform: rotate(-.5deg); background: #ffe7df; }
+.promise b { display: block; margin-bottom: 3px; font: 400 20px/1.35 var(--title); }
+code { padding: 1px 6px; border-radius: 6px; background: #f3ecdd; font: 14px Consolas, "D2Coding", monospace; word-break: break-all; }
+
+footer { padding: 20px 4px 20px; color: var(--sub); font-size: 14px; line-height: 1.6; }
+
+/* 크게 보기 */
+.big { position: fixed; inset: 0; z-index: 30; display: none; align-items: center; justify-content: center; padding: 18px; background: rgba(32, 30, 38, .9); }
+.big.on { display: flex; }
+.big video { width: min(96vw, calc((100vh - 76px) * 1.6667)); height: auto; border: 0; }
+.big button { position: absolute; top: 12px; right: 16px; }
+
+/* 움직임: 쪽을 넘길 때 한 번 */
+@media (prefers-reduced-motion: no-preference) {
+  .tab { animation: pop .34s cubic-bezier(.3, 1.4, .5, 1) backwards; animation-delay: calc(var(--i) * 28ms); }
+  .page > * { animation: rise .3s ease-out backwards; }
+  .page > *:nth-child(2) { animation-delay: 70ms; }
+  ol.steps li { animation: rise .28s ease-out backwards; animation-delay: calc(90ms + var(--i) * 45ms); }
+  .buddy.hi .arm { animation: wave .9s ease-in-out; }
+  .eye { animation: blink 5.5s infinite; }
+}
+.arm { transform-box: fill-box; transform-origin: 90% 90%; }
+.eye { transform-box: fill-box; transform-origin: center; }
+@keyframes pop { from { opacity: 0; transform: translateY(12px); } }
+@keyframes rise { from { opacity: 0; transform: translateY(9px); } }
+@keyframes wave { 0%, 100% { transform: rotate(0); } 25%, 75% { transform: rotate(-24deg); } 50% { transform: rotate(10deg); } }
+@keyframes blink { 0%, 95%, 100% { transform: scaleY(1); } 97.5% { transform: scaleY(.1); } }
+
+@media (max-width: 1000px) {
+  .mast { flex-wrap: wrap; min-height: 0; padding-right: 74px; }
+  .talk { order: 3; margin: 2px 0 12px; max-width: none; font-size: 18px; }
+  .talk::after { right: 24px; top: -11px; margin: 0; transform: rotate(-45deg) skew(10deg, 10deg); }
+  .buddy { right: 0; top: 14px; bottom: auto; width: 64px; }
+  .tabs { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 7px; padding: 0; margin-bottom: 12px; }
+  .tab, .tab[aria-selected="true"] { padding: 7px 4px; border: var(--b); border-radius: 13px; text-align: center; font-size: 16.5px; }
+  .tab[aria-selected="true"] { box-shadow: 2px 3px 0 var(--ink); }
+  .page { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 560px) {
+  .wrap { padding: 0 14px; }
+  .mast .tag { font-size: 16.5px; }
+  .folder { padding: 10px 9px 12px; border-radius: 18px; box-shadow: 4px 5px 0 var(--ink); }
+  .sheet { padding: 30px 14px 18px; }
+  .promise { grid-template-columns: minmax(0, 1fr); }
+  .frame::before, .frame::after { width: 54px; height: 18px; }
+  .frame::before { left: -8px; } .frame::after { right: -8px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap c-start" id="book">
+  <header class="mast">
+    <div>
+      <p class="tag">나이스 반복 입력, 버튼 한 번으로 끝내요</p>
+      <h1>업무 도우미 사용 설명서</h1>
+    </div>
+    <p class="talk" id="talk" aria-live="polite"></p>
+    <div class="buddy" id="buddy" aria-hidden="true"></div>
+  </header>
+  <main>
+    <div class="tabs" id="tabs" role="tablist" aria-label="기능 묶음"></div>
+    <section class="folder" id="folder">
+      <div class="pills" id="pills" role="tablist" aria-label="이 묶음의 기능"></div>
+      <article class="sheet" id="sheet" role="tabpanel" tabindex="-1"></article>
+    </section>
+  </main>
+  <footer>영상은 실제 나이스 화면에서 찍었고, 학생·교사 이름과 학교, 복무 정보는 가렸어요. 영상 속 값은 시험용이고, 시험으로 만든 줄은 모두 지웠어요. · <a href="../privacy.html">개인정보 처리방침</a></footer>
+</div>
+<div class="big" id="big" role="dialog" aria-modal="true" aria-label="크게 보기"><button class="btn" id="bigClose">닫기</button></div>
+<script src="videos.js"></script>
+<script>
+const FEATURES = [
+  { group: '시작하기', cls: 'c-start', intro: '처음이면 여기부터 보세요!', items: [
+    { id: 'overview', short: '한눈에 보기', title: '도우미가 하는 일', who: '출결·생기부·평가·복무를 패널에서 골라요', steps: ['나이스에 로그인하고 주소창 옆 도우미 아이콘을 눌러요. 오른쪽에 패널이 열려요.', '파일을 끌어다 놓거나 폰 출석부로 체크해요.', '넣을 값과 지금 나이스 값을 표로 비교해요.', '버튼 한 번이면 모두 채워져요.'], note: '마감과 결재는 선생님이 직접 해요.', go: 'install', goText: '설치하러 가기' },
+    { id: 'install', short: '설치하기', title: '설치는 다섯 걸음', who: '처음 한 번만 하면 돼요. 스토어 등록 전이라 파일로 설치해요.', kind: 'install' },
+    { id: 'promise', short: '도우미의 약속', title: '도우미의 약속', kind: 'promise' },
+  ] },
+  { group: '출결', cls: 'c-att', intro: '폰으로 체크하면 저절로 들어와요', items: [
+    { id: 'daily', short: '일일출결', title: '일일출결', who: '담임 · 일일출결관리', steps: ['패널에서 [출결] → [일일출결]을 눌러요.', '폰 출석부를 연결해 두었으면 체크한 출결이 바로 들어와요. 아니면 양식을 채워 끌어다 놓아요.', '[나이스에서 확인하기]로 넣을 값과 지금 값을 비교해요.', '처음 한 번은 1명만 넣어 맞는지 봐요.', '[입력 후 저장] 한 번으로 모두 들어가요. 마감은 직접 해요.'], note: '구분은 질병결석·미인정지각처럼 적어요. 다른 줄은 [고치기]에서 눌러서 골라요.' },
+    { id: 'subject', short: '과목별출결', title: '과목별출결', who: '교과 · 과목별출결관리', steps: ['[출결] → [과목별출결]을 눌러요.', '폰 수업 출석부의 출결이 저절로 들어오거나, 파일을 놓아요.', '도우미가 날짜·교시의 수업 줄을 골라 학생 목록을 열어요.', '확인하고 [입력 후 저장]을 눌러요.'], note: '여러 반 학생이 섞인 수업은 번호 자리에 학번(예: 2103)을 적어요.' },
+  ] },
+  { group: '생기부', cls: 'c-rec', intro: '엑셀·한글 파일을 놓으면 끝이에요', items: [
+    { id: 'record', short: '담임 생기부', title: '자율·진로·행동특성·동아리·개인별 세특·독서', who: '담임 · 생기부', steps: ['[생기부]에서 화면을 골라요.', '[명단 든 양식]을 받아 글을 적어요. 바이트가 저절로 계산돼요.', '엑셀(.xlsx)이나 한글(.hwpx) 파일을 끌어다 놓아요.', '바이트·금지어·같은 문장 검사를 보고 [입력 후 저장]을 눌러요.'] },
+    { id: 'setuk', short: '교과 세특', title: '교과 세특', who: '교과 · 과목별 세부능력 및 특기사항', steps: ['[생기부] → [교과 세특]을 눌러요.', '나이스가 2차 인증(OTP)을 물으면 선생님이 인증한 뒤 [이어서]를 눌러요.', '[내 수업 명단 든 양식]을 받아 과목별 탭에 글을 적어요.', '파일을 놓고 확인한 뒤 [입력 후 저장]을 눌러요.'], note: 'OTP 번호는 선생님만 넣어요. 도우미는 읽지 않아요.' },
+  ] },
+  { group: '평가', cls: 'c-eval', intro: '평가계획부터 문항정보표까지!', items: [
+    { id: 'items', short: '문항정보표', title: '지필 문항정보표', who: '교과 · 문항정보표관리', steps: ['[평가] → [문항정보표]에서 양식을 받아요.', '배점·정답·평가요소만 적어요. 난이도는 기준 점수로, 성취기준은 평가요소를 읽어 골라요.', '서답형 채점기준표 파일도 같이 놓으면 첨부 칸에 붙여요.', '배점 합계 검사를 통과하면 [입력 후 저장]을 눌러요.'], note: '난이도 기준을 비워 두면 높은 배점부터 상·보통·쉬움으로 나눠요.' },
+    { id: 'plan', short: '평가계획', title: '성취기준·평가기준·수행평가 영역·반영비율', who: '교과 · 평가계획', steps: ['[평가]에서 화면을 골라요.', '평가기준안(.hwpx)을 끌어다 놓아요.', '문서에서 읽은 표를 보고 고칠 곳을 고쳐요.', '[입력 후 저장]을 눌러요.'], note: '.hwp는 한글에서 .hwpx로 저장해 주세요.' },
+    { id: 'perf', short: '수행평가 성적', title: '수행평가 성적', who: '교과 · 수행평가성적관리', steps: ['[평가] → [수행평가 성적]을 눌러요.', '반·번호·이름과 영역별 점수가 든 파일을 놓아요. 칸 이름은 나이스 영역 이름과 같게 적어요.', '만점 초과·빈 점수를 확인해요.', '[입력 후 저장]을 눌러요.'], note: '결시는 점수 칸에 질병결·미인정결·인정결·기타결처럼 사유로 적어요.' },
+  ] },
+  { group: '복무', cls: 'c-duty', intro: '즐겨찾기로 날짜만 고르면 돼요', items: [
+    { id: 'duty', short: '초과근무', title: '초과근무', who: '복무 신청 즐겨찾기', steps: ['[복무] → [복무 신청]에서 시각·하여야 할 일을 즐겨찾기로 저장해요(방과후 차감 시간도).', '첫 화면의 즐겨찾기를 누르고 날짜를 골라요(여러 날 가능).', '[나이스에 채우기]를 누르면 신청 창이 채워져요.', '창에서 확인하고 [승인요청]을 직접 눌러요. 결재 창에 교감 → 교장이 들어가면 [상신]을 눌러요.'], note: '[승인요청]·[상신]은 도우미가 누르지 않아요. 신청 창을 닫으면 아무것도 저장되지 않아요.' },
+    { id: 'trip', short: '출장', title: '출장', who: '복무 신청 즐겨찾기', steps: ['출장지·목적·시각을 즐겨찾기로 저장해요.', '날짜를 골라 [나이스에 채우기]를 눌러요.', '[승인요청]을 누르면 결재선이 저절로 들어가요. 관내는 교감, 관외는 교감 → 교장이에요.', '기안 내용을 확인하고 [상신]을 눌러요.'], note: '연락처는 복무 신청 첫 화면에 내 연락처를 저장해 두면 저절로 들어가요. 출장지 [찾기]·동행자는 창에서 직접 해요.' },
+    { id: 'leave', short: '연가·조퇴·외출', title: '연가·조퇴·외출', who: '복무 신청 즐겨찾기', steps: ['종류와 시각을 즐겨찾기로 저장해요. 조퇴·외출은 사유를 비우면 ‘개인 용무’로 들어가요.', '날짜를 골라 [나이스에 채우기]를 눌러요.', '창에서 확인하고 [승인요청]을 눌러요. 결재선은 결재 창에서 직접 골라요.'] },
+  ] },
+  { group: '회의', cls: 'c-meet', intro: '모두 비는 시간을 찾아 드려요', items: [
+    { id: 'free', short: '빈 시간 찾기', title: '빈 시간 찾기', who: '협의회·보강', steps: ['[회의] → [빈 시간 찾기]에서 학교를 찾아요.', '함께할 선생님을 골라 그룹으로 저장해요.', '날짜를 고르고 [찾기]를 누르면 수업·부재·빈 시간이 나와요.'], note: '복무는 ‘부재’만 보여 주고 사유는 읽지 않아요.' },
+  ] },
+  { group: '출석부 앱', cls: 'c-app', intro: 'QR만 찍으면 명단이 든 채로 열려요', items: [
+    { id: 'roster', short: '폰 출석부 만들기', title: '폰 출석부 만들기', who: '담임 · 교과', steps: ['[출석부 앱]에서 [우리 반] 또는 [내 수업 반]을 눌러요.', '도우미가 나이스에서 번호·이름만 읽어 QR을 만들어요.', '폰 카메라로 찍어 열고 홈 화면에 추가해요.', '구글 자동 저장을 켜 두면 체크한 출결이 PC 패널로 저절로 들어와요.'], note: 'QR에는 학생 이름이 들어 있어요. 본인 폰으로만 찍고 메신저로 보내지 마세요.' },
+  ] },
+  { group: '길잡이', cls: 'c-learn', intro: '나이스가 처음이어도 괜찮아요', items: [
+    { id: 'guide', short: '나이스 길잡이', title: '나이스 길잡이', who: '나이스가 처음인 선생님', steps: ['[길잡이]에서 하려는 일을 골라요.', '나이스 화면 위에 테두리 친 곳을 누르면 저절로 다음으로 넘어가요.', '패널을 닫아도 말풍선으로 끝까지 이어져요.'], note: '길잡이는 보여 주기만 해요. 나이스 값을 바꾸지 않아요.' },
+  ] },
+  { group: '에듀파인', cls: 'c-edu', intro: '에듀파인 탭에서 패널을 열어요', items: [
+    { id: 'inbox', short: '결재함 보기', title: '결재함 보기', who: '에듀파인 탭에서', steps: ['에듀파인 탭에서 패널을 열고 [결재함 보기]를 눌러요.', '결재대기 문서를 카드로 보고 한 건씩 열어요.', '결재는 문서마다 선생님이 직접 해요.'] },
+    { id: 'draft', short: '기안·품의 준비', title: '기안·품의 준비', who: '에듀파인 탭에서', steps: ['[기안·품의 준비]에서 내용을 적어요.', '공문 형식 본문·금액·붙임을 검사해요.', '복사하거나 PC 도우미로 기안 창에 채워요. 상신은 직접 해요.'] },
+    { id: 'todo', short: '할 일 내보내기', title: '할 일 내보내기', who: '에듀파인 탭에서', steps: ['공문에서 할 일을 적어요.', '복사·스티커 메모·캘린더 파일로 내보내요.'] },
+  ] },
+];
+const VIDEOS = window.HELP_VIDEOS || {};
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const $ = (id) => document.getElementById(id);
+const FIND = {};
+FEATURES.forEach((g, gi) => g.items.forEach((f) => { FIND[f.id] = { g, gi, f }; }));
+const BUDDY = `<svg viewBox="0 0 84 100" role="presentation">
+  <path class="line-b" d="M31 84v11M53 84v11M25 95h10M49 95h10"/>
+  <path class="line-b" d="M71 56c6 2 9 7 8 13"/>
+  <path class="line-b arm" d="M13 56c-6-3-9-9-7-16"/>
+  <path class="paper-b" d="M13 10a5 5 0 0 1 5-5h34l19 19v56a5 5 0 0 1-5 5H18a5 5 0 0 1-5-5z"/>
+  <path class="paper-f" d="M52 5v14a5 5 0 0 0 5 5h14z"/>
+  <ellipse cx="24" cy="54" rx="5" ry="3" fill="#ffc2b3"/><ellipse cx="60" cy="54" rx="5" ry="3" fill="#ffc2b3"/>
+  <circle class="eye" cx="31" cy="46" r="3.6" fill="#2b2a33"/><circle class="eye" cx="53" cy="46" r="3.6" fill="#2b2a33"/>
+  <path class="line-b" d="M35 55c3 4 11 4 14 0"/></svg>`;
+$('buddy').innerHTML = BUDDY;
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const SPEEDS = [1.5, 2, 1]; // 기본 재생 속도 1.5배(교사 요청 2026-11-02), 단추로 2배·1배
+let speed = 1.5, current = '', lastIn = {};
+
+const stepsHtml = (steps) => `<ol class="steps">${steps.map((s, i) => `<li style="--i:${i}">${s}</li>`).join('')}</ol>`;
+const safeSteps = (f) => stepsHtml(f.steps.map(esc));
+const videoBox = (f) => (VIDEOS[f.id]
+  ? `<div class="frame"><video id="vid" src="media/${f.id}.mp4" muted loop playsinline preload="auto" controls aria-label="${esc(f.title)} 사용 방법 영상"></video></div>
+     <div class="bar"><span class="say">실제 화면이에요. 이름은 가렸어요</span><button class="btn" id="speed">${speed}배 빠르기</button><button class="btn" id="bigOpen">크게 보기</button></div>`
+  : `<div class="novid">${BUDDY}<b>영상은 곧 올라와요</b><span>지금은 옆의 순서대로 따라 해 보세요.</span></div>`);
+const INSTALL = [
+  '<a class="btn go" href="download/doumi-extension.zip">설치 파일 받기</a> <span id="dlVer" style="color:var(--dim);font-size:14px"></span>',
+  '받은 압축 파일을 바탕화면에 풀어요. 이 폴더는 지우면 안 돼요.',
+  '엣지는 <code>edge://extensions</code>, 크롬은 <code>chrome://extensions</code>로 들어가 [개발자 모드]를 켜요.',
+  '[압축 풀린 항목 로드](크롬은 [압축해제된 확장 프로그램을 로드])로 그 폴더를 골라요.',
+  '나이스에 로그인하고 주소창 옆 도우미 아이콘을 누르면 오른쪽에 패널이 열려요.',
+];
+function pageHtml({ f }) {
+  if (f.kind === 'install') return `<div class="page"><div class="side"><h2>${esc(f.title)}</h2><p class="who">${esc(f.who)}</p>${stepsHtml(INSTALL)}</div>
+    <div><p class="note"><b>새 판이 나오면요</b><br>패널 아래에 알려 드려요. 새 파일을 같은 폴더에 덮어쓰고, 확장 관리 화면에서 ↻를 누른 뒤 나이스 탭을 새로고침하세요.</p></div></div>`;
+  if (f.kind === 'promise') return `<div class="side" style="margin-bottom:16px"><h2>${esc(f.title)}</h2></div><div class="promise">
+    <div><b>학생 자료는 밖으로 안 나가요</b>이름·출결 사유·성적을 개발자 서버나 AI로 보내지 않아요.</div>
+    <div><b>누를 때만 움직여요</b>파일을 놓기만 해서는 나이스가 바뀌지 않아요.</div>
+    <div><b>마감·결재는 선생님이</b>마감·승인요청·상신·삭제 단추는 도우미가 누르지 않아요.</div>
+    <div><b>처음 한 번은 1건만</b>새 화면은 1건 넣어 맞는지 본 뒤 나머지를 넣어요.</div></div>`;
+  return `<div class="page"><div>${videoBox(f)}</div><div class="side"><h2>${esc(f.title)}</h2><p class="who">${esc(f.who)}</p>${safeSteps(f)}${f.note ? `<p class="note">${esc(f.note)}</p>` : ''}${f.go ? `<p style="margin:18px 0 0"><button class="btn go" data-go="${f.go}">${esc(f.goText)}</button></p>` : ''}</div></div>`;
+}
+function stopVideo() {
+  const v = $('vid');
+  if (v) { v.pause(); v.removeAttribute('src'); v.load(); }
+}
+// 탭을 고르면 그 탭의 기능 하나만 보인다. 영상도 고른 것 하나만 받아서 틀어 데이터와 렉을 줄인다(교사 요청 2026-11-02)
+function show(id, { push = true } = {}) {
+  const hit = FIND[id] || FIND.overview;
+  const { g, gi, f } = hit;
+  if (current === f.id) return;
+  const sameGroup = FIND[current]?.g === g;
+  stopVideo();
+  current = f.id;
+  lastIn[gi] = f.id;
+  $('book').className = `wrap ${g.cls}`;
+  $('talk').textContent = g.intro;
+  document.querySelectorAll('#tabs .tab').forEach((t, i) => { const on = i === gi; t.setAttribute('aria-selected', on); t.tabIndex = on ? 0 : -1; });
+  const pills = $('pills');
+  pills.hidden = g.items.length < 2;
+  pills.style.display = g.items.length < 2 ? 'none' : '';
+  pills.innerHTML = g.items.map((x) => `<button class="pill" role="tab" data-id="${x.id}" aria-selected="${x.id === f.id}" tabindex="${x.id === f.id ? 0 : -1}" aria-controls="sheet">${esc(x.short || x.title)}</button>`).join('');
+  $('sheet').innerHTML = pageHtml(hit);
+  $('sheet').setAttribute('aria-label', `${g.group} · ${f.short || f.title}`);
+  const v = $('vid');
+  if (v) { v.defaultPlaybackRate = speed; v.playbackRate = speed; if (!reduce) v.play().catch(() => {}); }
+  if ($('dlVer')) loadVersion();
+  if (push) history.replaceState(null, '', `#${f.id}`);
+  if (!sameGroup) { const b = $('buddy'); b.classList.remove('hi'); void b.offsetWidth; b.classList.add('hi'); }
+  const top = $('tabs').getBoundingClientRect().top;
+  if (top < 0) scrollTo({ top: scrollY + top - 8, behavior: reduce ? 'auto' : 'smooth' });
+}
+function loadVersion() {
+  fetch('version.json', { cache: 'no-store' }).then((r) => r.json()).then((j) => { if ($('dlVer')) $('dlVer').textContent = `v${j.version}`; }).catch(() => {});
+}
+$('tabs').innerHTML = FEATURES.map((g, i) => `<button class="tab ${g.cls}" role="tab" style="--i:${i}" data-g="${i}" aria-selected="false" tabindex="-1" aria-controls="sheet">${esc(g.group)}</button>`).join('');
+// 탭·알약은 화살표로도 옮겨 다닌다
+function arrows(box, pick) {
+  box.addEventListener('keydown', (e) => {
+    const keys = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: 1, ArrowUp: -1 };
+    if (!(e.key in keys) && e.key !== 'Home' && e.key !== 'End') return;
+    const all = [...box.querySelectorAll('[role="tab"]')];
+    const at = all.indexOf(document.activeElement);
+    if (at < 0) return;
+    e.preventDefault();
+    const to = e.key === 'Home' ? 0 : e.key === 'End' ? all.length - 1 : (at + keys[e.key] + all.length) % all.length;
+    pick(all[to]);
+    box.querySelectorAll('[role="tab"]')[to]?.focus();
+  });
+}
+const pickTab = (t) => { const gi = +t.dataset.g; show(lastIn[gi] || FEATURES[gi].items[0].id); };
+const pickPill = (p) => show(p.dataset.id);
+arrows($('tabs'), pickTab);
+arrows($('pills'), pickPill);
+const big = $('big');
+let bigFrom = null;
+function closeBig() {
+  if (!big.classList.contains('on')) return;
+  big.classList.remove('on');
+  const bv = big.querySelector('video');
+  const v = $('vid');
+  if (bv && v) { v.currentTime = bv.currentTime; if (!reduce) v.play().catch(() => {}); }
+  bv?.remove();
+  bigFrom?.focus();
+}
+document.addEventListener('click', (e) => {
+  const t = e.target.closest('.tab');
+  if (t) { pickTab(t); return; }
+  const p = e.target.closest('.pill');
+  if (p) { pickPill(p); return; }
+  const go = e.target.closest('[data-go]');
+  if (go) { show(go.dataset.go); return; }
+  if (e.target.id === 'speed') {
+    speed = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length];
+    const v = $('vid');
+    if (v) { v.defaultPlaybackRate = speed; v.playbackRate = speed; }
+    e.target.textContent = `${speed}배 빠르기`;
+    return;
+  }
+  if (e.target.id === 'bigOpen') {
+    const from = $('vid');
+    bigFrom = e.target;
+    big.querySelector('video')?.remove();
+    const v = document.createElement('video');
+    v.src = `media/${current}.mp4`; v.controls = true; v.autoplay = true; v.muted = true; v.loop = true; v.playsInline = true; v.defaultPlaybackRate = speed; v.playbackRate = speed;
+    v.addEventListener('loadedmetadata', () => { v.currentTime = from?.currentTime || 0; v.playbackRate = speed; }, { once: true });
+    from?.pause();
+    big.appendChild(v);
+    big.classList.add('on');
+    $('bigClose').focus();
+    return;
+  }
+  if (e.target.id === 'bigClose' || e.target === big) closeBig();
+});
+addEventListener('keydown', (e) => { if (e.key === 'Escape') closeBig(); });
+// 패널 [설명]은 #daily처럼 그 기능으로 바로 온다
+const fromHash = () => decodeURIComponent(location.hash.slice(1));
+addEventListener('hashchange', () => show(fromHash()));
+show(fromHash() || 'overview', { push: !!fromHash() });
+</script>
+</body>
+</html>

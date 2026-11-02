@@ -19,7 +19,7 @@
   --safe-b: env(safe-area-inset-bottom, 0px);
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-html, body { margin: 0; background: var(--bg); }
+html, body { margin: 0; background: var(--bg); overflow-x: clip; max-width: 100%; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 body { color: var(--text); font: 15px/1.5 var(--ff); -webkit-font-smoothing: antialiased; min-height: 100dvh; padding-bottom: calc(64px + var(--safe-b)); }
 button, input, textarea, select { font: inherit; color: inherit; }
 button { cursor: pointer; }
@@ -29,8 +29,8 @@ header.bar { position: sticky; top: 0; z-index: 5; display: flex; align-items: c
 .app-name { font-size: 16px; font-weight: 700; color: var(--blue); letter-spacing: -0.02em; }
 .datenav { display: flex; align-items: center; gap: 2px; }
 .datenav button { width: 34px; height: 34px; border: 0; background: none; font-size: 20px; color: var(--text-2); }
-.datenav label { position: relative; padding: 4px 8px; border: 1px solid var(--line); border-radius: 4px; font-size: 14px; font-weight: 600; }
-.datenav input { position: absolute; inset: 0; opacity: 0; }
+.datenav label { position: relative; display: block; overflow: hidden; padding: 4px 8px; border: 1px solid var(--line); border-radius: 4px; font-size: 14px; font-weight: 600; white-space: nowrap; }
+.datenav input { position: absolute; inset: 0; width: 100%; height: 100%; min-width: 0; margin: 0; padding: 0; border: 0; opacity: 0; -webkit-appearance: none; appearance: none; }
 .today-dot { margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--blue); }
 
 nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; display: grid; grid-template-columns: repeat(5, 1fr); padding-bottom: var(--safe-b); background: var(--panel); border-top: 1px solid var(--line); }
@@ -88,13 +88,25 @@ main { padding: 12px; }
 .btn.danger { border-color: var(--res); color: var(--res); }
 .sy-ok { color: var(--ok); } .sy-bad { color: var(--res); } .textbtn.danger { color: var(--res); }
 .row { display: flex; gap: 6px; margin-top: 10px; }
+.row > * { min-width: 0; }
+.card { min-width: 0; overflow-wrap: anywhere; }
+.card table { max-width: 100%; }
+.sy-ask { width: 100%; margin: 10px 0 4px; border-collapse: collapse; font-size: 13.5px; }
+.sy-ask th, .sy-ask td { padding: 7px 6px; border-top: 1px solid var(--line); text-align: left; vertical-align: top; }
+.sy-ask th { width: 76px; font-weight: 600; color: var(--text-2); }
+.sy-ask .new { font-weight: 700; color: var(--blue); }
 .row .btn { flex: 1; }
 .textbtn { padding: 0; border: 0; background: none; color: var(--blue); font-size: 13px; text-decoration: underline; text-underline-offset: 2px; }
 
 /* 입력 */
-.field { display: block; margin-top: 10px; }
+.field { display: block; min-width: 0; margin-top: 10px; }
 .field span { display: block; margin-bottom: 4px; font-size: 13px; font-weight: 600; color: var(--text-2); }
-.field input, .field textarea, .field select { width: 100%; padding: 10px; border: 1px solid #c5ccd6; border-radius: 4px; background: #fff; font-size: 15px; }
+.field input, .field textarea, .field select { display: block; width: 100%; min-width: 0; max-width: 100%; padding: 10px; border: 1px solid #c5ccd6; border-radius: 4px; background: #fff; font-size: 15px; }
+/* 아이폰: 날짜·시각 칸은 제 폭이 넓어 그대로 두면 옆 칸·화면을 넘어감 */
+.field input[type="date"], .field input[type="time"] { -webkit-appearance: none; appearance: none; min-height: 44px; text-align: left; }
+input::-webkit-date-and-time-value { text-align: left; min-width: 0; }
+/* 폰: 16px보다 작은 칸은 누를 때 아이폰이 화면을 확대함 */
+@media (pointer: coarse) { input, textarea, select { font-size: 16px !important; } }
 .field textarea { min-height: 150px; resize: vertical; line-height: 1.5; }
 .field input:focus, .field textarea:focus, .field select:focus { outline: none; border-color: var(--blue); }
 
@@ -687,7 +699,7 @@ body.sfv-open { overflow: hidden; }
   }
 
   // ── 서류: 사안마다 필요 서류·제출 체크·기한, 교외체험학습 누적 ──
-  let docsAll = false;
+  let docsAll = true; // 교사 요청 2026-11-02: 기본은 전체
   function renderDocs() {
     const today = ymdOf(new Date());
     const stu = (cs) => S.classes.find((c) => c.id === cs.classId)?.students.find((s) => s.no === cs.no);
@@ -708,7 +720,7 @@ body.sfv-open { overflow: hidden; }
     $('#main').innerHTML = `
       <div class="card">
         <h2 class="sec">받아야 할 서류</h2>
-        <div class="chips"><button class="chip ${docsAll ? '' : 'on'}" data-docs="miss">미제출만</button><button class="chip ${docsAll ? 'on' : ''}" data-docs="all">전체</button></div>
+        <div class="chips"><button class="chip ${docsAll ? 'on' : ''}" data-docs="all">전체</button><button class="chip ${docsAll ? '' : 'on'}" data-docs="miss">미제출만</button></div>
         ${list.length ? list.map((x) => {
           const s = stu(x.cs);
           const cname = S.classes.find((c) => c.id === x.cs.classId)?.name || '';
@@ -2016,6 +2028,34 @@ body.sfv-open { overflow: hidden; }
     } catch (e) { SY.status = e.message; }
     paintSync();
   }
+  // 출결 기록 수(명단·설정은 안 셈): 담임 기록 + 수업 출결 표시
+  const recordCount = (d) => Object.keys(d.cases || {}).length + Object.values(d.marks || {}).reduce((n, rec) => n + Object.values(rec || {}).filter((e) => e && e.m).length, 0);
+  // 이 기기·구글 양쪽에 다른 출결이 있을 때 어느 쪽으로 이어 쓸지. 더 나중에 고친 쪽을 추천, 고를 때까지 닫히지 않음
+  function askWhichSide({ myN, upN, myAt, upAt, myC, upC }) {
+    return new Promise((resolve) => {
+      const upNew = upAt >= myAt;
+      const bg = document.createElement('div');
+      bg.className = 'sheet-bg';
+      const sh = document.createElement('div');
+      sh.className = 'sheet';
+      sh.innerHTML = `
+        <h3>이 기기와 구글 자료가 달라요</h3>
+        <div class="dim" style="font-size:13px">이 기기를 구글 자동 저장에 새로 연결했어요. 어느 쪽으로 이어 쓸까요?</div>
+        <table class="sy-ask"><tbody>
+          <tr><th>구글 저장소</th><td class="${upNew ? 'new' : ''}">출결 ${upN}건 · 반 ${upC}개 · ${esc(hhmm(upAt))} 저장${upNew ? ' · 더 최근' : ''}</td></tr>
+          <tr><th>이 기기</th><td class="${upNew ? '' : 'new'}">출결 ${myN}건 · 반 ${myC}개 · ${myAt ? `${esc(hhmm(myAt))} 고침` : '고친 시각 모름'}${upNew ? '' : ' · 더 최근'}</td></tr>
+        </tbody></table>
+        <p class="hint">고르지 않은 쪽 자료는 이 기기의 [설정 → 구글 자동 저장 → 더 보기 → 되돌리기]에 남아요.</p>
+        <div class="row">
+          <button class="btn ${upNew ? 'main' : ''}" id="sySideUp" style="flex:1">구글 자료로</button>
+          <button class="btn ${upNew ? '' : 'main'}" id="sySideMe" style="flex:1">이 기기 자료로</button>
+        </div>`;
+      const done = (v) => { bg.remove(); sh.remove(); resolve(v); };
+      sh.querySelector('#sySideUp').addEventListener('click', () => done('google'));
+      sh.querySelector('#sySideMe').addEventListener('click', () => done('device'));
+      document.body.append(bg, sh);
+    });
+  }
   // 켜기(만들기 다리에서 열쇠를 받음) / 다른 기기 QR·링크(#sy=…)
   async function syncConnect(conf) {
     if (!conf || !STORE_RE.test(String(conf.u)) || !/^[0-9a-f]{64}$/.test(String(conf.t))) throw new Error('구글 저장소 연결 정보 모양이 달라요.');
@@ -2031,13 +2071,30 @@ body.sfv-open { overflow: hidden; }
     if (!r.ok) throw new Error(syncErr(r.err));
     if (r.rev > 0 && r.rev !== SY.meta.rev) {
       const box = await unseal(r.blob, conf.t);
-      const n = (box.data.classes || []).length;
-      const mine = S.classes.length && (S.editedAt || 0) !== (box.editedAt || 0);
-      if (!mine || confirm(`구글에 저장된 출석부가 있어요(반 ${n}개, ${hhmm(r.at || box.editedAt)} 저장).\n그 자료로 바꿀까요?\n[취소]를 누르면 이 기기 자료를 구글에 올려요.`)) {
+      const myN = recordCount(S), upN = recordCount(box.data);
+      const sameData = (S.editedAt || 0) === (box.editedAt || 0);
+      const keepUp = (note) => {
+        const mineNow = { v: 1, data: syncable(), editedAt: S.editedAt || 0 };
+        const here = S.classes;
+        if (myN) writeJson(`${KEY}.conflict`, { at: Date.now(), box: mineNow });
         syncApply(box, r.rev);
-        toast('구글에 저장된 출석부를 받았어요');
-        return;
-      }
+        // 이 기기 명단은 버리지 않는다: 구글에 없는 반은 더하고, 구글에 기록이 없으면 이 기기 명단(QR로 막 받은 새 명단)을 쓴다
+        const sameClass = (a, b) => a.name === b.name && (a.subject || '') === (b.subject || '');
+        const add = upN ? here.filter((c) => !S.classes.some((x) => sameClass(x, c))) : here;
+        if (add.length) {
+          S.classes = [...S.classes.filter((x) => !add.some((c) => sameClass(x, c))), ...add].sort((a, b) => a.name.localeCompare(b.name, 'ko', { numeric: true }));
+          if (!S.classes.some((c) => c.id === S.ui.classId)) S.ui.classId = S.classes[0]?.id || '';
+          save(true);
+          switchTab(tab);
+        }
+        toast(note);
+      };
+      // 이 기기에 남길 출결이 없으면(명단만 있거나 비었거나 같은 자료) 묻지 않고 구글 자료로
+      if (!S.classes.length || sameData || !myN) { keepUp('구글에 저장된 출석부를 받았어요'); return; }
+      // 양쪽에 다른 출결이 있을 때만 묻는다. 고르지 않은 쪽은 이 기기 [되돌리기]에 남김. 구글에 기록이 없으면 이 기기 자료로
+      const pick = upN ? await askWhichSide({ myN, upN, myAt: S.editedAt || 0, upAt: box.editedAt || r.at || 0, myC: S.classes.length, upC: (box.data.classes || []).length }) : 'device';
+      if (pick === 'google') { keepUp('구글에 저장된 출석부로 바꿨어요. 이 기기 자료는 [더 보기 → 되돌리기]에 있어요.'); return; }
+      if (upN) writeJson(`${KEY}.conflict`, { at: Date.now(), box });
       setMeta({ rev: r.rev });
     }
     if (S.classes.length) { await syncPush({ force: true }); toast('구글 자동 저장을 켰어요'); }
