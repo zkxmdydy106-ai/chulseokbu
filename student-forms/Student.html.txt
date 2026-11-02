@@ -99,7 +99,7 @@ main { padding: 12px; max-width: 640px; margin: 0 auto; }
 <header class="bar"><span class="app-name">서류 제출</span><span class="who" id="who"></span></header>
 <main id="main"></main>
 <div class="actbar" id="actbar" hidden></div>
-<p class="foot">로그인이 안 되면 오른쪽 위 메뉴 → 다른 브라우저로 열기</p>
+<p class="foot">본인 구글 계정이면 폰·PC 어디서나 열려요. 로그인이 안 되면 오른쪽 위 메뉴 → 다른 브라우저로 열기, 계정이 여러 개면 시크릿 창에서</p>
 <script>window.SF_CFG = <?!= cfg ?>;</script>
 <script>
 /* school-forms.js — 학교 서식(결석신고서·교외체험학습 신청서·결과보고서·대리 인솔 위임장)의 표·문단 모양. */
@@ -158,8 +158,8 @@ window.SCHOOL_FORMS = {"absence":{"title":"결석신고서","page":{"w":793.71,"
   /* ── 학생 확인 ─────────────────────────────────────────── */
   const normName = (s) => String(s || '').replace(/\s+/g, '');
   const classParts = (cls) => { const m = /^(\d)-(\d{1,2})$/.exec(String(cls || '')); return m ? { g: +m[1], c: +m[2] } : null; };
-  const hakbunOf = (cls, no) => { const p = classParts(cls); return p ? `${p.g}${pad(p.c)}${pad(+no)}` : ''; };
-  /* 학번 5자리(10307) 또는 4자리(1307) → 반·번호. 반 QR의 반과 다르면 null */
+  const hakbunOf = (cls, no) => { const p = classParts(cls); return p ? `${p.g}${p.c}${pad(+no)}` : ''; };
+  /* 학번 4자리(1307) 또는 5자리(10307) → 반·번호. 반 QR의 반과 다르면 null */
   function parseHakbun(s, cls) {
     const t = String(s || '').replace(/\D/g, '');
     const p = classParts(cls);
@@ -900,7 +900,8 @@ window.SCHOOL_FORMS = {"absence":{"title":"결석신고서","page":{"w":793.71,"
     return make();
   }
   const DEV = devToken();
-  const BOUND = '이 학번은 지금 로그인한 계정(이 폰)으로만 쓸 수 있어요.';
+  let acct = true; /* 받는 곳이 계정으로 묶었는지(아니면 이 기기로) */
+  const boundText = () => (acct ? '이 학번은 지금 로그인한 구글 계정으로 쓸 수 있어요. 같은 계정이면 폰·PC·집 컴퓨터 어디서나 열려요(쓰는 중인 서류는 그 기기에만 있어요).' : '이 학번은 이 기기로만 쓸 수 있어요.');
   function save() {
     if (!LS) return true;
     try { LS.setItem(KEY, JSON.stringify(P)); return true; }
@@ -933,7 +934,7 @@ window.SCHOOL_FORMS = {"absence":{"title":"결석신고서","page":{"w":793.71,"
       run.withSuccessHandler((j) => {
         if (!j || !j.ok) no(Object.assign(new Error((j && j.msg) || '보내지 못했어요.'), { code: j && j.err }));
         else ok(j);
-      }).withFailureHandler(() => no(Object.assign(new Error('인터넷 연결을 확인해 주세요. (선생님 서류함에 닿지 못했어요)'), { code: 'net' })))
+      }).withFailureHandler(() => no(Object.assign(new Error('선생님 서류함에 닿지 못했어요. 인터넷을 확인해 주세요. 구글 계정이 여러 개 로그인돼 있으면 본인 계정만 남기거나 시크릿 창에서 열어 주세요.'), { code: 'net' })))
         .studentApi(body);
     });
   }
@@ -990,12 +991,13 @@ window.SCHOOL_FORMS = {"absence":{"title":"결석신고서","page":{"w":793.71,"
   async function doLogin() {
     const hb = $('#lgNo').value, name = SF.normName($('#lgName').value);
     const p = SF.parseHakbun(hb, P.cfg.c);
-    if (!p) { login(`학번을 다시 확인해 주세요. ${P.cfg.c}반 학번 5자리예요.`); return; }
+    if (!p) { login(`학번을 다시 확인해 주세요. ${P.cfg.c}반 학번은 ${SF.hakbunOf(P.cfg.c, 7)}처럼 적어요.`); return; }
     if (!name) { login('이름을 적어 주세요.'); return; }
     $('#lgGo').disabled = true;
     try {
       const j = await api({ a: 'hello', c: P.cfg.c, k: P.cfg.k, no: p.no, name, dev: DEV });
-      if (j.first) toast(BOUND);
+      if (typeof j.acct === 'boolean') acct = j.acct;
+      if (j.first) toast(boundText());
       P.me = { no: p.no, name };
       save();
       sync(j);
@@ -1021,7 +1023,7 @@ window.SCHOOL_FORMS = {"absence":{"title":"결석신고서","page":{"w":793.71,"
     if (gone || locked) toast(`선생님이 확인한 서류 ${gone + locked}건은 이 폰에서 내용을 지웠어요.`);
   }
   async function refresh(quiet) {
-    try { const j = await api({ a: 'hello', ...auth() }); sync(j); if (j.first) toast(BOUND); else if (!quiet) toast('새로 받았어요'); }
+    try { const j = await api({ a: 'hello', ...auth() }); sync(j); if (typeof j.acct === 'boolean') acct = j.acct; if (j.first) toast(boundText()); else if (!quiet) toast('새로 받았어요'); }
     catch (e) { if (AUTH_ERR.includes(e.code)) { P.me = null; save(); login(e.message); return; } if (!quiet) toast(e.message); }
     if (screen === 'home') home();
   }
@@ -1056,7 +1058,7 @@ window.SCHOOL_FORMS = {"absence":{"title":"결석신고서","page":{"w":793.71,"
       <div class="card">
         <h2 class="sec">개인정보</h2>
         <p class="hint">제출한 서류는 선생님이 확인·인쇄한 뒤 파기돼요. 쓰는 중인 서류는 이 폰에만 있어요.</p>
-        <p class="hint" id="boundNote">${BOUND} 폰이나 계정을 바꾸면 선생님께 '서류 잠김 풀기'를 부탁하세요.</p>
+        <p class="hint" id="boundNote">${boundText()} 계정을 바꾸면 선생님께 '서류 잠김 풀기'를 부탁하세요.</p>
         <div class="row"><button class="btn small" id="hNotMe">내가 아니에요</button><button class="btn small danger" id="hWipe">동의 철회·자료 지우기</button></div>
       </div>`;
   }

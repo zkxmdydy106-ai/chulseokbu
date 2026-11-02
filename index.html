@@ -3,172 +3,266 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#ffffff">
+<meta name="theme-color" content="#fffefb">
 <meta name="robots" content="noindex">
 <title>출석부</title>
 <style>
-/* 교과 출석부 — 나이스 4세대 화면 결. 흰 바탕·연회색 테두리·파란 막대 소제목·파란 버튼.
+/* 출석부 — 종이색 바탕, 먹색 글자, 포인트 색 하나. 상태만 빨강(결석)·노랑(지각·조퇴·결과)·파랑(출석인정).
    학생 자료는 이 폰(브라우저) 안에만 저장한다. 외부 글꼴·라이브러리·통신 없음. */
 :root {
-  --bg: #f4f6f9; --panel: #fff; --line: #dde2e9; --line-2: #eceff4; --head: #f3f5f9;
-  --text: #222; --text-2: #555; --text-3: #8a9099;
-  --blue: #2a64d6; --blue-dark: #1f4fb2; --blue-soft: #eef3fd;
-  --res: #c4392b; --res-bg: #fdeceb; --rec: #2a64d6; --rec-bg: #e9f0fd;
-  --fill: #fff4c2; --fill-ink: #6b5200; --ok: #1f8a4c;
-  --ff: "Noto Sans KR", "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --bg: #f4f2ec; --panel: #fffefb; --line: #dcd8cd; --line-2: #ebe8df; --line-3: #c8c3b6; --head: #f2efe7;
+  --text: #24231f; --text-2: #57544b; --text-3: #75716a;
+  --accent: #25614c; --accent-dark: #1c4d3c; --accent-soft: #e6efe9;
+  --res: #b3392c; --res-bg: #fbebe8;
+  --late: #855d00; --late-line: #c9991f; --late-bg: #fdf4d7;
+  --rec: #2a5fa5; --rec-bg: #e8f0fa;
+  --fill: #fdf4d7; --fill-ink: #6b5200; --ok: #25614c;
+  --ff: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
   --safe-b: env(safe-area-inset-bottom, 0px);
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; background: var(--bg); overflow-x: clip; max-width: 100%; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
-body { color: var(--text); font: 15px/1.5 var(--ff); -webkit-font-smoothing: antialiased; min-height: 100dvh; padding-bottom: calc(64px + var(--safe-b)); }
+body { color: var(--text); font: 15px/1.5 var(--ff); -webkit-font-smoothing: antialiased; min-height: 100dvh; padding-bottom: calc(66px + var(--safe-b)); }
 button, input, textarea, select { font: inherit; color: inherit; }
 button { cursor: pointer; }
 [hidden] { display: none !important; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-header.bar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between; height: 52px; padding: 0 14px; background: var(--panel); border-bottom: 1px solid var(--line); }
-.app-name { font-size: 16px; font-weight: 700; color: var(--blue); letter-spacing: -0.02em; }
-.datenav { display: flex; align-items: center; gap: 2px; }
-.datenav button { width: 34px; height: 34px; border: 0; background: none; font-size: 20px; color: var(--text-2); }
-.datenav label { position: relative; display: block; overflow: hidden; padding: 4px 8px; border: 1px solid var(--line); border-radius: 4px; font-size: 14px; font-weight: 600; white-space: nowrap; }
+header.bar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 4px; height: 52px; padding: 0 10px 0 16px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.app-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; font-weight: 700; letter-spacing: -0.02em; }
+.datenav { display: flex; align-items: center; gap: 0; margin-left: auto; }
+.datenav button { width: 32px; height: 40px; border: 0; background: none; font-size: 21px; line-height: 1; color: var(--text-2); }
+.datenav label { position: relative; display: block; overflow: hidden; padding: 5px 8px; border: 1px solid var(--line-3); border-radius: 4px; font-size: 14px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .datenav input { position: absolute; inset: 0; width: 100%; height: 100%; min-width: 0; margin: 0; padding: 0; border: 0; opacity: 0; -webkit-appearance: none; appearance: none; }
-.today-dot { margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--blue); }
+.today-dot { margin-left: 5px; font-size: 11.5px; font-weight: 700; color: var(--accent); }
+.help-btn { flex: none; width: 36px; height: 36px; margin-left: 2px; border: 1px solid var(--line-3); border-radius: 50%; background: none; font-size: 16px; font-weight: 700; line-height: 1; color: var(--text-2); }
+.help-btn.on { border-color: var(--accent); background: var(--accent); color: #fff; }
+@media (max-width: 359px) {
+  header.bar { padding-left: 12px; }
+  .app-name { font-size: 14.5px; }
+  .datenav button { width: 26px; }
+  .datenav label { padding: 5px 6px; font-size: 13.5px; }
+  .today-dot { display: none; }
+  .help-btn { width: 32px; height: 32px; }
+}
 
-nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; display: grid; grid-template-columns: repeat(5, 1fr); padding-bottom: var(--safe-b); background: var(--panel); border-top: 1px solid var(--line); }
-nav.tabs button { height: 56px; border: 0; background: none; font-size: 14px; font-weight: 600; color: var(--text-3); border-top: 2px solid transparent; }
-nav.tabs button.on { color: var(--blue); border-top-color: var(--blue); }
-nav.tabs button { position: relative; letter-spacing: -0.03em; }
-.tab-badge { position: absolute; top: 5px; left: calc(50% + 14px); min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: var(--res); color: #fff; font-size: 11px; font-weight: 700; line-height: 17px; }
+nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; display: flex; padding-bottom: var(--safe-b); background: var(--panel); border-top: 1px solid var(--line); }
+nav.tabs button { position: relative; flex: 1 1 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-width: 0; height: 58px; border: 0; border-top: 2px solid transparent; background: none; font-size: 12.5px; font-weight: 600; letter-spacing: -0.02em; color: var(--text-3); }
+nav.tabs svg { display: block; width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+nav.tabs button.on { color: var(--accent); border-top-color: var(--accent); }
+.tab-badge { position: absolute; top: 4px; left: calc(50% + 8px); min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: var(--res); color: #fff; font-size: 11px; font-weight: 700; line-height: 17px; }
 
-main { padding: 12px; }
-.card { margin-bottom: 10px; padding: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; }
-.sec { position: relative; margin: 0 0 10px; padding-left: 11px; font-size: 16px; font-weight: 700; letter-spacing: -0.02em; }
-.sec::before { content: ""; position: absolute; left: 0; top: 4px; width: 4px; height: 16px; background: var(--blue); }
+main { max-width: 760px; margin: 0 auto; padding: 8px 0 12px; }
+.card { min-width: 0; margin: 0 0 8px; padding: 14px 16px; background: var(--panel); border: solid var(--line); border-width: 1px 0; overflow-wrap: anywhere; scroll-margin-top: 60px; }
+.card table { max-width: 100%; }
+.sec { margin: 0 0 10px; font-size: 16px; font-weight: 700; letter-spacing: -0.02em; }
+.sec .dim { font-size: 13px; font-weight: 500; }
 .sub { margin: 12px 0 6px; font-size: 13px; font-weight: 700; color: var(--text-2); }
-.hint { margin: 8px 0 0; font-size: 13px; color: var(--text-2); }
+.hint { margin: 8px 0 0; font-size: 13.5px; color: var(--text-2); }
 .hint.warn { color: var(--res); }
-.acc-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 8px 0 2px; font-size: 13px; overflow-wrap: anywhere; }
-.acc-line b { color: var(--text); }
+.how { margin: 12px 0 10px; font-size: 13.5px; color: var(--text-2); }
+.how:first-child { margin-top: 0; }
+.how:last-child { margin: 10px 0 0; }
 .dim { color: var(--text-3); }
+.over { color: var(--res); }
+
+/* PC 연결 줄 */
+.pc-line { display: flex; align-items: center; gap: 8px; min-height: 38px; margin: -8px 0 8px; padding: 5px 16px; background: var(--panel); border-bottom: 1px solid var(--line); font-size: 13.5px; color: var(--text-2); }
+.pc-line span { flex: 1; min-width: 0; }
+.pc-line .btn { flex: none; min-height: 32px; padding: 0 14px; }
+.dot { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--text-3); }
+.dot.on { background: var(--ok); }
+.dot.off { background: var(--res); }
+
+/* 처음 쓸 때 안내 */
+.tip { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; padding: 9px 16px; background: var(--accent-soft); border: solid var(--line); border-width: 1px 0; font-size: 14px; }
+.tip span { flex: 1; min-width: 0; }
+.tip .btn { flex: none; min-height: 34px; padding: 0 12px; }
+.tip-x { flex: none; min-height: 34px; padding: 0 2px; border: 0; background: none; font-size: 13.5px; color: var(--text-2); }
+
+/* 오늘 현황 */
+.day-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.day-head b { min-width: 0; font-size: 16px; letter-spacing: -0.02em; }
+.day-head span { flex: none; font-size: 13px; color: var(--text-3); }
+.tally { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
+.tally > div { padding: 0 2px; text-align: center; border-left: 1px solid var(--line-2); }
+.tally > div:first-child { border-left: 0; }
+.tally b { display: block; font-size: 22px; line-height: 1.2; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text-3); }
+.tally span { display: block; font-size: 12.5px; color: var(--text-2); }
+.tally .t-all b { color: var(--text); }
+.tally .t-abs b { color: var(--res); }
+.tally .t-late b { color: var(--late); }
+.tally .t-rec b { color: var(--rec); }
+.linkrow { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 42px; margin-top: 10px; padding: 0; border: solid var(--line-2); border-width: 1px 0; background: none; font-size: 14px; font-weight: 600; color: var(--res); text-align: left; }
+.chev { flex: none; width: 8px; height: 8px; margin-right: 4px; border-right: 1.6px solid currentColor; border-top: 1.6px solid currentColor; transform: rotate(45deg); }
 
 /* 고르기 칩 */
 .chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
 .chips::-webkit-scrollbar { display: none; }
-.chip { flex: none; min-width: 44px; height: 38px; padding: 0 12px; border: 1px solid var(--line); border-radius: 4px; background: #fff; font-size: 14px; font-weight: 600; }
-.chip.on { border-color: var(--blue); background: var(--blue); color: #fff; }
-.chip small { margin-left: 4px; font-size: 11px; font-weight: 500; opacity: .8; }
+.chips.wrap { flex-wrap: wrap; overflow: visible; }
+.chip { flex: none; min-width: 44px; min-height: 40px; padding: 0 12px; border: 1px solid var(--line-3); border-radius: 4px; background: var(--panel); font-size: 14px; font-weight: 600; }
+.chips.wrap .chip { flex: 0 1 auto; max-width: 100%; padding-block: 5px; line-height: 1.3; text-align: left; }
+.chip.on { border-color: var(--accent); background: var(--accent); color: #fff; }
+.chip small { margin-left: 4px; font-size: 11.5px; font-weight: 500; opacity: .85; }
+.pir { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 4px; }
+.pir .chip { min-width: 0; min-height: 44px; padding: 0; font-size: 15px; text-align: center; font-variant-numeric: tabular-nums; }
 
 /* 학생 칸 */
-.grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-@media (min-width: 520px) { .grid { grid-template-columns: repeat(6, 1fr); } }
-.stu { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 68px; padding: 6px 2px; border: 1px solid var(--line); border-radius: 4px; background: #fff; user-select: none; touch-action: manipulation; }
-.stu b { font-size: 20px; line-height: 1.1; font-weight: 700; font-variant-numeric: tabular-nums; }
-.stu span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; color: var(--text-2); }
+.grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+@media (min-width: 520px) { .grid { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+.stu { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 72px; padding: 6px 2px; border: 1px solid var(--line-3); border-radius: 4px; background: var(--panel); user-select: none; -webkit-user-select: none; touch-action: manipulation; }
+.stu b { font-size: 20px; line-height: 1.15; font-weight: 700; font-variant-numeric: tabular-nums; }
+.stu span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--text-2); }
 .stu i { position: absolute; top: 3px; right: 5px; font-style: normal; font-size: 15px; font-weight: 800; }
-.stu.res { border-color: var(--res); background: var(--res-bg); }
-.stu.res i, .stu.res b { color: var(--res); }
+.stu.res { border-color: var(--late-line); background: var(--late-bg); }
+.stu.res i, .stu.res b { color: var(--late); }
 .stu.rec { border-color: var(--rec); background: var(--rec-bg); }
 .stu.rec i, .stu.rec b { color: var(--rec); }
 .stu.has-r::after { content: ""; position: absolute; left: 6px; top: 6px; width: 6px; height: 6px; border-radius: 50%; background: currentColor; color: var(--text-3); }
-.stu:active { transform: scale(.97); }
-
-.sumbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; font-size: 14px; }
-.sumbar b { font-variant-numeric: tabular-nums; }
-.legend { display: flex; gap: 10px; font-size: 12px; color: var(--text-2); }
-.legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 4px; vertical-align: -1px; border: 1px solid; border-radius: 2px; }
-.legend .l-res::before { border-color: var(--res); background: var(--res-bg); }
-.legend .l-rec::before { border-color: var(--rec); background: var(--rec-bg); }
-.saved-tag { font-size: 12px; color: var(--ok); }
+.stu:active { background: var(--head); }
+.stu small { font-size: 11.5px; font-weight: 700; letter-spacing: -0.03em; }
+.stu.day-abs { border-color: var(--res); background: var(--res-bg); }
+.stu.day-abs b, .stu.day-abs small { color: var(--res); }
+.stu.day-late { border-color: var(--late-line); background: var(--late-bg); }
+.stu.day-late b, .stu.day-late small { color: var(--late); }
+.stu.day-rec { border-color: var(--rec); background: var(--rec-bg); }
+.stu.day-rec b, .stu.day-rec small { color: var(--rec); }
+.stu .need { position: absolute; left: 5px; top: 5px; width: 7px; height: 7px; border-radius: 50%; background: var(--res); }
 
 /* 버튼 */
-.btn { height: 44px; padding: 0 16px; border: 1px solid #c5ccd6; border-radius: 4px; background: #fff; font-size: 15px; font-weight: 600; }
-.btn.main { border-color: var(--blue); background: var(--blue); color: #fff; }
+.btn { min-height: 46px; padding: 0 16px; border: 1px solid var(--line-3); border-radius: 4px; background: var(--panel); font-size: 15px; font-weight: 600; line-height: 1.25; }
+.btn:active { background: var(--head); }
+.btn.main { border-color: var(--accent); background: var(--accent); color: #fff; }
+.btn.main:active { background: var(--accent-dark); }
 .btn.main:disabled { border-color: var(--line); background: var(--line-2); color: var(--text-3); }
 .btn.full { width: 100%; }
-.btn.small { height: 34px; padding: 0 12px; font-size: 13px; }
+.btn.small { min-height: 38px; padding: 4px 12px; font-size: 13.5px; }
 .btn.danger { border-color: var(--res); color: var(--res); }
 .sy-ok { color: var(--ok); } .sy-bad { color: var(--res); } .textbtn.danger { color: var(--res); }
-.row { display: flex; gap: 6px; margin-top: 10px; }
+.row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .row > * { min-width: 0; }
-.card { min-width: 0; overflow-wrap: anywhere; }
-.card table { max-width: 100%; }
+.row .btn { flex: 1 1 0; }
+.row .field { flex: 1 1 0; margin: 0; }
 .sy-ask { width: 100%; margin: 10px 0 4px; border-collapse: collapse; font-size: 13.5px; }
 .sy-ask th, .sy-ask td { padding: 7px 6px; border-top: 1px solid var(--line); text-align: left; vertical-align: top; }
 .sy-ask th { width: 76px; font-weight: 600; color: var(--text-2); }
-.sy-ask .new { font-weight: 700; color: var(--blue); }
-.row .btn { flex: 1; }
-.textbtn { padding: 0; border: 0; background: none; color: var(--blue); font-size: 13px; text-decoration: underline; text-underline-offset: 2px; }
+.sy-ask .new { font-weight: 700; color: var(--accent); }
+.textbtn { padding: 0; border: 0; background: none; color: var(--accent); font-size: 13.5px; text-decoration: underline; text-underline-offset: 2px; }
+.backrow { display: flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 16px; border: 0; background: none; font-size: 14px; font-weight: 600; color: var(--text-2); }
+.backrow::before { content: ""; width: 8px; height: 8px; border-left: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor; transform: rotate(45deg); }
+
+/* 접는 칸 */
+.fold { padding: 0 16px; }
+.fold > summary { display: flex; align-items: center; gap: 8px; min-height: 50px; list-style: none; cursor: pointer; -webkit-user-select: none; user-select: none; }
+.fold > summary::-webkit-details-marker { display: none; }
+.fold > summary .sec { flex: 1; min-width: 0; margin: 0; font-size: 15px; font-weight: 600; }
+.fold > summary::after { content: ""; flex: none; width: 8px; height: 8px; margin: -3px 4px 0 0; border-right: 1.6px solid var(--text-3); border-bottom: 1.6px solid var(--text-3); transform: rotate(45deg); }
+.fold[open] > summary::after { margin-top: 3px; transform: rotate(-135deg); }
+.fold[open] { padding-bottom: 14px; }
+.fold-note { flex: none; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--text-3); }
+.fold-note.warn { color: var(--res); }
+.fold-body > :first-child { margin-top: 0; }
+.fold-group { margin-bottom: 8px; }
+.fold-group .fold { margin: 0; border-bottom-width: 0; }
+.fold-group .fold:last-child { border-bottom-width: 1px; }
+.group-label { margin: 16px 0 6px; padding: 0 16px; font-size: 13px; font-weight: 600; color: var(--text-3); }
 
 /* 입력 */
 .field { display: block; min-width: 0; margin-top: 10px; }
 .field span { display: block; margin-bottom: 4px; font-size: 13px; font-weight: 600; color: var(--text-2); }
-.field input, .field textarea, .field select { display: block; width: 100%; min-width: 0; max-width: 100%; padding: 10px; border: 1px solid #c5ccd6; border-radius: 4px; background: #fff; font-size: 15px; }
+.field input, .field textarea, .field select { display: block; width: 100%; min-width: 0; max-width: 100%; padding: 10px; border: 1px solid var(--line-3); border-radius: 4px; background: var(--panel); font-size: 15px; }
 /* 아이폰: 날짜·시각 칸은 제 폭이 넓어 그대로 두면 옆 칸·화면을 넘어감 */
-.field input[type="date"], .field input[type="time"] { -webkit-appearance: none; appearance: none; min-height: 44px; text-align: left; }
+.field input[type="date"], .field input[type="time"] { -webkit-appearance: none; appearance: none; min-height: 46px; text-align: left; }
 input::-webkit-date-and-time-value { text-align: left; min-width: 0; }
 /* 폰: 16px보다 작은 칸은 누를 때 아이폰이 화면을 확대함 */
 @media (pointer: coarse) { input, textarea, select { font-size: 16px !important; } }
 .field textarea { min-height: 150px; resize: vertical; line-height: 1.5; }
-.field input:focus, .field textarea:focus, .field select:focus { outline: none; border-color: var(--blue); }
+.field input:focus, .field textarea:focus, .field select:focus { outline: none; border-color: var(--accent); }
+.appr-input { flex: 1; min-width: 0; height: 38px; padding: 0 8px; border: 1px solid var(--line-3); border-radius: 4px; background: var(--panel); }
 
 /* 표 */
-table.list { width: 100%; border-collapse: collapse; border-top: 2px solid #5a6475; font-size: 13.5px; }
+table.list { width: 100%; border-collapse: collapse; border-top: 1px solid var(--text-2); font-size: 13.5px; }
 table.list th { padding: 7px 6px; background: var(--head); border-bottom: 1px solid var(--line); text-align: left; font-weight: 600; color: var(--text-2); }
 table.list td { padding: 8px 6px; border-bottom: 1px solid var(--line-2); }
 table.list .c { text-align: center; }
 
-/* 사유 시트 */
-.sheet-bg { position: fixed; inset: 0; z-index: 20; background: rgba(20, 24, 31, .35); }
-.sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 21; padding: 16px 14px calc(16px + var(--safe-b)); background: var(--panel); border-top: 1px solid var(--line); border-radius: 10px 10px 0 0; animation: up .16s ease-out; }
+/* 아래에서 올라오는 창 */
+.sheet-bg { position: fixed; inset: 0; z-index: 20; background: rgba(36, 35, 31, .38); }
+.sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 21; max-height: 88dvh; overflow-y: auto; padding: 16px 16px calc(16px + var(--safe-b)); background: var(--panel); border-top: 1px solid var(--line); border-radius: 8px 8px 0 0; animation: up .16s ease-out; }
+/* [닫기]·[저장]을 아래에 고정: 글이 길어도 스크롤 없이 누르고, 위쪽을 다시 그려도 눌림이 사라지지 않게 따로 둔다 */
+.sheet.split { display: flex; flex-direction: column; overflow: hidden; padding: 0; }
+.sheet-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 16px 16px 14px; }
+.sheet-foot { flex: none; display: flex; gap: 8px; padding: 10px 16px calc(10px + var(--safe-b)); background: var(--panel); border-top: 1px solid var(--line); }
+.sheet-foot .btn { flex: 1 1 0; min-height: 48px; }
+.sheet-foot .btn.main { flex-grow: 2; }
+@media (min-width: 620px) { .sheet { left: calc(50% - 290px); right: calc(50% - 290px); border: 1px solid var(--line); border-bottom: 0; } }
 @keyframes up { from { transform: translateY(30px); opacity: .5; } }
-.sheet h3 { margin: 0 0 4px; font-size: 17px; }
-.marks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; }
-.marks button { height: 44px; border: 1px solid var(--line); border-radius: 4px; background: #fff; font-weight: 700; }
+.sheet h3 { margin: 0 0 2px; font-size: 18px; letter-spacing: -0.02em; }
+.sheet-sub { font-size: 13px; color: var(--text-3); }
+.marks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 12px; }
+.marks button { min-height: 48px; border: 1px solid var(--line-3); border-radius: 4px; background: var(--panel); font-weight: 700; }
 .marks button.on[data-m=""] { border-color: var(--text); }
-.marks button.on[data-m="/"] { border-color: var(--res); background: var(--res-bg); color: var(--res); }
+.marks button.on[data-m="/"] { border-color: var(--late-line); background: var(--late-bg); color: var(--late); }
 .marks button.on[data-m="Ø"] { border-color: var(--rec); background: var(--rec-bg); color: var(--rec); }
 .reasons { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-.reasons button { height: 34px; padding: 0 12px; border: 1px solid var(--line); border-radius: 17px; background: #fff; font-size: 13.5px; }
+.reasons button { min-height: 38px; padding: 0 12px; border: 1px solid var(--line-3); border-radius: 4px; background: var(--panel); font-size: 13.5px; }
 
-/* 담임 일일출결 */
-.stu small { font-size: 11px; font-weight: 700; }
-.stu.day-abs { border-color: var(--res); background: var(--res-bg); }
-.stu.day-abs b, .stu.day-abs small { color: var(--res); }
-.stu.day-late { border-color: #c98a00; background: #fff6dc; }
-.stu.day-late b, .stu.day-late small { color: #8a5d00; }
-.stu.day-rec { border-color: var(--rec); background: var(--rec-bg); }
-.stu.day-rec b, .stu.day-rec small { color: var(--rec); }
-.stu .need { position: absolute; left: 5px; top: 5px; width: 7px; height: 7px; border-radius: 50%; background: var(--res); }
-.seg { display: grid; gap: 6px; margin-top: 8px; }
-.seg.c5 { grid-template-columns: repeat(5, 1fr); }
-.seg.c4 { grid-template-columns: repeat(4, 1fr); }
-.seg button { height: 40px; padding: 0 2px; border: 1px solid var(--line); border-radius: 4px; background: #fff; font-size: 14px; font-weight: 600; white-space: nowrap; letter-spacing: -0.04em; }
-.seg.c4 button { font-size: 13px; }
-.seg button.on { border-color: var(--blue); background: var(--blue); color: #fff; }
+/* 담임 일일출결 기록 창 */
+.seg { display: grid; gap: 6px; margin-top: 6px; }
+.seg.c5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.seg.c4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.seg button { min-height: 46px; padding: 0 2px; border: 1px solid var(--line-3); border-radius: 4px; background: var(--panel); font-size: 14.5px; font-weight: 600; white-space: nowrap; letter-spacing: -0.04em; }
+.seg.c4 button { font-size: 13.5px; }
+.seg button.on { border-color: var(--accent); background: var(--accent); color: #fff; }
 .seg button:disabled { opacity: .35; }
-.lab { margin: 12px 0 0; font-size: 13px; font-weight: 700; color: var(--text-2); }
+.lab { margin: 14px 0 0; font-size: 13px; font-weight: 700; color: var(--text-2); }
 .docs { margin: 10px 0 0; padding: 0; list-style: none; border-top: 1px solid var(--line-2); }
-.docs li { display: flex; align-items: center; gap: 8px; padding: 9px 0; border-bottom: 1px solid var(--line-2); font-size: 14px; }
-.docs li input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--blue); }
-.docs li span { flex: 1; }
+.docs li { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 7px 0; border-bottom: 1px solid var(--line-2); font-size: 14px; }
+.docs li input[type=checkbox] { flex: none; width: 22px; height: 22px; accent-color: var(--accent); }
+.docs li span { flex: 1; min-width: 0; }
 .docs li.done span { color: var(--text-3); text-decoration: line-through; }
 .docs .cnt { display: flex; align-items: center; gap: 4px; }
-.docs .cnt button { width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 4px; background: #fff; font-weight: 700; }
-.badge { display: inline-block; padding: 0 6px; border-radius: 2px; font-size: 12px; font-weight: 600; background: var(--head); color: var(--text-2); }
+.docs .cnt button { width: 36px; height: 36px; border: 1px solid var(--line-3); border-radius: 4px; background: var(--panel); font-weight: 700; }
+.badge { display: inline-block; padding: 1px 6px; border-radius: 2px; font-size: 12.5px; font-weight: 600; background: var(--head); color: var(--text-2); }
 .badge.late { background: var(--res-bg); color: var(--res); }
-.badge.ok { background: #e3f3e8; color: var(--ok); }
-.trip { margin-top: 8px; font-size: 13px; color: var(--text-2); }
+.badge.ok { background: var(--accent-soft); color: var(--ok); }
+.trip { margin-top: 8px; font-size: 13.5px; color: var(--text-2); }
 .trip b.over { color: var(--res); }
-.sheet { max-height: 88dvh; overflow-y: auto; }
 .contact { display: flex; align-items: center; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line-2); font-size: 14px; }
-.contact span { flex: 1; color: var(--text-2); }
+.contact span { flex: 1; min-width: 0; color: var(--text-2); }
 .contact b { color: var(--text); font-variant-numeric: tabular-nums; }
 .qrbox { display: flex; flex-direction: column; align-items: center; gap: 4px; margin: 10px 0 4px; text-align: center; }
 .qrbox img { image-rendering: pixelated; background: #fff; }
 .contact .btn { display: inline-flex; align-items: center; text-decoration: none; color: var(--text); }
-.toast { position: fixed; left: 50%; bottom: calc(76px + var(--safe-b)); z-index: 30; transform: translateX(-50%); padding: 9px 14px; border-radius: 4px; background: #2b313b; color: #fff; font-size: 13.5px; white-space: nowrap; animation: up .16s ease-out; }
+.toast { position: fixed; left: 12px; right: 12px; bottom: calc(76px + var(--safe-b)); z-index: 30; width: fit-content; margin-inline: auto; padding: 9px 14px; border-radius: 4px; background: var(--text); color: #fff; font-size: 13.5px; animation: fade .16s ease-out; }
+@keyframes fade { from { opacity: 0; } }
 .empty { padding: 28px 10px; text-align: center; color: var(--text-2); }
 .empty b { display: block; margin-bottom: 6px; font-size: 16px; color: var(--text); }
-.warnbox { margin-top: 10px; padding: 9px 10px; background: var(--fill); color: var(--fill-ink); font-size: 13px; border-radius: 4px; }
+.warnbox { margin-top: 10px; padding: 9px 10px; background: var(--fill); color: var(--fill-ink); font-size: 13.5px; border-radius: 4px; }
+
+/* 사용 방법 */
+.help-title { margin: 0; padding: 0 16px 8px; font-size: 20px; font-weight: 700; letter-spacing: -0.03em; }
+.todo-list { margin: 0; padding: 0; list-style: none; }
+.todo-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 10px; align-items: start; padding: 10px 0; border-top: 1px solid var(--line-2); }
+.todo-list li:first-child { border-top: 0; padding-top: 0; }
+.todo-list li > b { font-size: 15px; font-weight: 600; }
+.todo-list p { grid-column: 1 / -1; margin: 3px 0 0; font-size: 13.5px; color: var(--text-2); }
+.todo-list .btn { grid-column: 1 / -1; justify-self: start; margin-top: 8px; }
+.step-list { margin: 0; padding: 0; list-style: none; counter-reset: st; }
+.step-list li { position: relative; padding: 8px 0 8px 30px; border-top: 1px solid var(--line-2); font-size: 14.5px; }
+.step-list li:first-child { border-top: 0; padding-top: 0; }
+.step-list li::before { counter-increment: st; content: counter(st); position: absolute; left: 0; top: 9px; width: 21px; height: 21px; border-radius: 50%; background: var(--head); font-size: 12.5px; font-weight: 700; line-height: 21px; text-align: center; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.step-list li:first-child::before { top: 1px; }
+.qa { margin: 0; }
+.qa dt { margin-top: 12px; font-size: 14.5px; font-weight: 600; }
+.qa dt:first-child { margin-top: 0; }
+.qa dd { margin: 2px 0 0; font-size: 13.5px; color: var(--text-2); }
+.swatches { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; }
+.swatch { padding: 9px 4px; border: 1px solid var(--line-3); border-radius: 4px; font-size: 13.5px; font-weight: 700; text-align: center; }
+.swatch.sw-abs { border-color: var(--res); background: var(--res-bg); color: var(--res); }
+.swatch.sw-late { border-color: var(--late-line); background: var(--late-bg); color: var(--late); }
+.swatch.sw-rec { border-color: var(--rec); background: var(--rec-bg); color: var(--rec); }
+
 /* 서류함(학생이 낸 서류) */
 .steps { margin: 8px 0 0; padding-left: 20px; font-size: 14px; color: var(--text-2); }
 .steps li { margin: 7px 0; }
@@ -176,13 +270,25 @@ table.list .c { text-align: center; }
 .bx li { align-items: flex-start; }
 .docs li .badge { flex: none; }
 .bx li span small { font-size: 12.5px; }
-.sfv { position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column; background: #e9ecf1; }
+.sfv { position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column; background: #e9e6dd; }
 .sfv-bar { display: flex; align-items: center; gap: 6px; padding: 8px 10px; background: var(--panel); border-bottom: 1px solid var(--line); }
 .sfv-bar .sp { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
 .sfv-info { padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--line); font-size: 13px; color: var(--text-2); }
 .sfv-info b { color: var(--text); }
 .sfv-pages { flex: 1; overflow: auto; padding: 0 6px; }
 body.sfv-open { overflow: hidden; }
+
+/* 넓은 화면(PC에서 열 때) */
+@media (min-width: 768px) {
+  main { padding: 14px 12px; }
+  .card, .tip { border-width: 1px; border-radius: 4px; }
+  .pc-line { margin: 0 0 8px; border: 1px solid var(--line); border-radius: 4px; }
+  nav.tabs { justify-content: center; }
+  nav.tabs button { flex: 0 1 180px; }
+  .fold-group .fold { border-radius: 0; }
+  .fold-group .fold:first-child { border-radius: 4px 4px 0 0; }
+  .fold-group .fold:last-child { border-radius: 0 0 4px 4px; }
+}
 @media print {
   body.sf-printing { padding: 0; background: #fff; }
   body.sf-printing > *:not(.sfv) { display: none !important; }
@@ -201,16 +307,16 @@ body.sfv-open { overflow: hidden; }
     <label><span id="dLabel"></span><input type="date" id="dPick" aria-label="날짜 고르기"></label>
     <button id="dNext" aria-label="다음 날">›</button>
   </div>
+  <button class="help-btn" id="helpBtn" aria-label="사용 방법">?</button>
 </header>
 
 <main id="main"></main>
 
 <nav class="tabs" id="tabs">
-  <button data-tab="check" class="on">출석</button>
-  <button data-tab="docs">서류</button>
-  <button data-tab="box">서류함<span class="tab-badge" id="boxBadge" hidden></span></button>
-  <button data-tab="export">내보내기</button>
-  <button data-tab="setup">설정</button>
+  <button data-tab="check" class="on"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 12.5l2.8 2.8L16 9.5"/></svg>출석</button>
+  <button data-tab="docs"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4M10 12h5M10 16h5"/></svg>서류</button>
+  <button data-tab="box"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 13.5L6.5 5h11l3 8.5V20h-17z"/><path d="M3.5 13.5h5l1.2 2.5h4.6l1.2-2.5h5"/></svg>서류함<span class="tab-badge" id="boxBadge" hidden></span></button>
+  <button data-tab="setup"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M18 7h2M4 17h2M11 17h9"/><circle cx="15.5" cy="7" r="2.5"/><circle cx="8.5" cy="17" r="2.5"/></svg>설정</button>
 </nav>
 
 <script>
@@ -431,15 +537,14 @@ body.sfv-open { overflow: hidden; }
     const n = (t) => recs.filter(([, x]) => x && x.type === t).length;
     const miss = recs.filter(([, x]) => x && docState(x).miss.length).length;
     $('#main').innerHTML = `
+      ${pcLine()}${tipHtml()}${classChips(c)}
       <div class="card">
-        <h2 class="sec">${esc(c.name)} 담임 · 일일출결</h2>
-        <div class="sub" style="margin-top:0">반</div>
-        <div class="chips">${S.classes.map((x) => `<button class="chip ${x.id === c.id ? 'on' : ''}" data-cls="${x.id}">${esc(x.name)}${x.subject ? `<small>${esc(x.subject)}</small>` : ''}</button>`).join('')}</div>
-      </div>
-      <div class="card">
+        <div class="day-head"><b>${esc(c.name)} 일일출결</b><span>${c.students.length}명</span></div>
+        <div class="tally">${tallyCell('출석', recs.filter(([, x]) => !x).length, 'all')}${tallyCell('결석', n('결석'), 'abs')}${tallyCell('지각', n('지각'), 'late')}${tallyCell('조퇴', n('조퇴'), 'late')}${tallyCell('결과', n('결과'), 'late')}</div>
+        ${miss ? `<button class="linkrow" data-goto="docs"><span>서류를 안 낸 학생 ${miss}명</span><i class="chev"></i></button>` : ''}
+        <p class="how">결석·지각·조퇴·결과인 학생만 누르면 돼요.</p>
         <div class="grid" id="stuGrid">${recs.map(([s, x]) => dayTile(s, x)).join('')}</div>
-        <div class="sumbar"><div>결석 <b>${n('결석')}</b> · 지각 <b>${n('지각')}</b> · 조퇴 <b>${n('조퇴')}</b> · 결과 <b>${n('결과')}</b></div>${miss ? `<span class="badge late">서류 ${miss}명</span>` : ''}</div>
-        <p class="hint">학생을 누르면 나이스 출결 구분과 필요 서류를 적어요. 빨간 점은 서류 미제출.</p>
+        ${miss ? '<p class="how dim">빨간 점: 서류를 아직 안 냄</p>' : ''}
       </div>`;
   }
 
@@ -452,45 +557,62 @@ body.sfv-open { overflow: hidden; }
     const bg = document.createElement('div');
     bg.className = 'sheet-bg';
     const sh = document.createElement('div');
-    sh.className = 'sheet';
+    sh.className = 'sheet split';
+    sh.innerHTML = '<div class="sheet-body"></div><div class="sheet-foot"><button class="btn" id="dsClose">닫기</button><button class="btn main" id="dsSave">저장</button></div>';
+    const body = $('.sheet-body', sh);
     document.body.append(bg, sh);
-    const close = () => { bg.remove(); sh.remove(); };
-    bg.addEventListener('click', close);
+    let redrawT = 0, needDraw = false, drawn = '', pickLeft = 0, bgSkip = false;
+    const close = () => { clearTimeout(redrawT); bg.remove(); sh.remove(); };
     const seg = (cls2, list, cur, attr, dis = () => false) => `<div class="seg ${cls2}">${list.map((v) => `<button data-${attr}="${v}" class="${v === cur ? 'on' : ''}" ${dis(v) ? 'disabled' : ''}>${v.replace('출석인정', '인정').replace('행사·교외활동', '행사·교외')}</button>`).join('')}</div>`;
+    // 교시 안내·평일 수: 시각·날짜 칸을 고르는 동안에도 이 글만 고친다
+    const periodHtml = () => {
+      const pf = periodsFor(cs.type, cs.t1, cs.t2);
+      return `${pf && pf.text ? `나이스에 체크할 교시: <b>${esc(pf.text)}</b>` : pf ? '<span class="over">이 시각에는 겹치는 교시가 없어요. 시각을 확인해 주세요.</span>' : cs.type === '결과' ? '나간 시각과 돌아온 시각을 넣으면 교시를 계산해요.' : '시각을 고르면 교시를 계산해요.'}${cs.period && !cs.t1 ? ` <span class="dim">(예전 기록: ${esc(cs.period)})</span>` : ''}`;
+    };
+    const tripHtml = () => {
+      const days = weekdays(cs.from, cs.to).length;
+      const used = isTrip(cs) ? tripDays(cs) : 0;
+      return `평일 <b>${days}</b>일${isTrip(cs) ? ` · 올해 교외체험학습 <b class="${used + days > S.cfg.tripMax ? 'over' : ''}">${used + days}</b> / ${S.cfg.tripMax}일${used + days > S.cfg.tripMax ? ' — 최대 일수를 넘어요' : ''}` : ''}`;
+    };
+    const pickSig = () => [cs.from, cs.to, cs.t1, cs.t2].join('|');
+    function paintLive() {
+      const h = $('#dsHint', sh), t = $('#dsTrip', sh);
+      if (h) h.innerHTML = periodHtml();
+      if (t) t.innerHTML = tripHtml();
+    }
     function draw() {
+      clearTimeout(redrawT);
+      needDraw = false;
+      drawn = pickSig();
       const st = docState(cs);
-      const trip = isTrip(cs);
-      const used = trip ? tripDays(cs) : 0;
       const t1Label = cs.type === '지각' ? '등교 시각' : '나간 시각';
-      const pf = cs.type !== '결석' ? periodsFor(cs.type, cs.t1, cs.t2) : null;
-      sh.innerHTML = `
+      body.innerHTML = `
         <h3>${esc(s.no)}번 ${esc(s.name)}</h3>
-        <div class="dim" style="font-size:13px">${esc(c.name)} · ${old ? '기록 고치기' : esc(showDay(day))}</div>
+        <div class="sheet-sub">${esc(c.name)} · ${old ? '기록 고치기' : esc(showDay(day))}</div>
         <p class="lab">상태</p>
         ${seg('c5', ['출석', ...TYPES], present ? '출석' : cs.type, 'type')}
-        ${present ? '<p class="hint">출석으로 바꾸면 이 기록과 서류 체크를 지워요. 내보낼 때 \'출석\'으로 나가서 나이스의 표시도 지울 수 있어요.</p>' : `
+        ${present ? '<p class="hint">이 기록과 서류 체크를 지워요. PC에는 \'출석\'으로 가서 나이스의 표시도 지울 수 있어요.</p>' : `
         <p class="lab">사유 분류</p>
         ${seg('c4', KINDS, cs.kind, 'kind')}
         ${cs.kind === '출석인정' ? `<p class="lab">세부 분류</p>${seg('c4', SUBS, cs.sub, 'sub', (v) => v === '교외체험학습' && cs.type !== '결석')}` : ''}
         ${cs.type === '결석' ? `
           <div class="row">
-            <label class="field" style="flex:1;margin:0"><span>시작</span><input type="date" id="dsFrom" value="${isoOf(cs.from)}"></label>
-            <label class="field" style="flex:1;margin:0"><span>끝</span><input type="date" id="dsTo" value="${isoOf(cs.to)}"></label>
+            <label class="field"><span>시작</span><input type="date" id="dsFrom" value="${isoOf(cs.from)}"></label>
+            <label class="field"><span>끝</span><input type="date" id="dsTo" value="${isoOf(cs.to)}"></label>
           </div>
-          <p class="trip">평일 <b>${st.days}</b>일${trip ? ` · 올해 교외체험학습 <b class="${used + st.days > S.cfg.tripMax ? 'over' : ''}">${used + st.days}</b> / ${S.cfg.tripMax}일${used + st.days > S.cfg.tripMax ? ' — 최대 일수를 넘어요' : ''}` : ''}</p>` : `
+          <p class="trip" id="dsTrip">${tripHtml()}</p>` : `
           <div class="row">
-            <label class="field" style="flex:1;margin:0"><span>${t1Label}</span><input type="time" id="dsT1" value="${esc(cs.t1 || '')}"></label>
-            ${cs.type === '결과' ? `<label class="field" style="flex:1;margin:0"><span>돌아온 시각</span><input type="time" id="dsT2" value="${esc(cs.t2 || '')}"></label>` : ''}
+            <label class="field"><span>${t1Label}</span><input type="time" id="dsT1" value="${esc(cs.t1 || '')}"></label>
+            ${cs.type === '결과' ? `<label class="field"><span>돌아온 시각</span><input type="time" id="dsT2" value="${esc(cs.t2 || '')}"></label>` : ''}
           </div>
-          <p class="hint">${pf && pf.text ? `나이스에 체크할 교시: <b>${esc(pf.text)}</b>` : pf ? '<span class="over">이 시각에는 겹치는 교시가 없어요. 시각을 확인해 주세요.</span>' : cs.type === '결과' ? '나간 시각과 돌아온 시각을 넣으면 교시를 계산해요.' : '시각을 넣으면 교시를 계산해요.'}${cs.period && !cs.t1 ? ` <span class="dim">(예전 기록: ${esc(cs.period)})</span>` : ''}</p>`}
+          <p class="hint" id="dsHint">${periodHtml()}</p>`}
         <label class="field"><span>사유${cs.kind === '기타' && cs.type === '결석' ? ' (필수)' : ''}</span><input id="dsReason" maxlength="100" value="${esc(cs.reason)}" placeholder="예: 감기로 병원 진료"></label>
-        <p class="hint dim">나이스 사유 칸에는 ${cs.kind === '기타' ? '이 글이 들어가요' : cs.kind === '출석인정' && ['교외체험학습', '생리'].includes(cs.sub) ? `'${esc(cs.sub)}'만 들어가요` : '빈칸으로 가요(이 글에 \'면접\'이 있으면 \'면접\'만)'}. 이 글은 출석부·서류에 남아요.</p>
+        <p class="hint dim">나이스 사유 칸: ${cs.kind === '기타' ? '이 글이 그대로 들어가요.' : cs.kind === '출석인정' && ['교외체험학습', '생리'].includes(cs.sub) ? `'${esc(cs.sub)}'만 들어가요.` : '빈칸으로 가요(이 글에 \'면접\'이 있으면 \'면접\'만).'}</p>
         ${st.need.length ? `<p class="lab">필요 서류</p><ul class="docs">${st.need.map((d) => d === 'photo'
           ? `<li class="${(cs.docs.photo || 0) >= st.days ? 'done' : ''}"><span>${DOC[d]}</span><div class="cnt"><button data-ph="-1">−</button><b>${cs.docs.photo || 0}/${st.days}</b><button data-ph="1">+</button></div></li>`
           : `<li class="${cs.docs[d] ? 'done' : ''}"><input type="checkbox" data-doc="${d}" ${cs.docs[d] ? 'checked' : ''}><span>${DOC[d]}</span></li>`).join('')}</ul>` : '<p class="hint dim">이 구분은 따로 받을 서류가 없어요.</p>'}
         ${old && !present ? reqHtml(cs) : ''}`}
-        ${contactsHtml(s, cls())}
-        <div class="row"><button class="btn" id="dsClose">닫기</button><button class="btn main" id="dsSave">저장</button></div>`;
+        ${contactsHtml(s, cls())}`;
     }
     function keep() {
       const f = $('#dsFrom', sh), t = $('#dsTo', sh), t1 = $('#dsT1', sh), t2 = $('#dsT2', sh), r = $('#dsReason', sh);
@@ -502,7 +624,33 @@ body.sfv-open { overflow: hidden; }
       if (cs.type !== '결석' && cs.t1) { const pf = periodsFor(cs.type, cs.t1, cs.t2); cs.period = pf?.text || ''; cs.pt = pf?.token || ''; }
       if (r) cs.reason = r.value.trim();
     }
-    sh.addEventListener('change', () => { keep(); draw(); });
+    // 아이폰은 시각·날짜를 고르는 동안 값이 바뀔 때마다 change를 보낸다. 그때 다시 그리면 칸이 사라져 고르기 창이 닫힌다(교사 제보 2026-11-02)
+    // → 칸에 있는 동안은 값만 받아 교시 안내만 고치고, 칸을 벗어나면 그린다. 포커스 없이 온 change는 바로 그린다
+    const isPick = (el) => !!el && el.matches('input[type=date], input[type=time]');
+    const inField = () => { const a = document.activeElement; return !!a && sh.contains(a) && a.matches('input:not([type=checkbox]), textarea, select'); };
+    sh.addEventListener('change', (ev) => {
+      keep();
+      if (ev.target.id === 'dsReason') return; // 글만 바뀜: 다시 그릴 일이 없다(그리면 칸을 벗어나며 누른 단추가 사라짐)
+      if (isPick(ev.target) && document.activeElement === ev.target) { paintLive(); needDraw = true; return; }
+      draw();
+    });
+    // 바깥을 눌렀을 때 아이폰이 칸을 그대로 둘 수 있어서, 칸 아닌 곳을 누르면 벗어나게 한다
+    sh.addEventListener('pointerdown', (ev) => { const a = document.activeElement; if (isPick(a) && sh.contains(a) && ev.target !== a) a.blur(); });
+    // 시각을 고르고 창 바깥을 눌렀을 때는 칸만 벗어난다(값이 들어가야 하는데 창이 닫혀 기록이 사라지면 안 됨). 그다음 바깥을 누르면 닫힘
+    bg.addEventListener('pointerdown', () => {
+      const a = document.activeElement, on = isPick(a) && sh.contains(a);
+      bgSkip = on || Date.now() - pickLeft < 500;
+      if (on) a.blur();
+    });
+    bg.addEventListener('click', () => { if (bgSkip) { bgSkip = false; return; } close(); });
+    // 조금 미룬다: 칸을 벗어나며 바로 누른 단추가 다시 그려져 눌림이 사라지지 않게. 다른 입력칸에 가 있으면 그 칸을 벗어날 때까지 기다린다
+    sh.addEventListener('focusout', (ev) => {
+      if (!ev.target.matches('input, textarea, select')) return;
+      if (isPick(ev.target)) { pickLeft = Date.now(); keep(); paintLive(); if (pickSig() !== drawn) needDraw = true; }
+      if (!needDraw) return;
+      clearTimeout(redrawT);
+      redrawT = setTimeout(() => { if (sh.isConnected && needDraw && !inField()) { keep(); draw(); } }, 250);
+    });
     sh.addEventListener('click', (ev) => {
       const b = ev.target.closest('button, input[type=checkbox]');
       if (!b) return;
@@ -537,7 +685,7 @@ body.sfv-open { overflow: hidden; }
   function renderCheck() {
     const main = $('#main');
     if (!S.classes.length) {
-      main.innerHTML = `<div class="card empty"><b>먼저 내 수업 반을 추가해 주세요</b>반 이름과 학생 명단(번호·이름)만 있으면 돼요.<div class="row"><button class="btn main" id="goSetup">반 추가하기</button></div></div>`;
+      main.innerHTML = `<div class="card empty"><b>아직 명단이 없어요</b>PC 패널 [출석부 앱]에서 나온 QR을 폰 카메라로 찍거나, 반을 직접 추가해요.<div class="row"><button class="btn main" id="goSetup">반 추가하기</button><button class="btn" data-goto="help">사용 방법</button></div></div>`;
       return;
     }
     if (!cls()) S.ui.classId = S.classes[0].id;
@@ -546,20 +694,30 @@ body.sfv-open { overflow: hidden; }
     const rec = S.marks[key()] || {};
     const pirs = [1, 2, 3, 4, 5, 6, 7, 8];
     main.innerHTML = `
+      ${pcLine()}${tipHtml()}
       <div class="card">
-        <h2 class="sec">${esc(c.name)} ${S.ui.pir}교시${c.subject ? ` <span class="dim" style="font-weight:500;font-size:14px">${esc(c.subject)}</span>` : ''}</h2>
         <div class="sub" style="margin-top:0">교시</div>
-        <div class="chips" id="pirChips">${pirs.map((p) => `<button class="chip ${p === S.ui.pir ? 'on' : ''}" data-pir="${p}">${p}</button>`).join('')}</div>
-        <div class="sub">반</div>
-        <div class="chips" id="clsChips">${S.classes.map((x) => `<button class="chip ${x.id === c.id ? 'on' : ''}" data-cls="${x.id}">${esc(x.name)}${x.subject ? `<small>${esc(x.subject)}</small>` : ''}</button>`).join('')}</div>
+        <div class="pir" id="pirChips">${pirs.map((p) => `<button class="chip ${p === S.ui.pir ? 'on' : ''}" data-pir="${p}">${p}</button>`).join('')}</div>
+        ${S.classes.length > 1 ? `<div class="sub">반</div>${classChipRow(c)}` : ''}
       </div>
       <div class="card">
+        ${S.classes.length > 1 ? '' : `<div class="day-head"><b>${esc(c.name)}</b><span>${c.students.length}명</span></div>`}
+        <div class="tally" id="sum"></div>
+        <p class="how">한 번 결과(/) · 두 번 출석인정(Ø) · 세 번 출석 · 길게 사유</p>
         <div class="grid" id="stuGrid">${c.students.map((s) => tile(s, rec[s.no])).join('')}</div>
-        <div class="sumbar"><div class="legend"><span class="l-res">결과</span><span class="l-rec">출석인정</span></div><div id="sum"></div></div>
-        <p class="hint">누를 때마다 출석 → 결과(/) → 출석인정(Ø). 길게 누르면 사유를 적어요.</p>
       </div>`;
     paintSum();
   }
+  // 오늘 현황 한 칸: 0이 아닐 때만 상태 색
+  const tallyCell = (label, n, kind) => `<div class="${n || kind === 'all' ? `t-${kind}` : ''}"><b>${n}</b><span>${label}</span></div>`;
+  // 반 고르기: 반이 여럿일 때만. 긴 수업 반 이름은 옆으로 숨지 않게 줄바꿈. 반 이름에 과목이 이미 있으면 다시 적지 않음
+  const classChipRow = (c) => `<div class="chips wrap" id="clsChips">${S.classes.map((x) => `<button class="chip ${x.id === c.id ? 'on' : ''}" data-cls="${x.id}">${esc(x.name)}${x.subject && !x.name.includes(x.subject) ? `<small>${esc(x.subject)}</small>` : ''}</button>`).join('')}</div>`;
+  const classChips = (c) => (S.classes.length > 1 ? `<div class="card">${classChipRow(c)}</div>` : '');
+  // 처음 쓸 때만 보이는 안내(닫으면 안 나옴, 이 폰에만 기억)
+  const TIP_KEY = `${KEY}.guideSeen`;
+  const tipSeen = () => { try { return localStorage.getItem(TIP_KEY) === '1'; } catch { return true; } };
+  const tipDone = () => { try { localStorage.setItem(TIP_KEY, '1'); } catch { /* 저장 못 함 */ } };
+  const tipHtml = () => (tipSeen() ? '' : '<div class="tip" id="guideTip"><span>처음 쓰시나요?</span><button class="btn small main" data-goto="help">사용 방법 보기</button><button class="tip-x" id="guideClose">닫기</button></div>');
   function tile(s, e) {
     const m = e?.m || '';
     const klass = m === '/' ? 'res' : m === 'Ø' ? 'rec' : '';
@@ -570,7 +728,7 @@ body.sfv-open { overflow: hidden; }
     const vals = Object.values(rec);
     const n = (m) => vals.filter((e) => e.m === m).length;
     const el = $('#sum');
-    if (el) el.innerHTML = `결과 <b>${n('/')}</b> · 인정 <b>${n('Ø')}</b>`;
+    if (el) el.innerHTML = `${tallyCell('출석', cls().students.length - n('/') - n('Ø'), 'all')}${tallyCell('결과', n('/'), 'late')}${tallyCell('출석인정', n('Ø'), 'rec')}`;
   }
   function setMark(no, m, r) {
     const k = key();
@@ -609,6 +767,13 @@ body.sfv-open { overflow: hidden; }
     const c = e.target.closest('[data-cls]');
     if (c) { S.ui.classId = c.dataset.cls; save(); renderCheck(); return; }
     if (e.target.id === 'goSetup') switchTab('setup');
+    if (e.target.id === 'guideClose') { tipDone(); e.target.closest('#guideTip').remove(); }
+    if (e.target.id === 'pcOn') goTo('setup', 'syncCard');
+  });
+  // 다른 화면으로 가는 단추(data-goto, data-anchor: 그 화면의 어느 칸까지)
+  $('#main').addEventListener('click', (e) => {
+    const g = e.target.closest('[data-goto]');
+    if (g) goTo(g.dataset.goto, g.dataset.anchor);
   });
 
   // 전화·문자: 폰의 전화·문자 앱을 연다(이 앱은 아무 데도 보내지 않음)
@@ -674,15 +839,17 @@ body.sfv-open { overflow: hidden; }
     const bg = document.createElement('div');
     bg.className = 'sheet-bg';
     const sh = document.createElement('div');
-    sh.className = 'sheet';
+    sh.className = 'sheet split';
     sh.innerHTML = `
+      <div class="sheet-body">
       <h3>${esc(s.no)}번 ${esc(s.name)}</h3>
-      <div class="dim" style="font-size:13px">${esc(showDay(day))} ${S.ui.pir}교시 · ${esc(cls().name)}</div>
+      <div class="sheet-sub">${esc(showDay(day))} ${S.ui.pir}교시 · ${esc(cls().name)}</div>
       <div class="marks">${Object.entries(MARK).map(([m, l]) => `<button data-m="${m}" class="${e.m === m ? 'on' : ''}">${l}</button>`).join('')}</div>
       <label class="field"><span>사유</span><input id="shReason" maxlength="100" value="${esc(e.r)}" placeholder="예: 병원 진료"></label>
       <div class="reasons">${REASONS.map((r) => `<button data-r="${esc(r)}">${esc(r)}</button>`).join('')}</div>
       ${contactsHtml(s, cls())}
-      <div class="row"><button class="btn" id="shClose">닫기</button><button class="btn main" id="shSave">저장</button></div>`;
+      </div>
+      <div class="sheet-foot"><button class="btn" id="shClose">닫기</button><button class="btn main" id="shSave">저장</button></div>`;
     document.body.append(bg, sh);
     let m = e.m || '/';
     sh.querySelectorAll('.marks button').forEach((b) => b.classList.toggle('on', b.dataset.m === m));
@@ -743,17 +910,14 @@ body.sfv-open { overflow: hidden; }
           return `<tr><td>${esc(c?.name || '')}</td><td class="c">${esc(no)}</td><td>${esc(s?.name || '')}</td><td class="c" style="${n > S.cfg.tripMax ? 'color:var(--res);font-weight:700' : ''}">${n} / ${S.cfg.tripMax}</td></tr>`;
         }).join('')}</tbody></table>` : '<p class="hint">올해 교외체험학습 기록이 없어요.</p>'}
       </div>
-      <div class="card">
-        <h2 class="sec">서류 설정</h2>
-        <div class="row">
-          <label class="field" style="flex:1;margin:0"><span>제출 기한 (끝난 날부터, 일)</span><input type="number" min="1" max="60" id="cfgDeadline" value="${+S.cfg.deadline || 7}"></label>
-          <label class="field" style="flex:1;margin:0"><span>체험학습 최대 (일)</span><input type="number" min="1" max="60" id="cfgTrip" value="${+S.cfg.tripMax || 15}"></label>
-        </div>
-      </div>
-      <div class="card">
-        <h2 class="sec">서류 규칙 <span class="dim" style="font-size:13px;font-weight:500">— 학교에 맞게 눌러서 바꾸세요</span></h2>
-        <table class="list"><tbody>${RULE_ROWS.map(([k, label]) => `<tr><td style="width:38%;font-weight:600">${esc(label)}</td><td><div class="chips" style="flex-wrap:wrap">${Object.entries(DOC).map(([d, name]) => `<button class="chip ${(rules()[k] || []).includes(d) ? 'on' : ''}" style="height:30px;font-size:12px;padding:0 8px" data-rule="${k}" data-rdoc="${d}">${esc(name.split(' (')[0])}</button>`).join('')}</div></td></tr>`).join('')}</tbody></table>
-        <div class="row"><button class="btn small" id="rulesReset">처음 규칙으로 되돌리기</button></div>
+      <div class="fold-group">
+        ${fold('docsCfg', '제출 기한 · 체험학습 일수', `<div class="row">
+          <label class="field"><span>제출 기한 (끝난 날부터, 일)</span><input type="number" min="1" max="60" id="cfgDeadline" value="${+S.cfg.deadline || 7}"></label>
+          <label class="field"><span>체험학습 최대 (일)</span><input type="number" min="1" max="60" id="cfgTrip" value="${+S.cfg.tripMax || 15}"></label>
+        </div>`, { note: `${+S.cfg.deadline || 7}일 · ${+S.cfg.tripMax || 15}일` })}
+        ${fold('docsRules', '서류 규칙', `<p class="how">경우마다 받을 서류예요. 학교에 맞게 눌러서 바꾸세요.</p>
+        <table class="list"><tbody>${RULE_ROWS.map(([k, label]) => `<tr><td style="width:34%;font-weight:600">${esc(label)}</td><td><div class="chips wrap">${Object.entries(DOC).map(([d, name]) => `<button class="chip ${(rules()[k] || []).includes(d) ? 'on' : ''}" style="min-height:34px;font-size:12.5px;padding:2px 8px" data-rule="${k}" data-rdoc="${d}">${esc(name.split(' (')[0])}</button>`).join('')}</div></td></tr>`).join('')}</tbody></table>
+        <div class="row"><button class="btn small" id="rulesReset">처음 규칙으로 되돌리기</button></div>`)}
       </div>`;
   }
   $('#main').addEventListener('click', (e) => {
@@ -818,14 +982,19 @@ body.sfv-open { overflow: hidden; }
     }
     return out.sort((a, b) => a.ymd.localeCompare(b.ymd) || a.pir - b.pir || a.cls.localeCompare(b.cls, 'ko', { numeric: true }) || a.no - b.no);
   }
+  // 구글을 못 쓰는 학교를 위해 [설정 → 파일로 내보내기] 안쪽에 남겨 둠(교사 결정 2026-11-02: 아래 탭에서 없앰, 자동 연결되니까)
+  let expDrawn = '';
   function renderExport() {
     if (!exp.from) exp = { from: day, to: day }; // 기본은 오늘(교사 결정 2026-10-28) — 이번 주·이번 달·날짜 범위는 위 [기간]에서
+    expDrawn = `${exp.from}|${exp.to}`;
     const rows = exportRows(exp.from, exp.to);
     const marked = rows.filter((r) => r.mark !== '출석');
     const byDay = {};
     rows.forEach((r) => { (byDay[r.ymd] = byDay[r.ymd] || []).push(r); });
     const drows = dailyRows(exp.from, exp.to);
     $('#main').innerHTML = `
+      <button class="backrow" id="exBack">설정으로</button>
+      <h2 class="help-title">파일로 내보내기</h2>
       <div class="card">
         <h2 class="sec">기간</h2>
         <div class="chips">
@@ -834,17 +1003,10 @@ body.sfv-open { overflow: hidden; }
           <button class="chip ${rangeIs('month') ? 'on' : ''}" data-range="month">이번 달</button>
         </div>
         <div class="row">
-          <label class="field" style="flex:1;margin:0"><span>시작</span><input type="date" id="exFrom" value="${isoOf(exp.from)}"></label>
-          <label class="field" style="flex:1;margin:0"><span>끝</span><input type="date" id="exTo" value="${isoOf(exp.to)}"></label>
+          <label class="field"><span>시작</span><input type="date" id="exFrom" value="${isoOf(exp.from)}"></label>
+          <label class="field"><span>끝</span><input type="date" id="exTo" value="${isoOf(exp.to)}"></label>
         </div>
-        <p class="hint dim">날짜를 하나만 보내려면 시작과 끝을 같은 날로 고르세요. 아래 파일은 이 기간으로 만들어요.</p>
-      </div>
-      <div class="card" id="exPc">
-        <h2 class="sec">PC 업무 도우미로</h2>
-        ${SY.conf ? `<p class="hint">PC 업무 도우미가 이 출석부를 <b>구글 자동 저장</b>에서 저절로 읽어요(저장소 번호 <b>${esc(syTag(SY.conf))}</b>). 체크하면 몇 초 안에 올라가니, PC 패널에서 <b>[${APP === 'class' ? '과목별출결' : '일일출결'}]</b>만 누르세요.</p>
-        <p class="hint dim">PC 패널에 보이는 저장소 번호가 이 번호와 같아야 해요.${SY.meta.dirty ? ' 지금 저장 대기 중이에요.' : SY.meta.at ? ` 마지막 저장 ${hhmm(SY.meta.at)}.` : ''}</p>`
-    : `<p class="hint warn">PC 업무 도우미로 출결이 가려면 <b>[설정 → 구글 자동 저장 → 켜기]</b>를 교육청 구글 계정으로 켜 주세요. 켜 두면 체크할 때마다 저절로 올라가고, PC 패널에서 [${APP === 'class' ? '과목별출결' : '일일출결'}]만 누르면 들어와요.</p>
-        <div class="row"><button class="btn small main" id="exGoSync">설정 열기</button></div>`}
+        <p class="hint dim">아래 파일은 이 기간으로 만들어요. 하루만 받으려면 시작과 끝을 같은 날로 고르세요.</p>
       </div>
       ${drows.length ? `<div class="card">
         <h2 class="sec">담임 일일출결 파일</h2>
@@ -868,13 +1030,23 @@ body.sfv-open { overflow: hidden; }
           : '<p class="empty" style="padding:14px">이 기간에는 기록이 없어요.</p>'}
       </div>`;
   }
+  // 기록 창과 같이: 날짜 칸을 고르는 동안은 값만 받고, 칸을 벗어나면 그린다(아이폰은 고르는 동안 change를 보냄)
+  const exField = (el) => !!el && (el.id === 'exFrom' || el.id === 'exTo');
+  function exRead() {
+    const a = $('#exFrom'), b = $('#exTo');
+    const f = a ? a.value.replace(/-/g, '') : '', t = b ? b.value.replace(/-/g, '') : '';
+    if (f && t) exp = f <= t ? { from: f, to: t } : { from: t, to: f };
+  }
+  const exRedraw = () => { exRead(); if (`${exp.from}|${exp.to}` !== expDrawn) renderExport(); };
   $('#main').addEventListener('change', (e) => {
-    if (e.target.id === 'exFrom' || e.target.id === 'exTo') {
-      const f = $('#exFrom').value.replace(/-/g, ''), t = $('#exTo').value.replace(/-/g, '');
-      if (f && t) { exp = f <= t ? { from: f, to: t } : { from: t, to: f }; renderExport(); }
-    }
+    if (exField(e.target) && document.activeElement !== e.target) exRedraw();
+  });
+  $('#main').addEventListener('focusout', (e) => {
+    if (!exField(e.target)) return;
+    setTimeout(() => { if (tab === 'export' && !exField(document.activeElement)) exRedraw(); }, 250);
   });
   $('#main').addEventListener('click', (e) => {
+    if (e.target.id === 'exBack') { goTo('setup', 'exportFold'); return; }
     const r = e.target.closest('[data-range]');
     if (r) {
       if (r.dataset.range === 'today') exp = { from: day, to: day };
@@ -883,6 +1055,7 @@ body.sfv-open { overflow: hidden; }
       renderExport();
       return;
     }
+    if (e.target.id === 'exXlsx' || e.target.id === 'exCsv' || e.target.id === 'exDayXlsx') exRead();
     if (e.target.id === 'exXlsx') download(xlsx(table()), `과목별출결_${exp.from}-${exp.to}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     if (e.target.id === 'exCsv') download(new Blob(['﻿' + table().map((r) => r.map(csvCell).join(',')).join('\r\n')], { type: 'text/csv' }), `과목별출결_${exp.from}-${exp.to}.csv`);
   });
@@ -905,7 +1078,6 @@ body.sfv-open { overflow: hidden; }
     return out.sort((a, b) => a.ymd.localeCompare(b.ymd) || a.cls.localeCompare(b.cls, 'ko', { numeric: true }) || a.no - b.no);
   }
   $('#main').addEventListener('click', (e) => {
-    if (e.target.id === 'exGoSync') { switchTab('setup'); setTimeout(() => document.getElementById('syncCard')?.scrollIntoView({ block: 'start' }), 0); return; }
     if (e.target.id !== 'exDayXlsx') return;
     download(xlsx(dailyTable()), `일일출결_${exp.from}-${exp.to}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   });
@@ -964,6 +1136,14 @@ body.sfv-open { overflow: hidden; }
     ]);
   }
 
+  // ── 접는 칸: 다시 그려도 열린 칸은 그대로(고치는 중에 닫히지 않게) ──
+  const foldState = {};
+  function fold(key, title, body, { open = false, note = '', warn = false, id = '' } = {}) {
+    const isOpen = foldState[key] ?? open;
+    return `<details class="card fold" data-fold="${key}"${id ? ` id="${id}"` : ''}${isOpen ? ' open' : ''}><summary><h2 class="sec">${title}</h2>${note ? `<span class="fold-note${warn ? ' warn' : ''}">${note}</span>` : ''}</summary><div class="fold-body">${body}</div></details>`;
+  }
+  $('#main').addEventListener('toggle', (e) => { const k = e.target.dataset?.fold; if (k) foldState[k] = e.target.open; }, true);
+
   // ── 설정: 반 관리 ─────────────────────────────────────
   let editing = null; // 반 id 또는 'new'
   function parseRoster(text) {
@@ -991,20 +1171,18 @@ body.sfv-open { overflow: hidden; }
     const sc = schoolCfg();
     const ap = apprEdit || sc.appr;
     const form = (S.ui.schForm || sc.form);
-    return `<div class="card" id="schoolCard">
-        <h2 class="sec">학교 (학생 서류 서식)</h2>
+    return fold('school', '학교 서식', `
         <label class="field"><span>학교 이름</span><input id="schName" maxlength="30" value="${esc(sc.name)}" placeholder="예: ○○고등학교"></label>
         <p class="hint">학생 서류 맨 아래 '<b>${esc(sc.name || '○○고등학교')}장 귀하</b>'에 들어가요.</p>
         <p class="lab">서식</p>
         <div class="chips"><button class="chip ${form === 'common' ? 'on' : ''}" data-schform="common">공통 서식</button><button class="chip ${form === 'gg' ? 'on' : ''}" data-schform="gg">강경고 서식</button></div>
         ${form === 'common' ? `<p class="lab">결재 칸 (왼쪽부터, 최대 7칸)</p>
-        <ul class="docs">${ap.map((a, i) => `<li><input data-appr="${i}" value="${esc(a)}" maxlength="8" aria-label="결재 칸 ${i + 1}" style="flex:1;min-width:0;height:36px;padding:0 8px;border:1px solid #c5ccd6;border-radius:4px"><button class="btn small" data-apup="${i}" ${i ? '' : 'disabled'} aria-label="앞으로">↑</button><button class="btn small" data-apdel="${i}" ${ap.length > 1 ? '' : 'disabled'} aria-label="지우기">×</button></li>`).join('')}</ul>
+        <ul class="docs">${ap.map((a, i) => `<li><input class="appr-input" data-appr="${i}" value="${esc(a)}" maxlength="8" aria-label="결재 칸 ${i + 1}"><button class="btn small" data-apup="${i}" ${i ? '' : 'disabled'} aria-label="앞으로">↑</button><button class="btn small" data-apdel="${i}" ${ap.length > 1 ? '' : 'disabled'} aria-label="지우기">×</button></li>`).join('')}</ul>
         <div class="row"><button class="btn small" id="apAdd" ${ap.length >= 7 ? 'disabled' : ''}>칸 더하기</button><button class="btn small" id="apReset">기본으로</button></div>
         <table class="list" style="margin-top:10px;text-align:center"><tbody><tr><th rowspan="2" style="width:28px;text-align:center">결<br>재</th>${ap.map((a) => `<th style="text-align:center">${esc(a)}</th>`).join('')}</tr><tr>${ap.map(() => '<td style="height:34px"></td>').join('')}</tr></tbody></table>`
           : '<p class="hint">강경고등학교 원래 서식(결재: 담임·담당·부장·교감 전결) 그대로 인쇄해요.</p>'}
         <div class="row"><button class="btn small main" id="schSave">저장</button></div>
-        <p class="hint dim">학생 미리 보기에도 같은 모양이 보이도록 [서류함]을 쓸 때 학교 이름·결재 칸만 받는 곳에 함께 보내요(학생 정보 아님).</p>
-      </div>`;
+        <p class="hint dim">학생 미리 보기에도 같은 모양이 보이도록 [서류함]을 쓸 때 학교 이름·결재 칸만 받는 곳에 함께 보내요(학생 정보 아님).</p>`, { id: 'schoolCard', note: esc(sc.name) });
   }
   function readAppr() { const list = [...document.querySelectorAll('[data-appr]')].map((el) => el.value.trim().slice(0, 8)); return list.length ? list : (apprEdit || schoolCfg().appr).slice(); }
   $('#main').addEventListener('click', (e) => {
@@ -1028,50 +1206,55 @@ body.sfv-open { overflow: hidden; }
       toast('학교 설정을 저장했어요');
     }
   });
+  // 교시 시각: 예시 그대로면 펼쳐서 위쪽에, 고쳤으면 접어서 아래쪽에
+  function bellCard() {
+    return fold('bell', '우리 학교 교시 시각', `
+        ${S.cfg.bellsSet ? '' : '<div class="warnbox" style="margin:0 0 6px">아래는 예시 시각이에요. 우리 학교 시각으로 고친 뒤 [저장]을 눌러 주세요.</div>'}
+        <p class="hint">지각·조퇴·결과 시각으로 나이스에 체크할 교시를 계산할 때 써요. 한 줄에 하나씩, 쉬는 시간·점심·청소는 적지 않아요.</p>
+        <label class="field"><textarea id="bellText" rows="9" style="font-variant-numeric:tabular-nums">${esc(S.cfg.bells || '')}</textarea></label>
+        <div class="row"><button class="btn small main" id="bellSave">저장</button><button class="btn small" id="bellReset">처음 시각으로</button></div>
+        <p class="hint" id="bellMsg"></p>`, { id: 'bellCard', open: !S.cfg.bellsSet, note: S.cfg.bellsSet ? '' : '아직 예시', warn: !S.cfg.bellsSet });
+  }
   function renderSetup() {
     if (editing) return renderEdit();
+    const bellTop = APP !== 'class' && !S.cfg.bellsSet;
     $('#main').innerHTML = `
+      ${S.classes.length ? '' : tipHtml()}
       ${syncCard()}
       <div class="card">
-        <h2 class="sec">내 수업 반</h2>
-        ${S.classes.length ? `<table class="list"><thead><tr><th>반</th><th>과목</th><th class="c">학생</th><th></th></tr></thead><tbody>${S.classes.map((c) => `<tr><td><b>${esc(c.name)}</b></td><td>${esc(c.subject || '-')}</td><td class="c">${c.students.length}</td><td class="c"><button class="textbtn" data-edit="${c.id}">고치기</button></td></tr>`).join('')}</tbody></table>` : '<p class="hint">아직 반이 없어요.</p>'}
-        <div class="row"><button class="btn main" data-edit="new">반 추가</button></div>
-      </div>
-      ${accountCard()}
-      ${formCard()}
-      <div class="card">
-        <h2 class="sec">명단·연락처 불러오기</h2>
-        <p class="hint">나이스 명단은 PC 업무 도우미의 [출석부 웹앱 만들기]에서 나온 QR을 이 폰 카메라로 찍으면 들어가요(파일로 받았다면 아래 [명단 파일 넣기]). 연락처는 엑셀·CSV나 구글 시트에서 불러와 이 폰에만 저장해요.</p>
-        <div class="row"><label class="btn small" style="display:flex;align-items:center;justify-content:center">명단 파일 넣기<input type="file" id="rsLoad" accept=".json" hidden></label></div>
-        <div class="row"><label class="btn small" style="display:flex;align-items:center;justify-content:center">연락처 엑셀·CSV 넣기<input type="file" id="ctLoad" accept=".xlsx,.csv,.txt" hidden></label><button class="btn small" id="ctGoogle">구글 시트에서 불러오기</button></div>
-        <p class="hint dim">연락처 칸 예시: 반 · 번호 · 이름 · 학생 연락처 · 보호자 연락처. 반 칸이 없으면 지금 고른 반에 넣어요.</p>
-        <p class="hint" id="ctMsg"></p>
-        ${contactCount() ? `<p class="hint">연락처가 있는 학생 ${contactCount()}명 · <button class="textbtn" id="ctWipe">연락처만 지우기</button></p>
-        <div class="row">${S.classes.filter((c) => c.students.some(hasContact)).map((c) => `<button class="btn small" data-vcf="${esc(c.id)}|">${esc(c.name)} 연락처 폰에 모두 추가</button>`).join('')}</div>` : ''}
+        <h2 class="sec">${APP === 'class' ? '내 수업 반' : '내 반'}</h2>
+        ${S.classes.length ? `<table class="list"><thead><tr><th>반</th><th>과목</th><th class="c">학생</th><th></th></tr></thead><tbody>${S.classes.map((c) => `<tr><td><b>${esc(c.name)}</b></td><td>${esc(c.subject || '-')}</td><td class="c">${c.students.length}</td><td class="c"><button class="textbtn" data-edit="${c.id}">고치기</button></td></tr>`).join('')}</tbody></table>` : '<p class="hint">아직 반이 없어요. PC 패널 [출석부 앱]에서 나온 QR을 이 폰 카메라로 찍으면 명단이 저절로 들어와요.</p>'}
+        <div class="row"><button class="btn small" data-edit="new">반 직접 추가</button></div>
       </div>
       ${standalone() ? '' : `<div class="card">
         <h2 class="sec">홈 화면에 추가</h2>
         <p class="hint">${homeGuide()} 다음부터는 홈 화면 아이콘으로 여세요.</p>
       </div>`}
-      ${APP === 'class' ? '' : schoolCard()}
-      ${APP === 'class' ? '' : `<div class="card">
-        <h2 class="sec">우리 학교 교시 시각</h2>
-        ${S.cfg.bellsSet ? '' : '<div class="warnbox" style="margin:0 0 6px">아래는 예시 시각이에요. 우리 학교 시각으로 고친 뒤 [저장]을 눌러 주세요.</div>'}
-        <p class="hint">지각·조퇴·결과 시각으로 나이스에 체크할 교시를 계산할 때 써요. 한 줄에 하나씩, 쉬는 시간·점심·청소는 적지 않아요.</p>
-        <label class="field"><textarea id="bellText" rows="9" style="font-variant-numeric:tabular-nums">${esc(S.cfg.bells || '')}</textarea></label>
-        <div class="row"><button class="btn small main" id="bellSave">저장</button><button class="btn small" id="bellReset">처음 시각으로</button></div>
-        <p class="hint" id="bellMsg"></p>
-      </div>`}
-      <div class="card">
-        <h2 class="sec">백업</h2>
-        <p class="hint">폰을 바꾸거나 브라우저 자료를 지우기 전에 백업 파일을 받아 두세요. 백업 파일에도 학생 이름이 들어 있어요.</p>
-        <div class="row"><button class="btn small" id="bkSave">백업 받기</button><label class="btn small" style="display:flex;align-items:center;justify-content:center">백업 불러오기<input type="file" id="bkLoad" accept=".json" hidden></label></div>
-      </div>
-      <div class="card">
-        <h2 class="sec">자료 지우기</h2>
+      ${bellTop ? bellCard() : ''}
+      <p class="group-label">필요할 때만</p>
+      <div class="fold-group">
+        ${fold('roster', '명단 · 연락처 불러오기', `
+        <p class="hint">나이스 명단은 PC 패널 [출석부 앱]에서 나온 QR을 찍으면 들어가요. 파일로 받았다면 아래 [명단 파일 넣기]로 넣어요.</p>
+        <div class="row"><label class="btn small" style="display:flex;align-items:center;justify-content:center">명단 파일 넣기<input type="file" id="rsLoad" accept=".json" hidden></label></div>
+        <p class="hint">연락처는 엑셀·CSV나 구글 시트에서 불러와 이 폰에만 저장해요. 칸 예시: 반 · 번호 · 이름 · 학생 연락처 · 보호자 연락처. 반 칸이 없으면 지금 고른 반에 넣어요.</p>
+        <div class="row"><label class="btn small" style="display:flex;align-items:center;justify-content:center">연락처 엑셀·CSV 넣기<input type="file" id="ctLoad" accept=".xlsx,.csv,.txt" hidden></label><button class="btn small" id="ctGoogle">구글 시트에서 불러오기</button></div>
+        <p class="hint" id="ctMsg"></p>
+        ${contactCount() ? `<p class="hint">연락처가 있는 학생 ${contactCount()}명 · <button class="textbtn" id="ctWipe">연락처만 지우기</button></p>
+        <div class="row">${S.classes.filter((c) => c.students.some(hasContact)).map((c) => `<button class="btn small" data-vcf="${esc(c.id)}|">${esc(c.name)} 연락처 폰에 모두 추가</button>`).join('')}</div>` : ''}`, { note: contactCount() ? `연락처 ${contactCount()}명` : '' })}
+        ${formCard()}
+        ${APP === 'class' ? '' : schoolCard()}
+        ${APP === 'class' || bellTop ? '' : bellCard()}
+        ${accountCard()}
+        ${fold('export', '파일로 내보내기', `
+        <p class="hint">구글을 못 쓰는 학교만 쓰면 돼요. 구글 자동 저장을 켜 두면 파일 없이 PC로 저절로 가요.</p>
+        <div class="row"><button class="btn small" id="goExport">엑셀 받는 화면 열기</button></div>`, { id: 'exportFold' })}
+        ${fold('backup', '백업', `
+        <p class="hint">폰을 바꾸거나 브라우저 자료를 지우기 전에 받아 두세요. 백업 파일에도 학생 이름이 들어 있어요.</p>
+        <div class="row"><button class="btn small" id="bkSave">백업 받기</button><label class="btn small" style="display:flex;align-items:center;justify-content:center">백업 불러오기<input type="file" id="bkLoad" accept=".json" hidden></label></div>`)}
+        ${fold('wipe', '자료 지우기', `
         <p class="hint">이 폰에 저장된 반·명단·출석 기록을 모두 지워요. 되돌릴 수 없어요.</p>
         <div class="row"><button class="btn small danger" id="wipe">전체 지우기</button></div>
-        <p class="hint dim">학생 자료는 이 폰의 브라우저 안에 저장돼요${SY.conf ? '(구글 자동 저장이 켜져 있어 암호로 잠근 사본이 선생님 구글 계정의 출석부 저장소에도 있어요 — 위 [구글 자동 저장 → 더 보기]에서 지워요)' : '(구글 자동 저장을 켜지 않으면 어디로도 보내지 않아요)'}. 연락처 설문지 응답은 선생님 구글 시트에 있으니 학년도가 끝나면 구글 드라이브에서 지워 주세요. 학생이 낸 서류는 선생님 구글 드라이브에 있어서 여기서 지워지지 않아요 — [서류함 → 구글 쪽 서류·요청 모두 지우기]로 지워 주세요.</p>
+        <p class="hint dim">학생 자료는 이 폰의 브라우저 안에 저장돼요${SY.conf ? '(구글 자동 저장이 켜져 있어 암호로 잠근 사본이 선생님 구글 계정의 출석부 저장소에도 있어요 — 위 [구글 자동 저장 → 더 보기]에서 지워요)' : '(구글 자동 저장을 켜지 않으면 어디로도 보내지 않아요)'}. 연락처 설문지 응답은 선생님 구글 시트에 있으니 학년도가 끝나면 구글 드라이브에서 지워 주세요. 학생이 낸 서류는 선생님 구글 드라이브에 있어서 여기서 지워지지 않아요 — [서류함 → 구글 쪽 서류·요청 모두 지우기]로 지워 주세요.</p>`)}
       </div>`;
     paintFormQr();
   }
@@ -1084,7 +1267,7 @@ body.sfv-open { overflow: hidden; }
         <label class="field"><span>과목 (선택)</span><input id="edSubject" value="${esc(c.subject || '')}" placeholder="국어"></label>
         <label class="field" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="edHome" style="width:20px;height:20px" ${isHome(c) ? 'checked' : ''}><span style="margin:0">담임 반 — 일일출결(결석·지각·조퇴·결과, 필요 서류)로 기록</span></label>
         <label class="field"><span>학생 명단 — 한 줄에 "번호 이름"</span><textarea id="edRoster" placeholder="1 김하늘&#10;2 이도윤&#10;3 박서연">${esc(c.students.map((s) => `${s.no} ${s.name}`).join('\n'))}</textarea></label>
-        <p class="hint">나이스 명렬표 엑셀에서 번호·이름 두 칸을 복사해 붙여 넣어도 돼요. 학번(10301)을 넣으면 끝 두 자리를 번호로 써요.</p>
+        <p class="hint">나이스 명렬표 엑셀에서 번호·이름 두 칸을 복사해 붙여 넣어도 돼요. 학번(1301)을 넣으면 끝 두 자리를 번호로 써요.</p>
         <p class="hint" id="edMsg"></p>
         <div class="row"><button class="btn" id="edCancel">취소</button><button class="btn main" id="edSave">저장</button></div>
         ${editing !== 'new' ? '<div class="row"><button class="btn small danger" id="edDelete">이 반 지우기</button></div>' : ''}
@@ -1107,6 +1290,7 @@ body.sfv-open { overflow: hidden; }
     const ed = e.target.closest('[data-edit]');
     if (ed) { editing = ed.dataset.edit; renderSetup(); return; }
     const id = e.target.id;
+    if (id === 'goExport') { switchTab('export'); return; }
     if (id === 'edCancel') { editing = null; renderSetup(); }
     if (id === 'edSave') {
       const name = normClass($('#edName').value);
@@ -1355,15 +1539,13 @@ body.sfv-open { overflow: hidden; }
   }
   function formCard() {
     const F = formInfo();
-    return `<div class="card">
-        <h2 class="sec">연락처 받기 (구글 설문지)</h2>
+    return fold('form', '연락처 설문 (구글 설문지)', `
         ${F ? `<p class="hint">학생·보호자에게 이 QR이나 링크를 보여 주세요. 링크에는 개인정보가 없어서 학급 단톡방에 올려도 돼요. 응답은 선생님 구글 시트에 쌓여요.</p>
         <div id="fmQr" class="qrbox"></div>
         <div class="row"><button class="btn small" id="fmCopy">링크 복사</button><button class="btn small main" id="fmRead">응답 불러오기</button></div>
         <p class="hint dim">${esc(F.title)} · ${esc(F.made)} · <button class="textbtn" id="fmNew">새로 만들기</button></p>`
         : `<p class="hint">선생님 구글 계정에 연락처 설문지(맨 앞에 개인정보 수집·이용 동의)를 만들어요. 묻는 것: 번호·이름·학생 휴대전화·주소·보호자 1·2 관계와 휴대전화·주 연락처(먼저 연락할 보호자).</p>
-        <div class="row"><button class="btn small main" id="fmMake">연락처 폼 만들기</button></div>`}
-      </div>`;
+        <div class="row"><button class="btn small main" id="fmMake">연락처 폼 만들기</button></div>`}`, { note: F ? '만듦' : '' });
   }
   let qrLib = null;
   function loadQr() {
@@ -1409,12 +1591,10 @@ body.sfv-open { overflow: hidden; }
   const gAccount = () => { try { return localStorage.getItem(ACC_KEY) || ''; } catch { return ''; } };
   function accountCard() {
     const acc = gAccount();
-    return `<div class="card">
-        <h2 class="sec">구글 계정 (자동 저장·연락처)</h2>
+    return fold('account', '구글 계정', `
         <p class="hint">폰에 여러 구글 계정이 로그인돼 있으면 엉뚱한 계정으로 열릴 수 있어요. PC 도우미와 <b>같은 교육청 구글 계정</b> 주소를 적어 두면 그 계정으로 열어요(로그인돼 있지 않으면 구글 로그인 화면이 먼저 떠요).</p>
         <label class="field"><span>계정 주소</span><input type="email" id="gaInput" placeholder="예: teacher@school.cnehs.kr" value="${esc(acc)}" autocomplete="email"></label>
-        <div class="row"><button class="btn small main" id="gaSave">저장</button>${acc ? '<button class="btn small" id="gaClear">지우기</button>' : ''}</div>
-      </div>`;
+        <div class="row"><button class="btn small main" id="gaSave">저장</button>${acc ? '<button class="btn small" id="gaClear">지우기</button>' : ''}</div>`, { note: esc(acc) });
   }
   document.addEventListener('click', (e) => {
     if (e.target.id === 'gaSave') {
@@ -1631,8 +1811,8 @@ body.sfv-open { overflow: hidden; }
     c.skSig = sig;
     save(true);
   }
-  // 반 링크(카톡방에 올림): 다리 주소 + 반 이름 + 반 비밀값만. 짧게(p=s, b=반, k=비밀값 16자)
-  const studentLink = (c) => `${S.cfg.sf.u}?p=s&b=${encodeURIComponent(c.name)}&k=${c.sk}`;
+  // 반 링크(카톡방에 올림): 입구(s.html, 카톡 등 앱 안 브라우저면 바깥 브라우저로 넘김) + '#' 뒤에 다리 주소·반 이름·반 비밀값만(공개판 서버로 안 감)
+  const studentLink = (c) => `${new URL('s.html', location.href.split('#')[0]).href}#${new URLSearchParams({ u: S.cfg.sf.u.replace('https://script.google.com/', ''), b: c.name, k: c.sk })}`;
   const linkText = (c) => `결석신고서·체험학습 서류는 여기서 내 주세요(학교 구글 계정 로그인) ${studentLink(c)}`;
   function reqHtml(cs) {
     if (!S.cfg.sf) return '<p class="hint dim">[서류함]을 연결하면 학생에게 서류를 폰으로 요청할 수 있어요.</p>';
@@ -1740,11 +1920,19 @@ body.sfv-open { overflow: hidden; }
       const n = linkSubs(BOX.subs);
       if (n) toast(`출결 기록 ${n}건에 '서류 받음'을 체크했어요`);
       preload();
-    } catch (e) { BOX.err = e.message; changed = true; if (!quiet) toast(e.message); }
+    } catch (e) { if (!quiet) { BOX.err = e.message; changed = true; toast(e.message); } } // 저절로 받기 실패는 조용히(다음에 다시)
     BOX.busy = false;
     paintBadge();
-    if (tab === 'box' && changed) renderBox(); // 바뀐 것이 없으면 다시 그리지 않음(깜빡임·스크롤 튐 없게)
+    if (tab === 'box' && changed && !document.querySelector('.sfv')) renderBox(); // 바뀐 것이 없거나 서류를 보는 중이면 다시 그리지 않음(깜빡임·스크롤 튐 없게)
   }
+  // 저절로 최신화(교사 요청 2026-11-02 '새로 받기 안 눌러도'): 창 없이 연결돼 있으면 서류함을 보는 동안 1분마다, 다른 탭이면 5분마다.
+  // 작은 창은 버튼을 눌러야 열 수 있어(브라우저 규칙) 저절로 못 받는다
+  let boxTick = 0;
+  setInterval(() => {
+    if (!S.cfg.sf || !BR.inFrame || document.hidden) return;
+    boxTick++;
+    if (tab === 'box' || boxTick % 5 === 0) refreshBox(true);
+  }, 60000);
   const stuName = (cname, no) => (S.classes.find((x) => x.name === cname && isHome(x)) || S.classes.find((x) => x.name === cname))?.students.find((s) => s.no === String(no))?.name || '';
   // 학생 서류는 담임 반만(교사 결정 2026-10-28) — 수업 반에는 학생 링크를 만들지 않음
   const qrClasses = () => S.classes.filter(isHome).filter((c) => /^\d-\d{1,2}$/.test(c.name));
@@ -1783,7 +1971,7 @@ body.sfv-open { overflow: hidden; }
   function boxLinkCard(qcs) {
     return `<div class="card">
         <h2 class="sec">학생용 링크 (반 카톡방에 올리기)</h2>
-        <p class="hint">[링크 복사]를 눌러 반 카톡방에 붙여 넣으세요. 링크에는 반 이름·반 비밀값·받는 곳 주소만 있어요. 그래도 들어오려면 <b>구글 로그인</b>과 <b>명단의 학번·이름</b>이 맞아야 해요. 링크가 다른 곳에 퍼졌으면 [반 링크 새로 만들기]로 옛 링크를 막으세요.</p>
+        <p class="hint">[링크 복사]를 눌러 반 카톡방에 붙여 넣으세요. 학생은 본인 구글 계정이면 폰·PC·집 컴퓨터 어디서나 열 수 있어요(카톡에서 누르면 바깥 브라우저로 넘어가요). 링크에는 반 이름·반 비밀값·받는 곳 주소만 있어요. 그래도 들어오려면 <b>구글 로그인</b>과 <b>명단의 학번·이름</b>이 맞아야 해요. 링크가 다른 곳에 퍼졌으면 [반 링크 새로 만들기]로 옛 링크를 막으세요.</p>
         ${qcs.length ? `<ul class="docs">${qcs.map((c) => `<li><span><b>${esc(c.name)}</b>${c.sk ? '' : ' <small class="dim">아직 안 만듦</small>'}</span><button class="btn small main" data-scopy="${esc(c.id)}">링크 복사</button><button class="btn small" data-sqr="${esc(c.id)}">QR</button><button class="btn small" data-snew="${esc(c.id)}">반 링크 새로 만들기</button></li>`).join('')}</ul>` : '<p class="hint">[설정]에서 반을 먼저 추가해 주세요.</p>'}
         <div id="sqrBox" class="qrbox"></div>
         <p class="hint dim">학생이 로그인이 안 되면: 오른쪽 위 메뉴 → 다른 브라우저로 열기${BOX.binds.length ? ` · 계정·기기에 묶인 학생 ${BOX.binds.length}명(계정 ${BOX.binds.filter((x) => x.by === 'account').length} · 기기 ${BOX.binds.filter((x) => x.by === 'device').length})` : ''}</p>
@@ -1801,7 +1989,7 @@ body.sfv-open { overflow: hidden; }
         ${subs.length ? `<ul class="docs bx">${subs.map((s) => `<li><span><b>${esc(KINDNAME[s.kind] || s.kind)}</b> · ${esc(s.c)} ${esc(s.no)}번 ${esc(s.name)}<br><small class="dim">${esc(rangeIso(s.from, s.to))}${s.kind === 'absence' && s.att ? ` ${esc(s.att)}` : ''}${s.proxy ? ' · 대리 인솔 위임장' : ''}${s.n ? ` · 사진 ${s.n}장` : ''} · ${esc(whenOf(s.up))} 제출</small></span>${isNewSub(s) ? `<span class="badge late">${s.seen ? '고침' : '새 서류'}</span>` : s.lock ? '<span class="badge ok">인쇄함</span>' : ''}<button class="btn small" data-sub="${esc(s.id)}">보기</button></li>`).join('')}</ul>`
           : `<p class="empty" style="padding:16px">${BOX.busy ? '받는 중…' : BOX.at ? '아직 낸 서류가 없어요.' : '[새로 받기]를 눌러 주세요.'}</p>`}
         <div class="row"><button class="btn small" id="bxRefresh" ${BOX.busy ? 'disabled' : ''}>${BOX.busy ? '받는 중…' : '새로 받기'}</button></div>
-        <p class="hint dim">${BOX.at ? `${esc(BOX.at)}에 받음. ` : ''}${BR.inFrame ? '창 없이 바로 받아요.' : "[새로 받기]를 누르면 작은 '서류함 연결 창'이 열렸다가 끝나면 저절로 닫혀요(선생님 구글 계정)."} 인쇄한 서류는 [보기 → 삭제]로 지워 주세요(구글 드라이브 파일까지 지워져요).</p>
+        <p class="hint dim">${BOX.at ? `${esc(BOX.at)}에 받음. ` : ''}${BR.inFrame ? '새로 낸 서류를 저절로 받아요(1분마다).' : BR.frameFailed ? "이 브라우저에서는 저절로 받지 못해요. [새로 받기]를 누르면 작은 '서류함 연결 창'이 열렸다가 끝나면 저절로 닫혀요." : "[새로 받기]를 누르면 작은 '서류함 연결 창'이 열렸다가 끝나면 저절로 닫혀요(선생님 구글 계정)."} 인쇄한 서류는 [보기 → 삭제]로 지워 주세요(구글 드라이브 파일까지 지워져요).</p>
       </div>
       <div class="card">
         <h2 class="sec">학생에게 보낸 요청</h2>
@@ -1811,7 +1999,7 @@ body.sfv-open { overflow: hidden; }
       ${BOX.blocked.length ? `<div class="card">
         <h2 class="sec">잠긴 학생 (다른 계정·기기에서 열려고 함)</h2>
         <ul class="docs">${BOX.blocked.map((x) => `<li><span>${esc(x.c)} ${esc(x.no)}번 ${esc(stuName(x.c, x.no))} <small class="dim">마지막 시도 ${esc(whenOf(x.at))} · ${+x.n || 1}번</small></span><button class="btn small" data-unbind="${esc(x.c)}|${esc(x.no)}">풀기</button></li>`).join('')}</ul>
-        <p class="hint dim">학번은 처음 연 구글 계정(또는 그 폰)으로만 쓸 수 있어요. 학생이 폰·계정을 바꿨으면 확인한 뒤 [풀기] — 다음에 처음 여는 계정·기기로 다시 묶여요. 모르는 시도면 풀지 마세요.</p>
+        <p class="hint dim">학번은 처음 연 구글 계정으로만 쓸 수 있어요(계정을 알 수 없으면 그 기기로). 같은 계정이면 어느 기기에서나 열려요. 학생이 계정을 바꿨으면 확인한 뒤 [풀기] — 다음에 처음 여는 계정·기기로 다시 묶여요. 모르는 시도면 풀지 마세요.</p>
       </div>` : ''}
       ${S.classes.length ? boxLinkCard(qcs) : ''}
       <div class="card">
@@ -2111,6 +2299,7 @@ body.sfv-open { overflow: hidden; }
     if (!SY.conf) return;
     SY.meta.dirty = true;
     writeJson(SYNC_META, SY.meta);
+    paintPc();
     clearTimeout(SY.timer);
     SY.timer = setTimeout(() => syncPush(), 2500);
   }
@@ -2284,26 +2473,40 @@ body.sfv-open { overflow: hidden; }
     const bad = !!SY.status && !/대기/.test(SY.status);
     const back = readJson(`${KEY}.conflict`);
     return `<div class="card" id="syncCard">
-        <h2 class="sec">구글 자동 저장</h2>
+        <h2 class="sec">구글 자동 저장 <span class="dim">PC로 가는 길</span></h2>
         ${on ? `<p class="hint"><b class="${bad ? 'sy-bad' : 'sy-ok'}">${esc(st)}</b></p>
           <p class="hint sy-tag">저장소 번호 <b>${esc(syTag(SY.conf))}</b>${SY.conf.email ? ` · ${esc(SY.conf.email)}${/@gmail\.com$/i.test(SY.conf.email) ? ' <b class="sy-bad">(개인 계정)</b>' : ''}` : ''}</p>
-          <p class="hint dim">PC와 폰에서 이 <b>저장소 번호</b>가 같아야 서로 맞춰져요. 다르면 맞는 기기에서 [다른 기기 연결 QR]을 띄워 다른 기기로 찍거나, 그 기기에서 [이 기기에서 끄기] 뒤 같은 교육청 계정으로 [켜기]를 눌러 주세요.</p>
-          <p class="hint dim">출결을 누르면 몇 초 뒤 선생님 구글 계정의 출석부 저장소에 저절로 저장되고, 같은 계정으로 켠 다른 기기(폰·PC)가 받아 가요. 이 기기에서 암호로 잠근 뒤 보내요.</p>
+          <p class="hint dim">PC 패널과 이 <b>저장소 번호</b>가 같아야 서로 맞춰져요. 다르면 [이 기기에서 끄기] 뒤 같은 교육청 계정으로 다시 [켜기]를 누르거나, 맞는 기기의 [다른 기기 연결 QR]을 찍어요.</p>
           <div class="row"><button class="btn small" id="syNow">지금 맞추기</button><button class="btn small" id="syQr">다른 기기 연결 QR</button><button class="btn small" id="syOff">이 기기에서 끄기</button></div>
           <div id="syQrBox"></div>
           <details><summary class="hint">더 보기</summary>
             ${back ? `<p class="hint">겹쳐서 바뀌기 전 자료(${hhmm(back.at)}) <button class="textbtn" id="syBack">그 자료로 되돌리기</button></p>` : ''}
             <p class="hint">구글에 저장된 이 출석부를 지우려면 <button class="textbtn danger" id="syWipe">구글에 저장된 출석부 지우기</button> (이 기기 자료는 그대로)</p>
           </details>`
-        : `<p class="hint">폰을 바꾸거나 PC에서 열어도 같은 출석부가 보이게, 선생님 <b>교육청 구글 계정</b>에 저절로 저장해요. 이 기기에서 암호로 잠근 뒤 보내서 구글에는 알아볼 수 없는 글자로만 남아요.</p>
+        : `<p class="hint">켜면 체크한 출결이 몇 초 뒤 선생님 <b>교육청 구글 계정</b>에 저장되고, PC 패널로 저절로 들어가요. 이 기기에서 암호로 잠근 뒤 보내서 구글에는 알아볼 수 없는 글자로만 남아요.</p>
           ${st ? `<p class="hint"><b class="${bad ? 'sy-bad' : 'sy-ok'}">${esc(st)}</b></p>` : ''}
-          <div class="row"><button class="btn small main" id="syOn">켜기</button></div>
-          <p class="hint dim">처음 한 번 작은 창에서 학교 구글 계정을 확인하고 [이 계정에 켜기]를 누르면 돼요. 다른 기기도 같은 계정으로 [켜기]만 누르면 같은 출석부가 들어와요.</p>`}
+          <div class="row"><button class="btn main" id="syOn">켜기</button></div>
+          <p class="hint dim">작은 창에서 학교 구글 계정을 확인하고 [이 계정에 켜기]를 누르면 돼요. 폰을 바꿔도 같은 계정으로 켜면 출석부가 그대로 들어와요.</p>`}
       </div>`;
+  }
+  // [출석] 위쪽 PC 연결 줄(교사 결정 2026-11-02: 내보내기 탭을 없앴으니, 자동 저장이 꺼져 있으면 여기서 알 수 있게)
+  function pcLine() {
+    const on = !!SY.conf;
+    const bad = on && !!SY.status && !/대기/.test(SY.status);
+    const text = !on ? '자동 저장이 꺼져 있어 PC로 가지 않아요'
+      : SY.status ? SY.status
+        : SY.busy ? 'PC로 보내는 중' : SY.meta.dirty ? '저장 대기 · 곧 PC로 가요'
+          : SY.meta.at ? `PC와 연결됨 · 마지막 저장 ${hhmm(SY.meta.at)}` : 'PC와 연결됨';
+    return `<div class="pc-line" id="pcLine"><i class="dot ${on && !bad ? 'on' : 'off'}"></i><span>${esc(text)}</span>${!on || bad ? `<button class="btn small" id="pcOn">${on ? '확인' : '켜기'}</button>` : ''}</div>`;
+  }
+  function paintPc() {
+    const l = document.getElementById('pcLine');
+    if (l) l.outerHTML = pcLine();
   }
   function paintSync() {
     const c = document.getElementById('syncCard');
     if (c) c.outerHTML = syncCard();
+    paintPc();
   }
   document.addEventListener('click', async (e) => {
     const id = e.target.id;
@@ -2358,15 +2561,95 @@ body.sfv-open { overflow: hidden; }
     try { const h = await storeCall({ a: 'head' }); if (h.ok && h.rev > SY.meta.rev) syncPull(); } catch { /* 다음에 */ }
   }, 30000);
 
+  // ── 사용 방법(교사 요청 2026-11-02): 위쪽 [?]로 연다. 처음 한 번 할 일은 지금 상태를 읽어 완료/아직으로 ──
+  let helpBack = 'check';
+  function renderHelp() {
+    const home = APP !== 'class';
+    const stuN = S.classes.reduce((n, c) => n + c.students.length, 0);
+    const first = [
+      { ok: S.classes.length > 0, name: '명단 넣기', done: `반 ${S.classes.length}개 · 학생 ${stuN}명이 들어 있어요.`, todo: `학교 PC 패널 <b>[출석부 앱]</b>에서 <b>[${home ? '우리 반' : '내 수업 반'}]</b>을 누르고, 나온 QR을 이 폰 카메라로 찍어요.` },
+      { ok: standalone(), name: '홈 화면에 추가', done: '아이콘으로 앱처럼 열려요.', todo: homeGuide() },
+      { ok: !!SY.conf, name: '구글 자동 저장 켜기', done: SY.conf ? `저장소 번호 ${esc(syTag(SY.conf))}. 체크하면 PC로 저절로 가요.` : '', todo: '교육청 구글 계정으로 켜 두면 체크한 출결이 PC 패널로 저절로 가요.', act: ['syncCard', '켜러 가기'] },
+      ...(home ? [{ ok: !!S.cfg.bellsSet, name: '우리 학교 교시 시각', done: '지각·조퇴 시각으로 교시를 계산해요.', todo: '지금은 예시 시각이에요. 고쳐 두어야 교시가 맞게 계산돼요.', act: ['bellCard', '고치러 가기'] }] : []),
+    ];
+    const daily = home ? [
+      '<b>[출석]</b>에서 결석·지각·조퇴·결과인 학생만 눌러요. 안 누른 학생은 출석이에요.',
+      '상태와 사유 분류를 고르고 <b>[저장]</b>. 지각·조퇴·결과는 시각을 끝까지 고른 뒤 다른 곳을 누르면 들어가고, 나이스에 체크할 교시가 계산돼요.',
+      '위쪽 점이 초록이면 몇 초 안에 PC로 가요.',
+      '학교 PC 패널에서 <b>[일일출결]</b>을 누르면 폰 출결이 바로 떠요. <b>[나이스에서 확인하기]</b>로 표를 본 뒤 <b>[입력 후 저장]</b>.',
+    ] : [
+      '위에서 교시와 반을 골라요.',
+      '결과·출석인정인 학생만 눌러요. 누를 때마다 결과(/) → 출석인정(Ø) → 출석. 길게 누르면 사유를 적어요.',
+      '위쪽 점이 초록이면 몇 초 안에 PC로 가요.',
+      '학교 PC 패널에서 <b>[과목별출결]</b>을 누르면 폰 출결이 바로 떠요. <b>[나이스에서 확인하기]</b>로 표를 본 뒤 <b>[입력 후 저장]</b>.',
+    ];
+    const faq = [
+      ['잘못 눌렀어요', home ? '그 학생을 다시 눌러 상태를 <b>[출석]</b>으로 바꾸고 [저장]해요. PC에도 출석으로 가요.' : '표시가 없어질 때까지 다시 눌러요. 표시가 없으면 출석이에요.'],
+      ['다른 날짜를 고치고 싶어요', '위쪽 ‹ › 또는 날짜를 눌러 그 날로 가서 똑같이 해요. PC 패널은 아직 안 넣은 날부터 모아 보여 줘요.'],
+      ...(home ? [['여러 날 결석이에요', '기록 창의 시작·끝 날짜를 고르면 그 사이 평일에 모두 들어가요.']] : []),
+      ['폰을 바꿨어요', '새 폰에서 <b>[설정 → 구글 자동 저장 → 켜기]</b>를 같은 교육청 계정으로 누르면 출석부가 그대로 들어와요.'],
+      ['PC에 안 들어와요', '[출석] 위쪽 점이 초록인지 보세요. 초록인데도 안 들어오면 [설정]의 저장소 번호가 PC 패널의 번호와 같은지 보세요.'],
+      ['구글을 못 쓰는 학교예요', '<b>[설정 → 파일로 내보내기]</b>에서 엑셀을 받아 학교 PC로 옮기고, 패널에 끌어다 놓아요.'],
+    ];
+    $('#main').innerHTML = `
+      <button class="backrow" id="hpBack">돌아가기</button>
+      <h2 class="help-title">${home ? '담임 출석부' : '수업 출석부'} 사용 방법</h2>
+      <div class="card">
+        <h2 class="sec">처음 한 번만</h2>
+        <ul class="todo-list" id="hpFirst">${first.map((f) => `<li><b>${f.name}</b><span class="badge ${f.ok ? 'ok' : ''}">${f.ok ? '완료' : '아직'}</span><p>${f.ok ? f.done : f.todo}</p>${!f.ok && f.act ? `<button class="btn small" data-goto="setup" data-anchor="${f.act[0]}">${f.act[1]}</button>` : ''}</li>`).join('')}</ul>
+      </div>
+      <div class="card">
+        <h2 class="sec">매일 이렇게 써요</h2>
+        <ol class="step-list">${daily.map((d) => `<li>${d}</li>`).join('')}</ol>
+      </div>
+      ${home ? `<div class="card">
+        <h2 class="sec">서류 챙기기</h2>
+        <ol class="step-list">
+          <li><b>[서류]</b>에 받아야 할 서류와 기한이 모여요. 받으면 체크해요.</li>
+          <li><b>[서류함]</b>에서 반 링크를 복사해 반 카톡방에 올리면 학생이 폰으로 내요. 선생님은 학교 서식 그대로 보고 인쇄해요.</li>
+        </ol>
+      </div>` : ''}
+      <div class="card">
+        <h2 class="sec">상태 색</h2>
+        <div class="swatches"><div class="swatch">출석</div>${home ? '<div class="swatch sw-abs">결석</div><div class="swatch sw-late">지각·조퇴·결과</div><div class="swatch sw-rec">출석인정</div>' : '<div class="swatch sw-late">결과 /</div><div class="swatch sw-rec">출석인정 Ø</div>'}</div>
+      </div>
+      <div class="card">
+        <h2 class="sec">자주 묻는 것</h2>
+        <dl class="qa">${faq.map(([q, a]) => `<dt>${q}</dt><dd>${a}</dd>`).join('')}</dl>
+      </div>
+      <div class="card">
+        <h2 class="sec">더 자세히</h2>
+        <p class="hint">누르면 설명 페이지가 새 창으로 열려요. 출석부 자료는 보내지 않아요.</p>
+        <div class="row"><a class="btn small" style="display:flex;align-items:center;justify-content:center;text-decoration:none;color:inherit" id="hpVideo" href="help/#roster" target="_blank" rel="noopener">설명·영상 보기</a></div>
+      </div>`;
+  }
+  function openHelp() {
+    if (tab !== 'help') helpBack = tab;
+    tipDone();
+    switchTab('help');
+  }
+  $('#helpBtn').addEventListener('click', () => { if (tab === 'help') switchTab(helpBack); else openHelp(); });
+  $('#main').addEventListener('click', (e) => { if (e.target.id === 'hpBack') switchTab(helpBack); });
+  function goTo(t, anchor) {
+    if (t === 'help') { openHelp(); return; }
+    switchTab(t);
+    const el = anchor && document.getElementById(anchor);
+    if (!el) return;
+    if (el.tagName === 'DETAILS') el.open = true;
+    el.scrollIntoView({ block: 'start' });
+  }
+
   // ── 탭 ────────────────────────────────────────────────
   function switchTab(t) {
     syncBoxTab();
     if ((t === 'box' && !boxOk()) || (t === 'docs' && APP === 'class')) t = 'check';
     tab = t;
     editing = null;
-    document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === t));
-    $('#dateNav').style.visibility = t === 'setup' || t === 'docs' || t === 'box' ? 'hidden' : '';
+    document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === (t === 'export' ? 'setup' : t))); // 파일로 내보내기는 [설정] 안쪽
+    $('#helpBtn').classList.toggle('on', t === 'help');
+    $('#dateNav').style.visibility = t === 'setup' || t === 'docs' || t === 'box' || t === 'help' ? 'hidden' : '';
     if (t === 'check') renderCheck();
+    if (t === 'help') renderHelp();
     if (t === 'export') { exp = { from: '', to: '' }; renderExport(); }
     if (t === 'setup') renderSetup();
     if (t === 'docs') renderDocs();

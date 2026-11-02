@@ -11,7 +11,8 @@
  * - 학생: 반 링크의 반 비밀값(k)과 학번·이름이 선생님 명단(반 비밀값으로 만든 16자리 값 목록)에 있어야 낸다.
  *   학생이 볼 수 있는 것은 자기 요청의 종류·날짜와 자기 서류 상태뿐.
  * - 처음 쓴 사람으로 고정(교사 결정 2026-10-28): 그 학번을 처음 연 구글 계정(같은 도메인이라 이메일이 보이면)
- *   또는 그 기기(학생 화면이 만든 기기 값)에 묶는다. 이메일·기기 값은 이 스크립트만 아는 소금과 섞은 해시 16자리로만
+ *   또는 구글이 주는 임시 계정 값(이메일이 안 보여도 같은 계정이면 어느 기기에서나 열리게, 2026-11-02 교사 요청) 또는 그 기기(학생 화면이 만든 기기 값)에 묶는다.
+ *   이메일·계정 값·기기 값은 이 스크립트만 아는 소금과 섞은 해시 16자리로만
  *   저장하고 원문은 저장·기록하지 않는다. 다른 계정·기기면 아무것도 돌려주지 않고 막으며 번호·시각·횟수만 남긴다.
  *   선생님이 [풀기]를 누르면 다음에 처음 여는 계정·기기로 다시 묶인다. 반 링크를 새로 만들어도 묶음은 그대로.
  * - 교사: 목록·내려받기·잠그기·삭제·요청 만들기는 이 스크립트를 배포한 선생님 계정으로 로그인했을 때만
@@ -150,13 +151,18 @@ function bind_(s, b) {
   var dev = String(b.dev || '');
   if (!/^[A-Za-z0-9_-]{16,64}$/.test(dev)) fail_('bad', '이 기기 정보를 읽지 못했어요. 반 링크로 다시 열어 주세요.');
   var email = String(Session.getActiveUser().getEmail() || '');
+  var uk = '';
+  try { uk = String(Session.getTemporaryActiveUserKey() || ''); } catch (err) { /* 못 받으면 기기로만 */ }
   var salt = salt_();
   var eh = email ? hex_(salt + '|e|' + email.toLowerCase(), 16) : '';
+  var uh = uk ? hex_(salt + '|u|' + uk, 16) : '';
   var dh = hex_(salt + '|d|' + dev, 16);
+  s.acct = !!(eh || uh); /* 계정으로 묶임 = 폰·PC·집 컴퓨터 어디서나 */
   var key = 'bd:' + s.c + ':' + s.no;
   var bd = getJson_(key);
-  if (!bd) { setJson_(key, { c: s.c, no: s.no, e: eh, d: dh, at: now_() }); return true; }
-  var same = bd.e ? eh === bd.e : dh === bd.d;
+  if (!bd) { setJson_(key, { c: s.c, no: s.no, e: eh, u: uh, d: dh, at: now_() }); return true; }
+  /* 이메일이 보이면 이메일로. 안 보이면 임시 계정 값(30일마다 바뀜) 또는 기기로: 어느 쪽이든 맞으면 본인, 맞은 뒤 나머지를 새 값으로 고친다 */
+  var same = bd.e ? eh === bd.e : (!!uh && uh === bd.u) || dh === bd.d;
   if (!same) {
     var bxKey = 'bx:' + s.c + ':' + s.no;
     var bx = getJson_(bxKey) || { c: s.c, no: s.no, n: 0 };
@@ -164,7 +170,11 @@ function bind_(s, b) {
     setJson_(bxKey, bx);
     fail_('bound', '이 학번은 다른 계정(기기)에서 이미 쓰고 있어요. 선생님께 \'서류 잠김 풀기\'를 부탁하세요.');
   }
-  if (!bd.e && eh) { bd.e = eh; setJson_(key, bd); }
+  var changed = false;
+  if (!bd.e && eh) { bd.e = eh; changed = true; }
+  if (uh && bd.u !== uh) { bd.u = uh; changed = true; }
+  if (bd.d !== dh) { bd.d = dh; changed = true; }
+  if (changed) setJson_(key, bd);
   return false;
 }
 function unbind_(b) {
@@ -187,7 +197,7 @@ function hello_(b) {
     .map(function (r) { return { id: r.id, kind: r.kind, att: r.att, from: r.from, to: r.to, at: r.at }; });
   var subs = all_('sm:').filter(function (m) { return m.c === s.c && String(m.no) === s.no; })
     .map(function (m) { return { id: m.id, kind: m.kind, at: m.at, up: m.up, lock: m.lock || '' }; });
-  return { ok: true, c: s.c, no: s.no, first: s.first, sch: s.sch, reqs: reqs, subs: subs };
+  return { ok: true, c: s.c, no: s.no, first: s.first, acct: s.acct, sch: s.sch, reqs: reqs, subs: subs };
 }
 function folder_() {
   var id = props_().getProperty('folder');
@@ -252,7 +262,7 @@ function list_() {
   }).sort(function (x, y) { return x.up < y.up ? 1 : -1; });
   var reqs = all_('rq:').map(function (r) { return { id: r.id, c: r.c, no: r.no, kind: r.kind, att: r.att, from: r.from, to: r.to, at: r.at, done: r.done }; });
   var blocked = all_('bx:').map(function (x) { return { c: x.c, no: x.no, at: x.at, n: x.n }; });
-  var binds = all_('bd:').map(function (x) { return { c: x.c, no: x.no, by: x.e ? 'account' : 'device' }; });
+  var binds = all_('bd:').map(function (x) { return { c: x.c, no: x.no, by: x.e || x.u ? 'account' : 'device' }; });
   return { ok: true, v: 2, subs: subs, reqs: reqs, blocked: blocked, binds: binds }; /* v: 받는 곳 판(2 = 창 없는 연결·미리 받기) */
 }
 function get_(b) {

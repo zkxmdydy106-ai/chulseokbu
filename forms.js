@@ -47,8 +47,8 @@
   /* ── 학생 확인 ─────────────────────────────────────────── */
   const normName = (s) => String(s || '').replace(/\s+/g, '');
   const classParts = (cls) => { const m = /^(\d)-(\d{1,2})$/.exec(String(cls || '')); return m ? { g: +m[1], c: +m[2] } : null; };
-  const hakbunOf = (cls, no) => { const p = classParts(cls); return p ? `${p.g}${pad(p.c)}${pad(+no)}` : ''; };
-  /* 학번 5자리(10307) 또는 4자리(1307) → 반·번호. 반 QR의 반과 다르면 null */
+  const hakbunOf = (cls, no) => { const p = classParts(cls); return p ? `${p.g}${p.c}${pad(+no)}` : ''; };
+  /* 학번 4자리(1307) 또는 5자리(10307) → 반·번호. 반 QR의 반과 다르면 null */
   function parseHakbun(s, cls) {
     const t = String(s || '').replace(/\D/g, '');
     const p = classParts(cls);

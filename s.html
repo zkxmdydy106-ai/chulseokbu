@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>학생 서류 제출</title>
+<style>
+  body { margin: 0; padding: 22px 18px; background: #f4f6f9; color: #222; font: 15px/1.6 "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; }
+  .card { max-width: 460px; margin: 0 auto; padding: 18px; background: #fff; border: 1px solid #dde2e9; border-radius: 4px; }
+  h1 { margin: 0 0 8px; font-size: 17px; }
+  p { margin: 8px 0; font-size: 14px; color: #444; }
+  ol { margin: 8px 0; padding-left: 20px; font-size: 14px; color: #444; }
+  a.btn, button { display: block; width: 100%; margin: 10px 0 0; padding: 11px; border: 1px solid #2a64d6; border-radius: 4px; background: #2a64d6; color: #fff; font: inherit; font-weight: 600; text-align: center; text-decoration: none; }
+  button.line { background: #fff; color: #2a64d6; }
+  .err { color: #c4392b; }
+</style>
+</head>
+<body>
+<div class="card" id="box"><p id="msg">여는 중…</p></div>
+<script>
+  // 학생 서류 반 링크의 입구(교사 요청 2026-11-02 '어떤 곳에서도'): 카톡 등 앱 안 브라우저에서는 구글 로그인이 막히므로 바깥 브라우저로 넘긴 뒤 받는 곳으로 간다.
+  // 반 비밀값은 주소의 '#' 뒤에 있어 이 공개판 서버로 가지 않는다. 이 쪽은 저장하는 것이 없다.
+  (function () {
+    var q = new URLSearchParams(location.hash.slice(1));
+    var u = q.get('u') || '', b = q.get('b') || '', k = q.get('k') || '';
+    var box = document.getElementById('box');
+    // 받는 곳 주소는 구글 Apps Script 웹 앱만(다른 주소로 넘기지 않음)
+    var okUrl = /^(macros|a\/macros\/[\w.-]+)\/s\/[\w-]{20,}\/exec$/.test(u) && /^\d-\d{1,2}$/.test(b) && /^[A-Za-z0-9_-]{16,64}$/.test(k);
+    if (!okUrl) { box.innerHTML = '<h1>링크가 잘렸어요</h1><p class="err">선생님이 올린 반 링크를 다시 눌러 주세요.</p>'; return; }
+    var target = 'https://script.google.com/' + u + '?' + new URLSearchParams({ p: 's', b: b, k: k });
+    var ua = navigator.userAgent || '';
+    var android = /Android/i.test(ua);
+    var inApp = /KAKAOTALK|Instagram|FBAN|FBAV|FB_IAB|Line\/|NAVER\(|DaumApps|everytimeApp|BAND\/|; wv\)/i.test(ua);
+
+    function manual(note) {
+      box.innerHTML = '<h1>다른 브라우저로 열어 주세요</h1>'
+        + '<p>' + note + '</p>'
+        + '<ol><li>' + (android ? '오른쪽 위 메뉴(⋮)' : '오른쪽 아래 공유 또는 메뉴') + '를 누르고</li><li>\'다른 브라우저로 열기\'(사파리·크롬)를 눌러 주세요.</li></ol>'
+        + '<button id="copy" class="line">링크 복사(브라우저 주소 칸에 붙여 넣기)</button><a class="btn" href="' + target.replace(/&/g, '&amp;') + '">이대로 열기</a>'
+        + '<p id="done"></p>';
+      document.getElementById('copy').onclick = function () {
+        var d = document.getElementById('done');
+        (navigator.clipboard ? navigator.clipboard.writeText(location.href) : Promise.reject()).then(function () { d.textContent = '복사했어요.'; }, function () { d.textContent = location.href; });
+      };
+    }
+
+    if (/KAKAOTALK/i.test(ua)) {
+      // 카카오톡 안 브라우저: 바깥 브라우저로 이 쪽을 다시 연다
+      location.href = 'kakaotalk://web/openExternal?url=' + encodeURIComponent(location.href);
+      setTimeout(function () { manual('카카오톡 안에서는 구글 로그인이 안 될 수 있어요.'); }, 1500);
+      return;
+    }
+    if (inApp && android) {
+      location.href = 'intent://' + location.host + location.pathname + location.hash + '#Intent;scheme=https;end';
+      setTimeout(function () { manual('이 앱 안에서는 구글 로그인이 안 될 수 있어요.'); }, 1500);
+      return;
+    }
+    if (inApp) { manual('이 앱 안에서는 구글 로그인이 안 될 수 있어요.'); return; }
+    location.replace(target);
+  })();
+</script>
+</body>
+</html>
