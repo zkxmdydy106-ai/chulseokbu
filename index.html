@@ -472,6 +472,7 @@ body.sfv-open { overflow: hidden; }
           </div>
           <p class="hint">${pf && pf.text ? `나이스에 체크할 교시: <b>${esc(pf.text)}</b>` : pf ? '<span class="over">이 시각에는 겹치는 교시가 없어요. 시각을 확인해 주세요.</span>' : cs.type === '결과' ? '나간 시각과 돌아온 시각을 넣으면 교시를 계산해요.' : '시각을 넣으면 교시를 계산해요.'}${cs.period && !cs.t1 ? ` <span class="dim">(예전 기록: ${esc(cs.period)})</span>` : ''}</p>`}
         <label class="field"><span>사유${cs.kind === '기타' && cs.type === '결석' ? ' (필수)' : ''}</span><input id="dsReason" maxlength="100" value="${esc(cs.reason)}" placeholder="예: 감기로 병원 진료"></label>
+        <p class="hint dim">나이스 사유 칸에는 ${cs.kind === '기타' ? '이 글이 들어가요' : cs.kind === '출석인정' && ['교외체험학습', '생리'].includes(cs.sub) ? `'${esc(cs.sub)}'만 들어가요` : '빈칸으로 가요(이 글에 \'면접\'이 있으면 \'면접\'만)'}. 이 글은 출석부·서류에 남아요.</p>
         ${st.need.length ? `<p class="lab">필요 서류</p><ul class="docs">${st.need.map((d) => d === 'photo'
           ? `<li class="${(cs.docs.photo || 0) >= st.days ? 'done' : ''}"><span>${DOC[d]}</span><div class="cnt"><button data-ph="-1">−</button><b>${cs.docs.photo || 0}/${st.days}</b><button data-ph="1">+</button></div></li>`
           : `<li class="${cs.docs[d] ? 'done' : ''}"><input type="checkbox" data-doc="${d}" ${cs.docs[d] ? 'checked' : ''}><span>${DOC[d]}</span></li>`).join('')}</ul>` : '<p class="hint dim">이 구분은 따로 받을 서류가 없어요.</p>'}
@@ -799,7 +800,8 @@ body.sfv-open { overflow: hidden; }
       for (const [no, e] of Object.entries(rec)) {
         const s = c.students.find((x) => x.no === no);
         if (!s) continue;
-        out.push({ ymd, pir: +pir, cls: c.name, no: +no, name: s.name, mark: MARK[e.m] ?? '출석', reason: e.r || '' });
+        // 과목별출결 사유는 넣지 않음(교사 결정 2026-10-30 — 수업 중 고른 사유는 출석부에만)
+        out.push({ ymd, pir: +pir, cls: c.name, no: +no, name: s.name, mark: MARK[e.m] ?? '출석', reason: '' });
       }
     }
     return out.sort((a, b) => a.ymd.localeCompare(b.ymd) || a.pir - b.pir || a.cls.localeCompare(b.cls, 'ko', { numeric: true }) || a.no - b.no);
@@ -882,8 +884,8 @@ body.sfv-open { overflow: hidden; }
       const c = S.classes.find((x) => x.id === cid);
       const s = c?.students.find((x) => x.no === no);
       if (!c || !s || !isHome(c)) return;
-      const when = !cs || cs.type === '결석' ? '' : cs.t1 ? (cs.type === '지각' ? `${cs.t1} 등교` : cs.type === '조퇴' ? `${cs.t1} 조퇴` : `${cs.t1}~${cs.t2 || ''} 결과`) : cs.period ? `${cs.period}${cs.type === '지각' ? ' 등교' : cs.type === '조퇴' ? ' 조퇴' : ''}` : '';
-      const reason = cs ? [cs.sub && cs.kind === '출석인정' ? `[${cs.sub}]` : '', when, cs.reason].filter(Boolean).join(' ') : '';
+      // 나이스 사유 칸(교사 결정 2026-10-30): 기본은 빈칸, 기타는 적은 글, 출석인정 교외체험학습·생리는 그 이름, 적은 글에 '면접'이 있으면 '면접'. 시각은 넣지 않음(교시 칸이 함)
+      const reason = !cs ? '' : cs.kind === '기타' ? String(cs.reason || '').trim() : cs.kind === '출석인정' && ['교외체험학습', '생리'].includes(cs.sub) ? cs.sub : /면접/.test(cs.reason || '') ? '면접' : '';
       out.push({ ymd, cls: c.name, no: +no, name: s.name, mark: cs ? labelOf(cs) : '출석', reason, pt: cs && cs.type !== '결석' && cs.t1 ? cs.pt || '' : '' });
     };
     for (const [k, rec] of Object.entries(S.daily)) for (const [no, id] of Object.entries(rec)) if (S.cases[id]) push(k, no, S.cases[id]);
