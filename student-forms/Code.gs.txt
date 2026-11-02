@@ -40,7 +40,9 @@ function doGet(e) {
   if (p.p === 't') {
     var tt = HtmlService.createTemplateFromFile('Teacher');
     tt.origin = ALLOWED_ORIGINS.indexOf(p.origin) >= 0 ? p.origin : '';
-    return tt.evaluate().setTitle('서류함 연결').addMetaTag('viewport', 'width=device-width, initial-scale=1');
+    tt.framed = !!tt.origin && p.frame === '1'; /* 창 없는 연결(2026-11-02): 허용 주소가 frame=1로 열 때만 숨은 틀에 들어갈 수 있다. 누를 곳 없는 화면이고 대답은 허용 주소로만 간다 */
+    var page = tt.evaluate().setTitle('서류함 연결').addMetaTag('viewport', 'width=device-width, initial-scale=1');
+    return tt.framed ? page.setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL) : page;
   }
   return ContentService.createTextOutput('학생 서류 받는 곳입니다. 학생은 선생님이 준 반 링크로, 선생님은 출석부 웹앱 [서류함]으로 씁니다.');
 }
@@ -74,7 +76,8 @@ function teacherApi(b) {
     if (a === 'request') return locked_(function () { return request_(x); });
     if (a === 'unrequest') return locked_(function () { props_().deleteProperty('rq:' + id_(x.id)); return { ok: true }; });
     if (a === 'list') return list_();
-    if (a === 'get') return locked_(function () { return get_(x); });
+    if (a === 'get') return x.peek ? get_(x) : locked_(function () { return get_(x); }); /* peek: 미리 받기, 읽음으로 안 바꿈 */
+    if (a === 'seen') return locked_(function () { return seen_(x); });
     if (a === 'lock') return locked_(function () { return lock_(x); });
     if (a === 'delete') return locked_(function () { return del_(id_(x.id)); });
     if (a === 'deleteAll') return locked_(function () { return deleteAll_(); });
@@ -250,14 +253,19 @@ function list_() {
   var reqs = all_('rq:').map(function (r) { return { id: r.id, c: r.c, no: r.no, kind: r.kind, att: r.att, from: r.from, to: r.to, at: r.at, done: r.done }; });
   var blocked = all_('bx:').map(function (x) { return { c: x.c, no: x.no, at: x.at, n: x.n }; });
   var binds = all_('bd:').map(function (x) { return { c: x.c, no: x.no, by: x.e ? 'account' : 'device' }; });
-  return { ok: true, subs: subs, reqs: reqs, blocked: blocked, binds: binds };
+  return { ok: true, v: 2, subs: subs, reqs: reqs, blocked: blocked, binds: binds }; /* v: 받는 곳 판(2 = 창 없는 연결·미리 받기) */
 }
 function get_(b) {
   var id = id_(b.id), m = getJson_('sm:' + id);
   if (!m) fail_('gone', '이미 지운 서류예요.');
   var text = DriveApp.getFileById(m.file).getBlob().getDataAsString('UTF-8');
-  if (!m.seen || m.seen < m.up) { m.seen = now_(); setJson_('sm:' + id, m); }
+  if (!b.peek && (!m.seen || m.seen < m.up)) { m.seen = now_(); setJson_('sm:' + id, m); }
   return { ok: true, doc: JSON.parse(text), lock: m.lock || '' };
+}
+function seen_(b) {
+  var id = id_(b.id), m = getJson_('sm:' + id);
+  if (m && (!m.seen || m.seen < m.up)) { m.seen = now_(); setJson_('sm:' + id, m); }
+  return { ok: true };
 }
 function lock_(b) {
   var id = id_(b.id), m = getJson_('sm:' + id);

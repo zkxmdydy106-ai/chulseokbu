@@ -261,7 +261,7 @@ body.sfv-open { overflow: hidden; }
     return true;
   }
   window.addEventListener('pagehide', () => save(true));
-  document.addEventListener('visibilitychange', () => { if (document.hidden) save(true); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) save(true); else if (S.cfg.sf && BR.inFrame) refreshBox(true); });
 
   // ── 도구 ──────────────────────────────────────────────
   const $ = (s, r = document) => r.querySelector(s);
@@ -1491,7 +1491,7 @@ body.sfv-open { overflow: hidden; }
   const SF_URL_RE = /^https:\/\/script\.google\.com\/(macros|a\/macros\/[\w.-]+)\/s\/[\w-]{20,}\/exec$/;
   const KINDNAME = { absence: '결석신고서', 'field-apply': '교외체험학습 신청서', 'field-report': '교외체험학습 결과보고서' };
   const SUB_DOC = { absence: 'singo', 'field-apply': 'tripApp', 'field-report': 'tripRep' };
-  const BOX = { subs: [], reqs: [], blocked: [], binds: [], at: '', err: '', busy: false, qr: '', dev: false, making: false };
+  const BOX = { subs: [], reqs: [], blocked: [], binds: [], at: '', err: '', busy: false, qr: '', dev: false, making: false, v: 0, gen: 0, seenQ: new Set() };
   let formsLib = null;
   function loadForms() {
     if (window.StudentForms) return Promise.resolve(window.StudentForms);
@@ -1512,10 +1512,60 @@ body.sfv-open { overflow: hidden; }
   const whenOf = (iso) => { const d = new Date(iso); return Number.isNaN(+d) ? '' : `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
   // 다리는 '구글 로그인한 사람만'(교사 결정 2026-10-28)이라 fetch로는 못 부른다 → 선생님 구글 계정으로 열린
   // 작은 연결 창(?p=t)을 띄우고 postMessage로 명령·결과를 주고받는다(연락처 다리와 같은 방식). 창은 버튼을 누를 때만 연다.
-  const BR = { win: null, src: null, origin: '', ready: false, q: [], seq: 0, wait: new Map() };
-  const bridgeOpen = () => !!(BR.win && !BR.win.closed);
+  const BR = { win: null, src: null, origin: '', ready: false, q: [], seq: 0, wait: new Map(), closeT: 0, frame: null, inFrame: false, frameT: 0, frameFailed: false };
+  const popupOpen = () => !!(BR.win && !BR.win.closed);
+  const bridgeOpen = () => BR.inFrame || popupOpen();
+  // 창 없는 연결(교사 요청 2026-11-02 '계속 안 뜨게', '렉 안 걸리게'): 화면에 안 보이는 틀로 연결 화면을 열어 둔다.
+  // 구글 로그인이 돼 있고 받는 곳이 새 판이면 창 없이 주고받는다. 안 되면(옛 받는 곳·로그인 전·다른 사이트 쿠키를 막는 브라우저)
+  // 조용히 그만두고 버튼을 누를 때 작은 창을 쓴다. 접속 계정 = 배포 계정 확인은 다리가 그대로 한다
+  const FR_KEY = 'chulseokbu.sfFrame'; // 이 기기에서 창 없이 연결된 적 있음 → 틀이 뜨는 동안 작은 창을 띄우지 않고 기다린다
+  const frameKnown = () => { try { return localStorage.getItem(FR_KEY) === '1'; } catch { return false; } };
+  const frameRemember = (on) => { try { if (on) localStorage.setItem(FR_KEY, '1'); else localStorage.removeItem(FR_KEY); } catch { /* 저장 못 함 */ } };
+  function paintBridge() { const st = $('#bxBridge'); if (st) st.textContent = BR.inFrame ? '창 없이 연결됨' : '버튼을 누를 때 작은 창이 열려요'; }
+  function sfFrameStart() {
+    if (!S.cfg.sf || BR.frame || BR.frameFailed) return;
+    const acc = gAccount();
+    const f = document.createElement('iframe');
+    f.src = `${S.cfg.sf.u}?${new URLSearchParams({ p: 't', origin: location.origin, frame: '1', ...(acc ? { authuser: acc } : {}) })}`;
+    f.title = '서류함 연결';
+    f.tabIndex = -1;
+    f.setAttribute('aria-hidden', 'true');
+    f.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;height:1px;border:0';
+    document.body.appendChild(f);
+    BR.frame = f;
+    BR.frameT = setTimeout(() => sfFrameStop(true), 15000);
+  }
+  // failed: 이번 화면에서는 작은 창으로. 기다리던 일은 다시 누르게 알린다(버튼을 눌러야 작은 창을 열 수 있어서)
+  function sfFrameStop(failed) {
+    clearTimeout(BR.frameT);
+    if (BR.frame) BR.frame.remove();
+    const wasOn = BR.inFrame;
+    BR.frame = null; BR.inFrame = false;
+    if (!failed) { if (wasOn) { BR.ready = false; BR.src = null; } paintBridge(); return; }
+    BR.frameFailed = true;
+    frameRemember(false);
+    if (!popupOpen()) {
+      BR.ready = false; BR.src = null; BR.q = [];
+      for (const [id, w] of BR.wait) { BR.wait.delete(id); clearTimeout(w.t); w.no(new Error('서류함과 연결되지 않았어요. 한 번 더 눌러 주세요(작은 연결 창이 열려요).')); }
+    }
+    paintBridge();
+  }
+  // 받는 곳이 바뀌었을 때(연결·업데이트): 틀을 새로
+  function sfFrameRestart() { sfFrameStop(false); BR.frameFailed = false; sfFrameStart(); }
+  // 주고받기가 끝나면 작은 창을 닫아 보던 출석부 화면으로 돌아온다(교사 요청 2026-11-02). 로그인 중이거나 실패하면 그 창을 봐야 하니 열어 둔다
+  function sfIdle() {
+    clearTimeout(BR.closeT);
+    BR.closeT = setTimeout(() => {
+      if (!popupOpen() || BR.wait.size || BR.q.length) return;
+      BR.win.close();
+      window.focus();
+      paintBridge();
+    }, 1200);
+  }
   function sfWake() {
-    if (!S.cfg.sf || bridgeOpen()) return true;
+    if (!S.cfg.sf || BR.inFrame) return true;
+    if (BR.frame && frameKnown()) return true; // 곧 연결된다. 창을 띄우지 않고 기다림
+    if (popupOpen()) { if (BR.ready && !BR.wait.size) sfIdle(); return true; }
     BR.ready = false; BR.src = null; BR.origin = '';
     BR.win = window.open(asAccount(S.cfg.sf.u, { p: 't', origin: location.origin }), 'chulseokbu-forms', 'width=440,height=560');
     if (!BR.win) { toast('팝업이 막혔어요. 주소창의 팝업 차단 표시를 눌러 허용해 주세요.'); return false; }
@@ -1524,24 +1574,50 @@ body.sfv-open { overflow: hidden; }
   function sfApi(body) {
     return new Promise((ok, no) => {
       if (!S.cfg.sf) { no(new Error('서류함이 연결되지 않았어요.')); return; }
-      if (!bridgeOpen() && !sfWake()) { no(new Error('서류함 연결 창을 열지 못했어요(팝업 차단).')); return; }
+      if (!sfWake()) { no(new Error('서류함 연결 창을 열지 못했어요(팝업 차단).')); return; }
+      clearTimeout(BR.closeT);
       const id = ++BR.seq;
-      const t = setTimeout(() => { BR.wait.delete(id); no(new Error('서류함 연결 창이 대답하지 않아요. 열린 창에서 선생님 구글 계정으로 로그인했는지 확인해 주세요.')); }, 120000);
+      const quick = BR.inFrame || (BR.frame && frameKnown());
+      const t = setTimeout(() => {
+        BR.wait.delete(id);
+        if (quick) sfFrameStop(true);
+        no(new Error(quick ? '서류함과 연결되지 않았어요. 한 번 더 눌러 주세요(작은 연결 창이 열려요).' : '서류함 연결 창이 대답하지 않아요. 열린 창에서 선생님 구글 계정으로 로그인했는지 확인해 주세요.'));
+      }, quick ? 60000 : 120000);
       BR.wait.set(id, { ok, no, t });
       const send = () => { try { BR.src.postMessage({ type: 'sf-cmd', id, body }, BR.origin); } catch { /* 창이 닫힘: 시간 초과로 알림 */ } };
       if (BR.ready) send(); else BR.q.push(send);
     });
   }
+  // 연결 틀·작은 창에서 온 말만 믿는다(다른 Apps Script 창이 끼어들지 못하게)
+  function fromBridge(src) {
+    try {
+      if (popupOpen() && src && src.top === BR.win) return true;
+      for (let w = src, i = 0; w && BR.frame && i < 6; i++) { if (w === BR.frame.contentWindow) return true; if (w === w.parent) break; w = w.parent; }
+    } catch { /* 닫히는 중 */ }
+    return false;
+  }
   window.addEventListener('message', (e) => {
     if (!/^https:\/\/[a-z0-9-]+-script\.googleusercontent\.com$/.test(e.origin) && e.origin !== 'https://script.google.com') return;
     const d = e.data;
-    if (!d || !BR.win) return;
-    if (d.type === 'sf-ready') { BR.ready = true; BR.src = e.source; BR.origin = e.origin; const q = BR.q.splice(0); q.forEach((f) => f()); return; }
-    if (d.type !== 'sf-res' || !BR.wait.has(d.id)) return;
+    if (!d || (d.type !== 'sf-ready' && d.type !== 'sf-res') || !fromBridge(e.source)) return;
+    if (d.type === 'sf-ready') {
+      BR.ready = true; BR.src = e.source; BR.origin = e.origin;
+      if (d.frame) { clearTimeout(BR.frameT); BR.inFrame = true; frameRemember(true); paintBridge(); }
+      const q = BR.q.splice(0);
+      q.forEach((f) => f());
+      if (!BR.wait.size) sfIdle();
+      if (d.frame) refreshBox(true);
+      return;
+    }
+    if (!BR.wait.has(d.id)) return;
     const w = BR.wait.get(d.id); BR.wait.delete(d.id); clearTimeout(w.t);
     const j = d.res;
-    if (!j || !j.ok) w.no(Object.assign(new Error((j && j.msg) || '실패했어요.'), { code: j && j.err }));
-    else w.ok(j);
+    if (!j || !j.ok) {
+      // 틀로 안 되는 까닭(다른 계정·연결 끊김)이면 다음 누름은 작은 창이나 새 틀로
+      if (BR.inFrame && j && j.err === 'owner') sfFrameStop(true);
+      else if (BR.inFrame && j && j.err === 'net') sfFrameRestart();
+      w.no(Object.assign(new Error((j && j.msg) || '실패했어요.'), { code: j && j.err }));
+    } else { w.ok(j); if (!BR.wait.size) sfIdle(); }
   });
   // 반 비밀값(반 QR에 들어감)과 명단 값(비밀값|번호|이름의 앞 16자리)을 다리에 맞춰 둔다
   async function syncClass(c) {
@@ -1613,26 +1689,68 @@ body.sfv-open { overflow: hidden; }
     const n = BOX.subs.filter(isNewSub).length, b = $('#boxBadge');
     if (b) { b.hidden = !n; b.textContent = n > 9 ? '9+' : String(n); }
   }
+  // 서류 내용은 받아 둔 뒤 누르면 기다림 없이 바로 연다(교사 요청 2026-11-02). 이 화면 메모리에만 있고 저장하지 않는다
+  const DOCS = new Map(); // '서류 번호|제출 시각' → Promise({ doc, lock })
+  const docKey = (sub) => `${sub.id}|${sub.up || ''}`;
+  function docOf(sub) {
+    const k = docKey(sub);
+    if (!DOCS.has(k)) {
+      const p = sfApi({ a: 'get', id: sub.id, peek: 1 });
+      p.catch(() => DOCS.delete(k));
+      DOCS.set(k, p);
+    }
+    return DOCS.get(k);
+  }
+  // 새 판 받는 곳만(옛 판은 받기만 해도 '읽음'이 되어 새 서류 표시가 사라짐). 창 없이 연결되면 최근 30건, 작은 창이면 새 서류 10건까지
+  async function preload() {
+    if (BOX.v < 2) return;
+    const keep = new Set(BOX.subs.map(docKey));
+    for (const k of DOCS.keys()) if (!keep.has(k)) DOCS.delete(k);
+    const todo = BOX.subs.filter((s) => !DOCS.has(docKey(s)) && (BR.inFrame || isNewSub(s))).slice(0, BR.inFrame ? 30 : 10);
+    let i = 0;
+    const worker = async () => { while (i < todo.length) await docOf(todo[i++]).catch(() => {}); };
+    await Promise.all([worker(), worker(), worker()]);
+  }
+  // 읽음 표시: 연결돼 있으면 바로, 아니면 다음에 연결될 때 보낸다(읽음만 알리려고 창을 띄우지 않음)
+  function flushSeen() {
+    if (!bridgeOpen() || !BOX.seenQ.size) return;
+    for (const id of BOX.seenQ) sfApi({ a: 'seen', id }).catch(() => {});
+    BOX.seenQ.clear();
+  }
+  function markSeen(sub) {
+    if (!isNewSub(sub)) return;
+    sub.seen = new Date().toISOString();
+    paintBadge();
+    if (BOX.v >= 2) { BOX.seenQ.add(sub.id); flushSeen(); }
+  }
   async function refreshBox(quiet) {
     if (!S.cfg.sf || BOX.busy) return;
-    if (quiet && !bridgeOpen()) { if (tab === 'box') renderBox(); return; } // 연결 창은 버튼을 누를 때만 연다
+    if (quiet && !bridgeOpen()) { if (tab === 'box') renderBox(); return; } // 작은 창은 버튼을 누를 때만 연다
     BOX.busy = true;
-    if (tab === 'box') renderBox();
+    if (!quiet && tab === 'box') renderBox();
+    const gen = BOX.gen;
+    let changed = !quiet;
     try {
+      flushSeen();
       const j = await sfApi({ a: 'list' });
-      BOX.subs = j.subs || []; BOX.reqs = j.reqs || []; BOX.blocked = j.blocked || []; BOX.binds = j.binds || []; BOX.at = nowHM(); BOX.err = '';
+      const sig = JSON.stringify([BOX.subs, BOX.reqs, BOX.blocked, BOX.binds]);
+      BOX.subs = j.subs || []; BOX.reqs = j.reqs || []; BOX.at = nowHM(); BOX.err = ''; BOX.v = j.v || 1;
+      if (gen === BOX.gen) { BOX.blocked = j.blocked || []; BOX.binds = j.binds || []; } // 받는 사이 [풀기]를 눌렀으면 그 결과를 지킨다
+      if (sig !== JSON.stringify([BOX.subs, BOX.reqs, BOX.blocked, BOX.binds])) changed = true;
       const n = linkSubs(BOX.subs);
       if (n) toast(`출결 기록 ${n}건에 '서류 받음'을 체크했어요`);
-    } catch (e) { BOX.err = e.message; if (!quiet) toast(e.message); }
+      preload();
+    } catch (e) { BOX.err = e.message; changed = true; if (!quiet) toast(e.message); }
     BOX.busy = false;
     paintBadge();
-    if (tab === 'box') renderBox();
+    if (tab === 'box' && changed) renderBox(); // 바뀐 것이 없으면 다시 그리지 않음(깜빡임·스크롤 튐 없게)
   }
   const stuName = (cname, no) => (S.classes.find((x) => x.name === cname && isHome(x)) || S.classes.find((x) => x.name === cname))?.students.find((s) => s.no === String(no))?.name || '';
   // 학생 서류는 담임 반만(교사 결정 2026-10-28) — 수업 반에는 학생 링크를 만들지 않음
   const qrClasses = () => S.classes.filter(isHome).filter((c) => /^\d-\d{1,2}$/.test(c.name));
   // [서류함] 탭은 담임 반이 있을 때만 보임
-  const syncBoxTab = () => { const b = document.querySelector('#tabs [data-tab="box"]'); if (b) b.hidden = APP === 'class' || !S.classes.some(isHome); };
+  const boxOk = () => APP !== 'class' && (S.classes.some(isHome) || !!S.cfg.sf); // PC 인쇄용: 명단 없이 받는 곳만 연결해도 쓴다(교사 요청 2026-11-02)
+  const syncBoxTab = () => { const b = document.querySelector('#tabs [data-tab="box"]'); if (b) b.hidden = !boxOk(); };
   function boxSetupHtml() {
     return `
       <div class="card">
@@ -1662,6 +1780,15 @@ body.sfv-open { overflow: hidden; }
         </details>
       </div>`;
   }
+  function boxLinkCard(qcs) {
+    return `<div class="card">
+        <h2 class="sec">학생용 링크 (반 카톡방에 올리기)</h2>
+        <p class="hint">[링크 복사]를 눌러 반 카톡방에 붙여 넣으세요. 링크에는 반 이름·반 비밀값·받는 곳 주소만 있어요. 그래도 들어오려면 <b>구글 로그인</b>과 <b>명단의 학번·이름</b>이 맞아야 해요. 링크가 다른 곳에 퍼졌으면 [반 링크 새로 만들기]로 옛 링크를 막으세요.</p>
+        ${qcs.length ? `<ul class="docs">${qcs.map((c) => `<li><span><b>${esc(c.name)}</b>${c.sk ? '' : ' <small class="dim">아직 안 만듦</small>'}</span><button class="btn small main" data-scopy="${esc(c.id)}">링크 복사</button><button class="btn small" data-sqr="${esc(c.id)}">QR</button><button class="btn small" data-snew="${esc(c.id)}">반 링크 새로 만들기</button></li>`).join('')}</ul>` : '<p class="hint">[설정]에서 반을 먼저 추가해 주세요.</p>'}
+        <div id="sqrBox" class="qrbox"></div>
+        <p class="hint dim">학생이 로그인이 안 되면: 오른쪽 위 메뉴 → 다른 브라우저로 열기${BOX.binds.length ? ` · 계정·기기에 묶인 학생 ${BOX.binds.length}명(계정 ${BOX.binds.filter((x) => x.by === 'account').length} · 기기 ${BOX.binds.filter((x) => x.by === 'device').length})` : ''}</p>
+      </div>`;
+  }
   function renderBox() {
     if (!S.cfg.sf) { $('#main').innerHTML = boxSetupHtml(); return; }
     const subs = BOX.subs;
@@ -1674,7 +1801,7 @@ body.sfv-open { overflow: hidden; }
         ${subs.length ? `<ul class="docs bx">${subs.map((s) => `<li><span><b>${esc(KINDNAME[s.kind] || s.kind)}</b> · ${esc(s.c)} ${esc(s.no)}번 ${esc(s.name)}<br><small class="dim">${esc(rangeIso(s.from, s.to))}${s.kind === 'absence' && s.att ? ` ${esc(s.att)}` : ''}${s.proxy ? ' · 대리 인솔 위임장' : ''}${s.n ? ` · 사진 ${s.n}장` : ''} · ${esc(whenOf(s.up))} 제출</small></span>${isNewSub(s) ? `<span class="badge late">${s.seen ? '고침' : '새 서류'}</span>` : s.lock ? '<span class="badge ok">인쇄함</span>' : ''}<button class="btn small" data-sub="${esc(s.id)}">보기</button></li>`).join('')}</ul>`
           : `<p class="empty" style="padding:16px">${BOX.busy ? '받는 중…' : BOX.at ? '아직 낸 서류가 없어요.' : '[새로 받기]를 눌러 주세요.'}</p>`}
         <div class="row"><button class="btn small" id="bxRefresh" ${BOX.busy ? 'disabled' : ''}>${BOX.busy ? '받는 중…' : '새로 받기'}</button></div>
-        <p class="hint dim">${BOX.at ? `${esc(BOX.at)}에 받음. ` : ''}[새로 받기]를 누르면 작은 '서류함 연결 창'이 열려요(선생님 구글 계정). 인쇄한 서류는 [보기 → 삭제]로 지워 주세요(구글 드라이브 파일까지 지워져요).</p>
+        <p class="hint dim">${BOX.at ? `${esc(BOX.at)}에 받음. ` : ''}${BR.inFrame ? '창 없이 바로 받아요.' : "[새로 받기]를 누르면 작은 '서류함 연결 창'이 열렸다가 끝나면 저절로 닫혀요(선생님 구글 계정)."} 인쇄한 서류는 [보기 → 삭제]로 지워 주세요(구글 드라이브 파일까지 지워져요).</p>
       </div>
       <div class="card">
         <h2 class="sec">학생에게 보낸 요청</h2>
@@ -1686,16 +1813,11 @@ body.sfv-open { overflow: hidden; }
         <ul class="docs">${BOX.blocked.map((x) => `<li><span>${esc(x.c)} ${esc(x.no)}번 ${esc(stuName(x.c, x.no))} <small class="dim">마지막 시도 ${esc(whenOf(x.at))} · ${+x.n || 1}번</small></span><button class="btn small" data-unbind="${esc(x.c)}|${esc(x.no)}">풀기</button></li>`).join('')}</ul>
         <p class="hint dim">학번은 처음 연 구글 계정(또는 그 폰)으로만 쓸 수 있어요. 학생이 폰·계정을 바꿨으면 확인한 뒤 [풀기] — 다음에 처음 여는 계정·기기로 다시 묶여요. 모르는 시도면 풀지 마세요.</p>
       </div>` : ''}
-      <div class="card">
-        <h2 class="sec">학생용 링크 (반 카톡방에 올리기)</h2>
-        <p class="hint">[링크 복사]를 눌러 반 카톡방에 붙여 넣으세요. 링크에는 반 이름·반 비밀값·받는 곳 주소만 있어요. 그래도 들어오려면 <b>구글 로그인</b>과 <b>명단의 학번·이름</b>이 맞아야 해요. 링크가 다른 곳에 퍼졌으면 [반 링크 새로 만들기]로 옛 링크를 막으세요.</p>
-        ${qcs.length ? `<ul class="docs">${qcs.map((c) => `<li><span><b>${esc(c.name)}</b>${c.sk ? '' : ' <small class="dim">아직 안 만듦</small>'}</span><button class="btn small main" data-scopy="${esc(c.id)}">링크 복사</button><button class="btn small" data-sqr="${esc(c.id)}">QR</button><button class="btn small" data-snew="${esc(c.id)}">반 링크 새로 만들기</button></li>`).join('')}</ul>` : '<p class="hint">[설정]에서 반을 먼저 추가해 주세요.</p>'}
-        <div id="sqrBox" class="qrbox"></div>
-        <p class="hint dim">학생이 로그인이 안 되면: 오른쪽 위 메뉴 → 다른 브라우저로 열기${BOX.binds.length ? ` · 계정·기기에 묶인 학생 ${BOX.binds.length}명(계정 ${BOX.binds.filter((x) => x.by === 'account').length} · 기기 ${BOX.binds.filter((x) => x.by === 'device').length})` : ''}</p>
-      </div>
+      ${S.classes.length ? boxLinkCard(qcs) : ''}
       <div class="card">
         <h2 class="sec">연결</h2>
-        <p class="hint">받는 곳: <span class="dim" style="word-break:break-all">${esc(S.cfg.sf.u.replace(/\/s\/([\w-]{6})[\w-]+(\w{4})\/exec$/, '/s/$1…$2/exec'))}</span> · 연결 창 ${bridgeOpen() ? '열림' : '닫힘'}</p>
+        <p class="hint">받는 곳: <span class="dim" style="word-break:break-all">${esc(S.cfg.sf.u.replace(/\/s\/([\w-]{6})[\w-]+(\w{4})\/exec$/, '/s/$1…$2/exec'))}</span> · <span id="bxBridge">${BR.inFrame ? '창 없이 연결됨' : '버튼을 누를 때 작은 창이 열려요'}</span></p>
+        ${BOX.v === 1 ? '<p class="hint">[받는 곳 업데이트]를 한 번 누르면 연결 창이 뜨지 않고 서류도 바로 열려요.</p>' : ''}
         <div class="row"><button class="btn small" id="bxDev">다른 기기 연결</button>${MAKER_URL ? '<button class="btn small" id="bxUpdate">받는 곳 업데이트</button>' : ''}<button class="btn small" id="bxOff">연결 끊기</button></div>
         <div id="devBox" class="qrbox"></div>
         <div class="row"><button class="btn small danger" id="bxWipe">구글 쪽 서류·요청 모두 지우기</button></div>
@@ -1737,8 +1859,13 @@ body.sfv-open { overflow: hidden; }
     if (!box) return;
     const ks = Object.fromEntries(S.classes.filter((c) => c.sk).map((c) => [c.name, c.sk]));
     const link = `${location.href.split('#')[0]}#sf=${b64u(new TextEncoder().encode(JSON.stringify({ u: S.cfg.sf.u, ks })))}`;
-    try { box.innerHTML = `${await qrImg(link, '다른 기기 연결 QR', 240)}<p class="hint">선생님의 다른 기기(PC·폰) 카메라로 찍으면 같은 서류함이 연결돼요. 서류를 보려면 그 기기에서도 선생님 구글 계정 로그인이 필요해요.</p>`; }
-    catch { box.textContent = 'QR을 그리지 못했어요.'; }
+    const pcLink = `${location.href.split('#')[0]}#sf=${b64u(new TextEncoder().encode(JSON.stringify({ u: S.cfg.sf.u })))}`;
+    try {
+      box.innerHTML = `${await qrImg(link, '다른 기기 연결 QR', 240)}<p class="hint">선생님의 다른 폰 카메라로 찍으면 같은 서류함이 연결돼요.</p>
+        <div class="row"><button class="btn small main" id="bxPcLink">PC에서 열 링크 복사</button></div>
+        <p class="hint dim">PC에서 인쇄할 때: 업무 도우미 패널 [출석부 앱 → 받은 서류함]을 누르면 바로 열려요. 패널이 없으면 이 링크를 카톡 '나에게'로 보내 PC에서 여세요. 링크에는 받는 곳 주소만 있어 명단·서류는 들어 있지 않고, 서류를 보려면 그 PC에서 선생님 구글 계정 로그인이 필요해요.</p>`;
+      box.dataset.pc = pcLink;
+    } catch { box.textContent = 'QR을 그리지 못했어요.'; }
   }
   // 다른 기기에서 만든 연결(#sf=…)을 이 기기에 넣는다
   function sfApply(b64) {
@@ -1746,6 +1873,7 @@ body.sfv-open { overflow: hidden; }
       const o = JSON.parse(new TextDecoder().decode(unb64u(b64)));
       if (!SF_URL_RE.test(o.u)) throw new Error();
       if (!S.cfg.sf || S.cfg.sf.u !== o.u) { S.cfg.sf = { u: o.u }; for (const c of S.classes) delete c.skSig; }
+      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(o.a || '') && !gAccount()) { try { localStorage.setItem(ACC_KEY, o.a); } catch { /* 저장 못 함 */ } }
       for (const c of S.classes) if (o.ks && /^[A-Za-z0-9_-]{16,64}$/.test(o.ks[c.name] || '')) { c.sk = o.ks[c.name]; delete c.skSig; }
       save(true);
       return true;
@@ -1784,6 +1912,7 @@ body.sfv-open { overflow: hidden; }
     if (!S.cfg.sf || S.cfg.sf.u !== r.url) { S.cfg.sf = { u: r.url }; for (const c of S.classes) delete c.skSig; }
     save(true);
     toast(r.made ? '받는 곳을 만들었어요' : r.updated ? '받는 곳을 새 버전으로 올렸어요' : '받는 곳을 연결했어요');
+    sfFrameRestart();
     if (tab === 'box') renderBox();
   });
   // [연결]: 주소를 기억하고 연결 창을 열어 선생님 계정인지 확인(ping)
@@ -1802,14 +1931,15 @@ body.sfv-open { overflow: hidden; }
     toast('서류함을 연결했어요');
     renderBox();
     refreshBox(true);
+    sfFrameRestart();
   }
   async function openSub(id) {
     let SFm, j;
-    try { SFm = await loadForms(); j = await sfApi({ a: 'get', id }); }
+    const sub = BOX.subs.find((s) => s.id === id) || { id };
+    try { SFm = await loadForms(); j = await docOf(sub); }
     catch (e) { toast(e.message); if (e.code === 'gone') refreshBox(true); return; }
-    const doc = j.doc || {}, sub = BOX.subs.find((s) => s.id === id) || { id };
-    sub.seen = new Date().toISOString();
-    paintBadge();
+    const doc = j.doc || {};
+    markSeen(sub);
     const v = { kind: doc.kind, cls: doc.c, no: doc.no, name: doc.name, f: doc.f || {} };
     const m = SFm.meta(v);
     const cs = caseFor({ ...sub, ...m, kind: doc.kind, c: doc.c, no: doc.no });
@@ -1834,7 +1964,7 @@ body.sfv-open { overflow: hidden; }
     $('#svClose', box).addEventListener('click', close);
     $('#svPrint', box).addEventListener('click', async () => {
       if (!sfWake()) return;
-      try { const r = await sfApi({ a: 'lock', id }); sub.lock = r.lock; } catch (e) { if (!confirm(`학생이 더 고치지 못하게 잠그지 못했어요(${e.message}). 그래도 인쇄할까요?`)) return; }
+      try { const r = await sfApi({ a: 'lock', id }); sub.lock = r.lock; } catch (e) { if (!confirm(`학생이 더 고치지 못하게 잠그지 못했어요(${e.message}). 그래도 인쇄할까요?`)) { toast(`인쇄하지 않았어요: ${e.message}`); return; } }
       const done = () => { document.body.classList.remove('sf-printing'); window.removeEventListener('afterprint', done); };
       window.addEventListener('afterprint', done);
       document.body.classList.add('sf-printing');
@@ -1846,6 +1976,7 @@ body.sfv-open { overflow: hidden; }
       if (!sfWake()) return;
       try { await sfApi({ a: 'delete', id }); } catch (e) { toast(e.message); return; }
       BOX.subs = BOX.subs.filter((s) => s.id !== id);
+      DOCS.delete(docKey(sub));
       paintBadge();
       close();
       toast('지웠어요(구글 드라이브 파일까지)');
@@ -1877,24 +2008,49 @@ body.sfv-open { overflow: hidden; }
       } catch { window.open(f, '_blank'); }
       return;
     }
-    // 아래 버튼들은 서류함 연결 창이 필요하다 → 누른 순간에 창을 연다(팝업 차단 피함)
-    const needs = ['bxRefresh', 'bxWipe'].includes(id) || e.target.closest('[data-sub], [data-unreq], [data-scopy], [data-sqr], [data-snew], [data-unbind]');
+    // 확인은 같은 버튼을 한 번 더 누르는 것으로: 브라우저 확인 창은 연결 창 뒤에 가려지거나 막혀 아무 일도 안 일어난 것처럼 보였다(교사 제보 2026-11-02)
+    const sure = (btn, label, note) => {
+      if (btn.dataset.sure) return true;
+      const old = btn.textContent;
+      btn.dataset.sure = '1'; btn.textContent = label; toast(note);
+      setTimeout(() => { if (btn.isConnected) { delete btn.dataset.sure; btn.textContent = old; } }, 8000);
+      return false;
+    };
+    const ub = e.target.closest('[data-unbind]');
+    if (ub && !sure(ub, '정말 풀기', '한 번 더 누르면 풀려요. 학생이 다음에 처음 여는 계정·기기로 다시 묶여요.')) return;
+    if (id === 'bxWipe' && !sure(e.target, '정말 모두 지우기', '구글 드라이브의 학생 서류와 요청을 모두 지워요. 되돌릴 수 없어요. 지우려면 한 번 더 눌러 주세요.')) return;
+    const nb = e.target.closest('[data-snew]');
+    if (nb && !sure(nb, '정말 새로 만들기', '예전 링크(카톡방에 올린 것)로는 더 낼 수 없어요. 새로 만들려면 한 번 더 눌러 주세요.')) return;
+    // 아래 버튼들은 서류함 연결이 필요하다 → 누른 순간에 작은 창을 연다(팝업 차단 피함, 창 없이 연결돼 있으면 안 뜸). 받아 둔 서류를 볼 때는 필요 없다
+    const sb = e.target.closest('[data-sub]');
+    const cached = sb && DOCS.has(docKey(BOX.subs.find((x) => x.id === sb.dataset.sub) || { id: sb.dataset.sub }));
+    const needs = ['bxRefresh', 'bxWipe'].includes(id) || (sb && !cached) || e.target.closest('[data-unreq], [data-scopy], [data-sqr], [data-snew], [data-unbind]');
     if (needs && !sfWake()) return;
     if (id === 'bxRefresh') { refreshBox(false); return; }
     if (id === 'bxDev') { BOX.dev = !BOX.dev; renderBox(); return; }
-    if (id === 'bxOff' && confirm('이 기기에서 서류함 연결을 끊을까요? 구글 쪽 서류는 그대로 있어요.')) { delete S.cfg.sf; if (bridgeOpen()) BR.win.close(); BOX.subs = []; BOX.reqs = []; BOX.at = ''; save(true); paintBadge(); renderBox(); return; }
-    if (id === 'bxWipe' && confirm('구글 드라이브에 있는 학생 서류와 요청을 모두 지울까요? 되돌릴 수 없어요.') && confirm('정말 모두 지울까요?')) {
-      try { const j = await sfApi({ a: 'deleteAll' }); BOX.subs = []; BOX.reqs = []; paintBadge(); renderBox(); toast(`서류 ${j.n}건을 지웠어요`); } catch (err) { toast(err.message); }
+    if (id === 'bxPcLink') {
+      const text = $('#devBox').dataset.pc;
+      try { await navigator.clipboard.writeText(text); toast('링크를 복사했어요. 카톡 나에게 보내기로 PC에 보내세요.'); }
+      catch { prompt('이 링크를 복사해 PC로 보내 주세요.', text); }
       return;
     }
-    const ub = e.target.closest('[data-unbind]');
+    if (id === 'bxOff' && confirm('이 기기에서 서류함 연결을 끊을까요? 구글 쪽 서류는 그대로 있어요.')) { delete S.cfg.sf; if (popupOpen()) BR.win.close(); sfFrameStop(false); DOCS.clear(); BOX.subs = []; BOX.reqs = []; BOX.at = ''; save(true); paintBadge(); renderBox(); return; }
+    if (id === 'bxWipe') {
+      try { const j = await sfApi({ a: 'deleteAll' }); DOCS.clear(); BOX.subs = []; BOX.reqs = []; paintBadge(); renderBox(); toast(`서류 ${j.n}건을 지웠어요`); } catch (err) { toast(err.message); }
+      return;
+    }
     if (ub) {
       const [c, no] = ub.dataset.unbind.split('|');
-      if (!confirm(`${c} ${no}번 학생의 잠김을 풀까요? 다음에 처음 여는 계정·기기로 다시 묶여요.`)) return;
-      try { await sfApi({ a: 'unbind', c, no }); } catch (err) { toast(err.message); return; }
-      BOX.blocked = BOX.blocked.filter((x) => !(x.c === c && String(x.no) === no));
-      BOX.binds = BOX.binds.filter((x) => !(x.c === c && String(x.no) === no));
-      renderBox(); toast(`${c} ${no}번 잠김을 풀었어요`); return;
+      // 누르자마자 잠긴 학생에서 뺀다(교사 요청 2026-11-02). 안 되면 되돌리고 알린다
+      const was = [BOX.blocked, BOX.binds];
+      const other = (x) => !(x.c === c && String(x.no) === no);
+      BOX.gen++;
+      BOX.blocked = BOX.blocked.filter(other);
+      BOX.binds = BOX.binds.filter(other);
+      renderBox();
+      try { await sfApi({ a: 'unbind', c, no }); toast(`${c} ${no}번 잠김을 풀었어요`); }
+      catch (err) { [BOX.blocked, BOX.binds] = was; renderBox(); toast(err.message); }
+      return;
     }
     const b = e.target.closest('[data-sub], [data-unreq], [data-sqr], [data-scopy], [data-snew]');
     if (!b) return;
@@ -1908,7 +2064,7 @@ body.sfv-open { overflow: hidden; }
     }
     if (b.dataset.sqr) { BOX.qr = BOX.qr === b.dataset.sqr ? '' : b.dataset.sqr; renderBox(); return; }
     if (b.dataset.scopy && c) { copyLink(c); return; }
-    if (b.dataset.snew && c && confirm(`${c.name} 반 링크를 새로 만들까요? 예전 링크(카톡방에 올린 것)로는 더 낼 수 없어요. 새 링크를 다시 올려 주세요.`)) {
+    if (b.dataset.snew && c) {
       const old = c.sk;
       c.sk = randKey(12); delete c.skSig;
       try { await syncClass(c); } catch (err) { c.sk = old; delete c.skSig; toast(err.message); return; }
@@ -2205,7 +2361,7 @@ body.sfv-open { overflow: hidden; }
   // ── 탭 ────────────────────────────────────────────────
   function switchTab(t) {
     syncBoxTab();
-    if ((t === 'box' && (APP === 'class' || !S.classes.some(isHome))) || (t === 'docs' && APP === 'class')) t = 'check';
+    if ((t === 'box' && !boxOk()) || (t === 'docs' && APP === 'class')) t = 'check';
     tab = t;
     editing = null;
     document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === t));
@@ -2214,15 +2370,15 @@ body.sfv-open { overflow: hidden; }
     if (t === 'export') { exp = { from: '', to: '' }; renderExport(); }
     if (t === 'setup') renderSetup();
     if (t === 'docs') renderDocs();
-    if (t === 'box') { renderBox(); refreshBox(true); } // 연결 창이 열려 있을 때만 바로 받음
+    if (t === 'box') { renderBox(); if (!BR.frame) sfFrameStart(); refreshBox(true); } // 연결돼 있으면 바로 받음(작은 창은 [새로 받기]를 누를 때만)
     window.scrollTo(0, 0);
   }
   $('#tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) switchTab(b.dataset.tab); });
 
   paintDate();
   const sfLinked = sfFromLink();
-  switchTab(sfLinked ? 'box' : S.classes.length ? 'check' : 'setup');
-  if (S.cfg.sf && !sfLinked) setTimeout(() => refreshBox(true), 600);
+  switchTab(sfLinked || (S.cfg.sf && !S.classes.length && boxOk()) ? 'box' : S.classes.length ? 'check' : 'setup');
+  if (S.cfg.sf) setTimeout(sfFrameStart, 800); // 첫 화면을 그린 뒤 뒤에서 연결(연결되면 저절로 받아 둠)
   const syLinked = syFromLink();
   rosterFromLink().then((msg) => {
     if (msg) { switchTab('check'); showHomeSheet(msg); }

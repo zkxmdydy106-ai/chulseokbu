@@ -20,7 +20,7 @@
   <? if (!origin) { ?>
     <p class="err">허용되지 않은 곳에서 열렸어요. 출석부 웹앱의 [서류함]에서 다시 열어 주세요.</p>
   <? } else { ?>
-    <p>출석부 웹앱 [서류함]이 이 창을 거쳐 선생님 구글 드라이브의 학생 서류를 주고받아요. 서류함을 쓰는 동안 열어 두세요(닫아도 다시 누르면 열려요).</p>
+    <p>출석부 웹앱 [서류함]이 이 창을 거쳐 선생님 구글 드라이브의 학생 서류를 주고받아요. 끝나면 저절로 닫히고 출석부로 돌아가요(안 닫히면 닫아도 돼요).</p>
     <div class="to">받는 곳: <?= origin ?></div>
     <p id="msg">연결하는 중…</p>
     <p style="font-size:12px;color:#8a9099">이 서류함을 만든 선생님 계정으로 로그인돼 있어야 해요. 다른 구글 계정이 함께 로그인돼 있으면 그 계정은 로그아웃해 주세요. 이 창은 내용을 저장하지 않아요.</p>
@@ -29,10 +29,11 @@
 <? if (origin) { ?>
 <script>
   var ORIGIN = <?!= JSON.stringify(origin) ?>;
+  var FRAMED = <?!= JSON.stringify(framed) ?>;
   var msg = document.getElementById('msg');
   var done = 0;
   function target() {
-    try { if (window.top.opener) return window.top.opener; } catch (e) { }
+    try { if (FRAMED) return window.top; if (window.top.opener) return window.top.opener; } catch (e) { }
     return null;
   }
   function say(t, cls) { msg.className = cls || ''; msg.textContent = t; }
@@ -58,7 +59,7 @@
   (function hello() {
     var to = target();
     if (!to) { say('출석부 창을 찾지 못했어요. 출석부 [서류함]에서 다시 열어 주세요.', 'err'); return; }
-    to.postMessage({ type: 'sf-ready' }, ORIGIN);
+    to.postMessage({ type: 'sf-ready', frame: FRAMED ? 1 : 0 }, ORIGIN);
     say('연결됨', 'ok');
   })();
 </script>
