@@ -1701,7 +1701,22 @@ body.sfv-open { overflow: hidden; }
   const FR_KEY = 'chulseokbu.sfFrame'; // 이 기기에서 창 없이 연결된 적 있음 → 틀이 뜨는 동안 작은 창을 띄우지 않고 기다린다
   const frameKnown = () => { try { return localStorage.getItem(FR_KEY) === '1'; } catch { return false; } };
   const frameRemember = (on) => { try { if (on) localStorage.setItem(FR_KEY, '1'); else localStorage.removeItem(FR_KEY); } catch { /* 저장 못 함 */ } };
-  function paintBridge() { const st = $('#bxBridge'); if (st) st.textContent = BR.inFrame ? '창 없이 연결됨' : '버튼을 누를 때 작은 창이 열려요'; }
+  function paintBridge() {
+    const st = $('#bxBridge'); if (st) st.textContent = BR.inFrame ? '창 없이 연결됨' : '버튼을 누를 때 작은 창이 열려요';
+    const note = $('#bxNote'); if (note) note.innerHTML = bridgeNote();
+  }
+  // 받는 곳이 옛 판으로 보임(판 번호 없음, 또는 판을 모르는데 틀이 안 뜸)
+  const bridgeOld = () => !!S.cfg.sf && (BOX.v === 1 || (BR.frameFailed && !BOX.v && !S.cfg.sf.v));
+  // 창이 뜨는 까닭과 없애는 법을 [서류함] 맨 위에(교사 제보 2026-11-02: 버튼마다 연결 창이 뜸 — 받는 곳이 옛 판이었음)
+  function bridgeNote() {
+    if (BR.inFrame || !S.cfg.sf) return '';
+    if (bridgeOld()) return MAKER_URL ? `<div class="card"><h2 class="sec">버튼마다 작은 창이 뜨나요?</h2>
+      <p class="hint">받는 곳이 옛 판이라 그래요. 한 번만 새 판으로 바꾸면 창이 안 뜨고 서류도 저절로 들어와요. 낸 서류와 반 링크는 그대로예요.</p>
+      <div class="row"><button class="btn main" id="bxUpdateNow">${BOX.making ? '바꾸는 중… 작은 창을 확인해 주세요' : '새 판으로 바꾸기'}</button></div></div>` : '';
+    if (BR.frameFailed) return `<div class="card"><p class="hint">이 브라우저에서는 창 없이 연결이 안 돼요. 구글 계정이 여러 개 로그인돼 있거나 브라우저가 다른 사이트 쿠키를 막으면 그래요. 버튼을 누를 때 작은 창이 잠깐 열렸다 닫혀요.</p>
+      <div class="row"><button class="btn small" id="bxFrameRetry">다시 해 보기</button></div></div>`;
+    return '';
+  }
   function sfFrameStart() {
     if (!S.cfg.sf || BR.frame || BR.frameFailed) return;
     const acc = gAccount();
@@ -1749,6 +1764,7 @@ body.sfv-open { overflow: hidden; }
     BR.ready = false; BR.src = null; BR.origin = '';
     BR.win = window.open(asAccount(S.cfg.sf.u, { p: 't', origin: location.origin }), 'chulseokbu-forms', 'width=440,height=560');
     if (!BR.win) { toast('팝업이 막혔어요. 주소창의 팝업 차단 표시를 눌러 허용해 주세요.'); return false; }
+    if (bridgeOld() && !BOX.hinted && tab !== 'box') { BOX.hinted = true; toast('이 창을 없애려면 [서류함] 맨 위 [새 판으로 바꾸기]를 한 번 눌러 주세요'); }
     return true;
   }
   function sfApi(body) {
@@ -1915,6 +1931,9 @@ body.sfv-open { overflow: hidden; }
       const j = await sfApi({ a: 'list' });
       const sig = JSON.stringify([BOX.subs, BOX.reqs, BOX.blocked, BOX.binds]);
       BOX.subs = j.subs || []; BOX.reqs = j.reqs || []; BOX.at = nowHM(); BOX.err = ''; BOX.v = j.v || 1;
+      if (S.cfg.sf && S.cfg.sf.v !== BOX.v) { S.cfg.sf.v = BOX.v; save(true); }
+      if (BOX.v === 1 && !BOX.email) sfApi({ a: 'ping' }).then((r) => { BOX.email = r.email || ''; }).catch(() => {}); // [새 판으로 바꾸기]를 같은 계정으로 바로
+      paintBridge();
       if (gen === BOX.gen) { BOX.blocked = j.blocked || []; BOX.binds = j.binds || []; } // 받는 사이 [풀기]를 눌렀으면 그 결과를 지킨다
       if (sig !== JSON.stringify([BOX.subs, BOX.reqs, BOX.blocked, BOX.binds])) changed = true;
       const n = linkSubs(BOX.subs);
@@ -1983,6 +2002,7 @@ body.sfv-open { overflow: hidden; }
     const open = BOX.reqs.filter((r) => !r.done);
     const qcs = qrClasses();
     $('#main').innerHTML = `
+      <div id="bxNote">${bridgeNote()}</div>
       <div class="card">
         <h2 class="sec">학생이 낸 서류</h2>
         ${BOX.err ? `<div class="warnbox" style="margin:0 0 8px">${esc(BOX.err)}</div>` : ''}
@@ -2005,7 +2025,6 @@ body.sfv-open { overflow: hidden; }
       <div class="card">
         <h2 class="sec">연결</h2>
         <p class="hint">받는 곳: <span class="dim" style="word-break:break-all">${esc(S.cfg.sf.u.replace(/\/s\/([\w-]{6})[\w-]+(\w{4})\/exec$/, '/s/$1…$2/exec'))}</span> · <span id="bxBridge">${BR.inFrame ? '창 없이 연결됨' : '버튼을 누를 때 작은 창이 열려요'}</span></p>
-        ${BOX.v === 1 ? '<p class="hint">[받는 곳 업데이트]를 한 번 누르면 연결 창이 뜨지 않고 서류도 바로 열려요.</p>' : ''}
         <div class="row"><button class="btn small" id="bxDev">다른 기기 연결</button>${MAKER_URL ? '<button class="btn small" id="bxUpdate">받는 곳 업데이트</button>' : ''}<button class="btn small" id="bxOff">연결 끊기</button></div>
         <div id="devBox" class="qrbox"></div>
         <div class="row"><button class="btn small danger" id="bxWipe">구글 쪽 서류·요청 모두 지우기</button></div>
@@ -2078,11 +2097,15 @@ body.sfv-open { overflow: hidden; }
   // ── 받는 곳 자동 만들기(교사 결정 2026-10-28): 공용 '만들기 다리'(gas/forms-maker, 선생님 본인 계정으로 실행)가
   // 선생님 구글 계정에 받는 곳을 만들고(있으면 그대로) 주소를 이 창으로 보낸다. 만들기 다리 주소는 배포 뒤 채운다.
   const MAKER_URL = 'https://script.google.com/macros/s/AKfycbwirnDn9IGP4Ebaew2HZ2RTQsKFklc_CGVc1IiTXcUt3gcWxoAn4AF2NjhVFeTI1xR0/exec'; // gas/forms-maker 배포(2026-10-28)
-  function makeForms(update) {
+  // now: 계정을 이미 아는 받는 곳을 새 판으로 — 만들기 창의 계정 확인을 건너뛴다. 다리가 expect 계정과 실제 계정을 견줘 다르면 멈춤
+  function makeForms(update, now) {
     if (!MAKER_URL) { toast('자동 만들기가 아직 준비 중이에요. 아래 [직접 만들기]로 해 주세요.'); return; }
-    const w = window.open(asAccount(MAKER_URL, { origin: location.origin, ...(update ? { update: '1' } : {}) }), 'chulseokbu-forms-maker', 'width=460,height=560');
+    const who = now ? (BOX.email || gAccount()) : '';
+    const w = window.open(asAccount(MAKER_URL, { origin: location.origin, ...(update ? { update: '1' } : {}), ...(who ? { go: '1', expect: who } : {}) }), 'chulseokbu-forms-maker', 'width=460,height=560');
     if (!w) { toast('팝업이 막혔어요. 주소창의 팝업 허용을 누른 뒤 다시 해 주세요.'); return; }
     BOX.making = true;
+    BOX.updating = !!update;
+    BOX.makerWin = w;
     if (tab === 'box') renderBox();
   }
   window.addEventListener('message', (e) => {
@@ -2098,6 +2121,9 @@ body.sfv-open { overflow: hidden; }
     if (!SF_URL_RE.test(String(r.url))) return;
     BOX.making = false; BOX.err = '';
     if (!S.cfg.sf || S.cfg.sf.u !== r.url) { S.cfg.sf = { u: r.url }; for (const c of S.classes) delete c.skSig; }
+    if (r.made || r.updated || BOX.updating) { S.cfg.sf.v = 2; BOX.v = 2; }
+    if (BOX.updating) { try { BOX.makerWin?.close(); } catch { /* 이미 닫힘 */ } }
+    BOX.updating = false;
     save(true);
     toast(r.made ? '받는 곳을 만들었어요' : r.updated ? '받는 곳을 새 버전으로 올렸어요' : '받는 곳을 연결했어요');
     sfFrameRestart();
@@ -2188,6 +2214,8 @@ body.sfv-open { overflow: hidden; }
     if (id === 'bxConnect') { connectBox(); return; }
     if (id === 'bxMake') { makeForms(false); return; }
     if (id === 'bxUpdate') { makeForms(true); return; }
+    if (id === 'bxUpdateNow') { makeForms(true, true); return; }
+    if (id === 'bxFrameRetry') { sfFrameRestart(); toast('다시 연결해 볼게요'); return; }
     const cp = e.target.closest('[data-copy]');
     if (cp) {
       const f = `student-forms/${cp.dataset.copy}`;
