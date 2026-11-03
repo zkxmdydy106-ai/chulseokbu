@@ -217,7 +217,30 @@
     }
     return { html: `${esc(before)}${name ? ` ${V(name)} ` : ''}<span class="sf-sign">${esc(mark)}${sigImg(s)}</span>` };
   }
-  const dateLine = (iso) => { const d = dateOf(iso); return d ? { html: `${V(d.getFullYear())}년 ${V(d.getMonth() + 1)}월 ${V(d.getDate())}일` } : undefined; };
+  /* 원본 글의 빈칸 자리에 값을 넣어 글 폭을 그대로 둔다(원본과 같은 자리에 오게, 교사 요청 2026-11-02). vals[k]: k번째 빈칸 덩이에 넣을 값, 비면 빈칸 그대로 */
+  const textWidth = (s) => [...String(s)].reduce((n, ch) => n + (/[\x20-\x7e]/.test(ch) ? 1 : 2), 0);
+  function gapFill(src, vals) {
+    let k = 0;
+    const parts = String(src ?? '').split(/( +)/);
+    return parts.map((x, i) => {
+      if (i % 2 === 0) return esc(x);
+      const v = vals[k++];
+      if (v === undefined || v === null || v === '') return x;
+      const rest = Math.max(0, x.length - textWidth(v));
+      /* 괄호·쌍점 안과 긴 빈칸은 가운데, 그 밖은 단위 글자(년·월·일·학년) 바로 앞에 */
+      const mid = /[(:]$/.test(parts[i - 1]) || /^[):]/.test(parts[i + 1] || '') || rest >= 6;
+      const l = mid ? rest >> 1 : rest;
+      return `${' '.repeat(l)}${V(v)}${' '.repeat(rest - l)}`;
+    }).join('');
+  }
+  /* 날짜 줄: 원본 ' 년     월     일' 또는 '년     월     일' */
+  function dateLine(iso, src) {
+    const d = dateOf(iso);
+    if (!d) return undefined;
+    const Y = d.getFullYear(), M = d.getMonth() + 1, D = d.getDate();
+    if (!src) return { html: `${V(Y)}년 ${V(M)}월 ${V(D)}일` };
+    return { html: src.startsWith(' ') ? gapFill(src, [Y, M, D]) : V(Y) + gapFill(src, [M, D]) };
+  }
   const left = (s) => ({ html: V(s), align: 'left' });
   /* 연락처: 줄바꿈 없이 한 줄, 칸보다 길면 글자만 줄임(교사 요청 2026-10-29) */
   const tel = (s, extra = '') => ({ html: `${V(s)}${extra}`, fit: true });
@@ -318,12 +341,9 @@
       }
     }
     const n = gcn(doc.cls, doc.no), pages = Math.ceil(rows.length / slots.length), out = [];
-    const gaps = (src, vals) => { let k = 0; return esc(src).replace(/ +(?=\S)/g, (sp) => {
-      const v = String(vals[k++] ?? ''), w = [...v].reduce((x, ch) => x + (/[\x20-\x7e]/.test(ch) ? 1 : 2), 0), rest = Math.max(2, sp.length - w), l = rest >> 1;
-      return `${' '.repeat(l)}${V(v)}${' '.repeat(rest - l)}`; }); };
     for (let k = 0; k < pages; k++) {
-      const O = { 't1.r0c1.p0': { html: gaps(orig('field-report-more', 't1.r0c1.p0'), [n.g, n.c, n.no]), fit: true }, 't1.r0c3.p0': { html: V(doc.name), fit: true } };
-      rows.slice(k * slots.length, (k + 1) * slots.length).forEach((h, j) => { O[slots[j]] = { html: h, align: 'left', size: 10, fit: true }; });
+      const O = { 't1.r0c1.p0': { html: gapFill(orig('field-report-more', 't1.r0c1.p0'), [n.g, n.c, n.no]), fit: true }, 't1.r0c3.p0': { html: V(doc.name), fit: true } };
+      rows.slice(k * slots.length, (k + 1) * slots.length).forEach((h, j) => { O[slots[j]] = { html: h, align: 'left', size: 10, fit: true, plain: true }; });
       if (pages > 1) O.p2 = { html: `별지 ${V(k + 1)}/${V(pages)}`, align: 'right' };
       out.push(O);
     }
@@ -334,12 +354,12 @@
     const f = doc.f || {}, O = {}, K = 'absence';
     const att = f.att || '결석', n = gcn(doc.cls, doc.no);
     O['t0.r2c1.p0'] = { html: V(doc.name) };
-    O['t0.r2c4.p0'] = { html: `( ${V(n.g)} ) 학년  ( ${V(n.c)} ) 반  ( ${V(n.no)} ) 번` };
+    O['t0.r2c4.p0'] = { html: gapFill(orig(K, 't0.r2c4.p0'), [n.g, , , n.c, , , n.no]) };
     O['t0.r3c1.p0'] = left(f.reason);
     if (dateOf(f.from)) {
       const to = att === '결석' && dateOf(f.to) ? f.to : f.from;
       O['t0.r4c1.p0'] = att === '결석'
-        ? { html: `${V(ymdLong(f.from))} ${V(dayName(f.from))}요일 ~ ${V(md(to))} ${V(dayName(to))}요일 ( ${V(weekdays(f.from, to).length)} )일간` }
+        ? { html: V(dateOf(f.from).getFullYear()) + gapFill(orig(K, 't0.r4c1.p0'), [dateOf(f.from).getMonth() + 1, dateOf(f.from).getDate(), dayName(f.from), , dateOf(to).getMonth() + 1, dateOf(to).getDate(), dayName(to), , weekdays(f.from, to).length]) }
         : { html: `${V(ymdLong(f.from))} ${V(dayName(f.from))}요일 · ${V(att)}${f.when ? ` (${V(f.when)})` : ''}` };
     }
     /* 결석 종류 칸과 담임 확인서의 같은 줄 */
@@ -350,7 +370,7 @@
       else if (f.kind === '출석인정') h = ticks(h, [att === '결석' ? '출석인정결석' : '출석인정 (지각']);
       else h = esc(h);
       if (f.kind === '미인정') h += `  ${ON}${V(`미인정${att}`)}`;
-      return { html: h };
+      return { html: h, fit: true };
     };
     O['t0.r5c1.p0'] = kindHtml(orig(K, 't0.r5c1.p0'));
     if (f.kind === '출석인정' && att !== '결석') O['t0.r6c6.p1'] = { html: ticks(orig(K, 't0.r6c6.p1'), [att]) };
@@ -370,15 +390,16 @@
         O[p] = lab === '기타' ? { html: `${ON} 기타( ${V(f.proofEtc || '')} )` } : { html: `${ON}${esc(t.slice(1))}` };
       }
     }
-    O.p3 = dateLine(f.date);
-    O.p4 = signLine('학생  성명:', doc.name, '(서명 또는 인)', (f.sig || {}).stu);
-    O.p5 = signLine('보호자(법정대리인) 성명:', f.parentName, '(서명 또는 인)', (f.sig || {}).par);
+    O.p3 = dateLine(f.date, orig(K, 'p3'));
+    O.p4 = signLine('학생  성명:', doc.name, '(서명 또는 인)', (f.sig || {}).stu, orig(K, 'p4'));
+    O.p5 = signLine('보호자(법정대리인) 성명:', f.parentName, '(서명 또는 인)', (f.sig || {}).par, orig(K, 'p5'));
     if (!blank(f.guardianNote)) O['t8.r0c0.t5.r0c0.p0'] = left(f.guardianNote);
     O['t9.r0c0.p4'] = kindHtml(orig(K, 't9.r0c0.p4'));
     if (dateOf(f.cDate)) {
       const [hh, mm] = String(f.cTime || '').split(':');
       O['t9.r0c0.p6'] = { html: ticks(orig(K, 't9.r0c0.p6'), ['보호자 연락 일시']) };
-      O['t9.r0c0.p7'] = { html: `        ${V(ymdLong(f.cDate))} ${V(dayName(f.cDate))}요일 ( ${V(hh || '')} : ${V(mm || '')} )  ${V(f.cWho || '보호자')} 와/과 ${f.cHow === '문자' ? `▢ 전화 ${ON} 문자` : `${ON} 전화 ▢ 문자`} 연락함` };
+      const cd = dateOf(f.cDate);
+      O['t9.r0c0.p7'] = { html: gapFill(orig(K, 't9.r0c0.p7'), [cd.getFullYear(), cd.getMonth() + 1, cd.getDate(), dayName(f.cDate), , hh || '', mm || '', f.cWho || '보호자']).replace(f.cHow === '문자' ? '▢ 문자' : '▢ 전화', f.cHow === '문자' ? `${ON} 문자` : `${ON} 전화`) };
     }
     return O;
   }
@@ -386,16 +407,18 @@
   function fillFieldTop(doc, O, R) {
     const f = doc.f || {}, n = gcn(doc.cls, doc.no);
     O['t0.r3c1.p0'] = { html: V(doc.name) };
-    O['t0.r3c6.p0'] = { html: `  ${V(n.g)}  학년   ${V(n.c)}  반   ${V(n.no)}  번` };
+    O['t0.r3c6.p0'] = { html: gapFill(orig(doc.kind, 't0.r3c6.p0'), [n.g, n.c, n.no]) };
     if (f.unit === 'half') {
       if (dateOf(f.halfDate)) {
         const d = dateOf(f.halfDate);
         const hours = +f.p2 >= +f.p1 ? +f.p2 - +f.p1 + 1 : '';
-        O[R.halfTotal] = { html: ` ( ${V(f.dayTotal || '')} )시간` };
-        O[R.half] = { html: `${V(d.getFullYear())}년 ${V(d.getMonth() + 1)}월 ${V(d.getDate())}일 (${V(dayName(f.halfDate))}) ( ${V(f.p1 || '')} )교시~( ${V(f.p2 || '')} )교시/( ${V(hours)} )시간 신청` };
+        O[R.halfTotal] = { html: gapFill(orig(doc.kind, R.halfTotal), [, f.dayTotal || '']) };
+        /* 원본의 연도 자리('2026년' 또는 '20  년')에 실제 연도 */
+        O[R.half] = { html: V(d.getFullYear()) + gapFill(orig(doc.kind, R.half).replace(/^20\d*\s*년/, '년'), [d.getMonth() + 1, d.getDate(), , f.p1 || '', f.p2 || '', hours]) };
       }
     } else if (dateOf(f.from) && dateOf(f.to)) {
-      O[R.day] = { html: ` ${V(dateOf(f.from).getFullYear())}년 ${V(md(f.from))} ~ ${V(md(f.to))} ( ${V(weekdays(f.from, f.to).length)} ) 일간`, align: 'left' };
+      const a = dateOf(f.from), b = dateOf(f.to), src = orig(doc.kind, R.day).replace(/202( *)년/, (m, sp) => `${a.getFullYear()}년${' '.repeat(Math.max(0, sp.length - 1))}`);
+      O[R.day] = { html: gapFill(src, [, a.getMonth() + 1, a.getDate(), , b.getMonth() + 1, b.getDate(), , weekdays(f.from, f.to).length]) };
     }
     if (LEARN.includes(f.form)) {
       let h = esc(orig(doc.kind, R.form));
@@ -415,14 +438,14 @@
     if (f.checked) O['t0.r6c12.p0'] = { html: `( <span class="v sf-circ">O</span> ,  X )` };
     O['t0.r11c1.p0'] = left(f.plan);
     if (f.agree) O['t0.r13c1.p0'] = { html: ticks(orig('field-apply', 't0.r13c1.p0'), ['동의']) };
-    O.p2 = dateLine(f.date);
+    O.p2 = dateLine(f.date, orig('field-apply', 'p2'));
     O.p3 = signLine('학  생', doc.name, '(인)', (f.sig || {}).stu, orig('field-apply', 'p3'));
     O.p4 = signLine('보호자', f.gName, '(인)', (f.sig || {}).par, orig('field-apply', 'p4'));
     return O;
   }
   function fillProxy(doc) {
     const f = doc.f || {}, px = f.px || {}, O = {}, n = gcn(doc.cls, doc.no);
-    O['t0.r1c1.p0'] = { html: `${V(n.g)}학년 ${V(n.c)}반 ${V(n.no)}번` };
+    O['t0.r1c1.p0'] = { html: gapFill(orig('field-proxy', 't0.r1c1.p0'), [n.g, n.c, n.no]) };
     O['t0.r1c3.p0'] = { html: V(doc.name) };
     O['t0.r1c5.p0'] = tel(px.stuTel);
     O['t0.r2c1.p0'] = { html: ` (${V(f.gRel)})`, align: 'left' };
@@ -432,7 +455,8 @@
     const a = half ? f.halfDate : f.from, b = half ? f.halfDate : f.to;
     if (dateOf(a) && dateOf(b)) {
       const hours = half && +f.p2 >= +f.p1 ? +f.p2 - +f.p1 + 1 : '';
-      O['t0.r3c1.p0'] = { html: `${V(ymdLong(a))} ${V(px.t1 || '')}  ~  ${V(md(b))} ${V(px.t2 || '')}, ( ${V(half ? 0 : weekdays(a, b).length)} )일 ( ${V(hours)} )시간` };
+      const da = dateOf(a), db = dateOf(b);
+      O['t0.r3c1.p0'] = { html: `${V(da.getFullYear())}년  ${V(da.getMonth() + 1)}월  ${V(da.getDate())}일 ${V(px.t1 || '')}  ~  ${V(db.getMonth() + 1)}월  ${V(db.getDate())}일 ${V(px.t2 || '')}, ( ${V(half ? 0 : weekdays(a, b).length)} )일 ( ${V(hours)} )시간` };
     }
     O['t0.r4c1.p0'] = { html: V(f.dest) };
     O['t0.r4c4.p0'] = { html: V(px.stay || '없음(당일)') };
@@ -441,10 +465,10 @@
     O['t0.r7c2.p0'] = { ...tel(f.lTel, f.lRel ? ` (관계: ${V(f.lRel)})` : ''), align: 'center' };
     O['t0.r8c2.p0'] = { html: V(px.lAddr) };
     if (px.agree) O['t0.r9c5.p0'] = { html: `( <span class="v sf-circ">○</span> , × )` };
-    O['t0.r10c0.p2'] = dateLine(f.date);
+    O['t0.r10c0.p2'] = dateLine(f.date, orig('field-proxy', 't0.r10c0.p2'));
     O['t0.r10c0.p3'] = signLine('학  생', doc.name, '(인)', (f.sig || {}).stu, orig('field-proxy', 't0.r10c0.p3'));
     O['t0.r10c0.p4'] = signLine('보호자', f.gName, '(인)', (f.sig || {}).par, orig('field-proxy', 't0.r10c0.p4'));
-    O['t3.r0c0.p4'] = dateLine(f.date);
+    O['t3.r0c0.p4'] = dateLine(f.date, orig('field-proxy', 't3.r0c0.p4'));
     O['t3.r0c0.p5'] = signLine('대리 인솔자 :', f.lName, '(인)', px.sigLead, orig('field-proxy', 't3.r0c0.p5'));
     return O;
   }
@@ -459,9 +483,7 @@
       dropBlanks(O, K, 't4.r0c1', 1, Math.min(8, flow.dayLines));
     }
     if (!blank(flow.feel)) { O['t4.r1c1.p0'] = { html: V(flow.feel) + (flow.feelCont ? CONT : ''), align: 'left', size: 10 }; dropBlanks(O, K, 't4.r1c1', 1, Math.min(4, flow.feelLines)); }
-    const n = [].concat(f.days || []).filter((d) => dateOf(d.date) && imgOk(d.photo)).length;
-    if (n) O.p5 = { html: `※ 사진 증빙: 뒤쪽 붙임(날짜별 ${V(n)}장)` };
-    O.p8 = dateLine(f.date);
+    O.p8 = dateLine(f.date, orig(K, 'p8'));
     O.p9 = signLine('학  생', doc.name, '(인)', (f.sig || {}).stu, orig('field-report', 'p9'));
     O.p10 = signLine('보호자', f.gName, '(인)', (f.sig || {}).par, orig('field-report', 'p10'));
     return O;
@@ -471,12 +493,20 @@
 
   /* ── 학교 설정(교사 결정 2026-10-28: 공통 서식 + 학교 이름·결재 칸) ──
      form: 'common'(공통 서식: 제목 + 설정한 결재 칸) / 'gg'(강경고 서식 그대로). name: 'OO학교장 귀하'의 학교 이름 */
-  const APPR = ['담임', '부장', '교감', '교장'];
+  /* 기본 결재 칸 = 원본 서식(교사 요청 2026-11-02 '교감 선생님 전결'): 담임·담당·부장·교감, 맨 끝 칸에 작은 '전결'. 예전 기본값을 그대로 둔 설정은 새 기본으로 */
+  const APPR = ['담임', '담당', '부장', '교감'];
+  const APPR_OLD = ['담임', '부장', '교감', '교장'];
   const HEAD_ROWS = { absence: 2, 'field-apply': 3, 'field-report': 3 };
   function school(o) {
     const x = o || {};
-    const appr = (Array.isArray(x.appr) ? x.appr : APPR).map((a) => String(a || '').replace(/\s+/g, ' ').trim().slice(0, 8)).filter(Boolean).slice(0, 7);
-    return { form: x.form === 'gg' ? 'gg' : 'common', name: String(x.name || '').trim().slice(0, 30), appr: appr.length ? appr : APPR.slice() };
+    let appr = (Array.isArray(x.appr) ? x.appr : APPR).map((a) => String(a || '').replace(/\s+/g, ' ').trim().slice(0, 8)).filter(Boolean).slice(0, 7);
+    if (!appr.length) appr = APPR.slice();
+    let jeon = x.jeon;
+    if (typeof jeon !== 'boolean') {
+      if (appr.join() === APPR_OLD.join()) appr = APPR.slice();
+      jeon = appr[appr.length - 1] === '교감';
+    }
+    return { form: x.form === 'gg' ? 'gg' : 'common', name: String(x.name || '').trim().slice(0, 30), appr, jeon };
   }
   let SCH = school();
   const TO_SCHOOL = /^\s*\S*학교장\s*귀하\s*$/;
@@ -502,12 +532,13 @@
     const lh = hw * (k - 1), ln = 0.5 * (k - 1), ws = 0.5 * k - sw - lh; /* 한글 · 숫자·영문(폭 약 0.5) · 빈칸 */
     return `letter-spacing:${lh.toFixed(3)}em;--sn:${ln.toFixed(3)}em;word-spacing:${ws.toFixed(3)}em`;
   }
-  /* 글자 모양 한 묶음(크기·굵기·글꼴·자간) → style. 글자 색은 모두 검정(교사 요청 2026-10-29 — 원본의 파란 글씨도 검정) */
+  /* 글자 모양 한 묶음(크기·굵기·글꼴·자간·색) → style. 서식 글자 색은 원본대로(교사 결정 2026-11-03 — 파란 글씨 그대로), 값은 검정 */
   function runStyle(r, base) {
     const st = [];
     if (!base || r.size !== base.size) st.push(`font-size:calc(var(--fs, 1) * ${(r.size * 1.333).toFixed(1)}px)`);
     if (!base || !!r.bold !== !!base.bold) st.push(`font-weight:${r.bold ? 700 : 400}`);
     if (r.font && (!base || r.font !== base.font)) st.push(fontCss(r.font));
+    if (!base || (r.color || '#000000') !== (base.color || '#000000')) st.push(`color:${r.color || '#000000'}`);
     if (!base || r.font !== base.font || r.sp !== base.sp || r.rt !== base.rt) st.push(spacingCss(r.font, r.sp, r.rt));
     return st.filter(Boolean).join(';');
   }
@@ -543,6 +574,7 @@
     else { if (v.align) align = v.align; if (v.size) size = v.size; inner = v.html !== undefined ? v.html : V(v.text); }
     const st = [`text-align:${align}${last}`, `font-size:calc(var(--fs, 1) * ${(size * 1.333).toFixed(1)}px)`, `font-weight:${b.bold ? 700 : 400}`];
     if (b.font) st.push(fontCss(b.font));
+    if (v === undefined && b.color && b.color !== '#000000') st.push(`color:${b.color}`);
     st.push(spacingCss(b.font || '휴먼고딕', b.sp, b.rt));
     /* 한글 줄 배치: 글자는 줄 맨 위, 줄 간격(%)만큼 아래를 띄움(칸 끝 줄의 띄움은 셈하지 않음 — CSS .hp). 줄 간격이 없는 옛 서식(결석신고서)은 그대로 */
     if (b.ls) st.push(`line-height:${(b.ls / 100).toFixed(2)}`, `--h:${((b.ls - 100) / 200).toFixed(3)}em`);
@@ -574,36 +606,62 @@
   function tblHtml(t, tp, O, skip = 0) {
     const cols = t.cols.map((w) => `${(+w).toFixed(1)}px`).join(' ');
     const rows = t.rows.slice(skip).map((h) => `minmax(${Math.max(14, +h).toFixed(1)}px,auto)`).join(' ');
-    /* 테두리: 서식의 실제 굵기(mm → px)·종류(실선·점선). 옛 서식(bd 없음)은 가는 선 1px·굵은 선 2px */
-    const bw = (n) => (n ? `${n >= 2 ? '2px' : '1px'} solid #000` : '0');
-    const bd = (x) => (!x || !x.w || x.s === 'none' ? '0' : `${Math.max(0.5, +x.w).toFixed(2)}px ${x.s === 'double' ? 'double' : x.s} #000`);
+    /* 테두리: 크롬은 CSS 선 굵기를 정수 px로 뭉개고 칸마다 따로 그리면 안쪽 선이 두 겹이 된다(0.12mm와 0.4mm가 같은 굵기) →
+       칸 경계 위에 SVG 선을 얹어 서식의 실제 굵기(mm → px)·종류 그대로 그린다. 옛 서식(bd 없음)은 가는 선·굵은 선 */
+    const edge = (x) => (!x || !x.w || x.s === 'none' ? null : { w: +x.w, s: x.s });
+    const edgeOld = (n) => (n ? { w: n >= 2 ? 2 : 1, s: 'solid' } : null);
+    const LINE = { l: [0, 0, 0, '100%'], r: ['100%', 0, '100%', '100%'], t: [0, 0, '100%', 0], b: [0, '100%', '100%', '100%'] };
     const cells = t.cells.filter((c) => c.r >= skip).map((c) => {
-      const side = (k) => (c.bd ? bd(c.bd[k]) : bw(c.b[k]));
-      const st = [`grid-column:${c.c + 1}/span ${c.cs}`, `grid-row:${c.r - skip + 1}/span ${c.rs}`, `border-left:${side('l')}`, `border-right:${side('r')}`, `border-top:${side('t')}`, `border-bottom:${side('b')}`,
-        `justify-content:${c.va === 'top' ? 'flex-start' : c.va === 'bottom' ? 'flex-end' : 'center'}`];
+      const area = `grid-column:${c.c + 1}/span ${c.cs};grid-row:${c.r - skip + 1}/span ${c.rs}`;
+      const st = [area, `justify-content:${c.va === 'top' ? 'flex-start' : c.va === 'bottom' ? 'flex-end' : 'center'}`];
       if (c.pad) st.push(`padding:${c.pad.map((x) => `${(+x).toFixed(1)}px`).join(' ')}`);
       if (c.fill) st.push(`background:${c.fill}`);
-      return `<div class="htc" style="${st.join(';')}">${blocksHtml(c.body, `${tp}.r${c.r}c${c.c}.`, O)}</div>`;
+      const lines = 'lrtb'.split('').map((k) => {
+        const e = c.bd ? edge(c.bd[k]) : edgeOld(c.b[k]);
+        if (!e) return '';
+        const [x1, y1, x2, y2] = LINE[k];
+        const dash = e.s === 'dashed' ? ' stroke-dasharray="3 2"' : e.s === 'dotted' ? ' stroke-dasharray="1 1.5"' : '';
+        return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" style="--w:${e.w.toFixed(2)}px"${dash}/>`;
+      }).join('');
+      return `<div class="htc" style="${st.join(';')}">${blocksHtml(c.body, `${tp}.r${c.r}c${c.c}.`, O)}</div>${lines ? `<svg class="hb" aria-hidden="true" style="${area}">${lines}</svg>` : ''}`;
     }).join('');
     const mg = t.mt !== undefined ? `;--tmt:${(+t.mt).toFixed(1)}px;--tmb:${(+t.mb).toFixed(1)}px;--tob:${(+t.ob || 0).toFixed(1)}px` : '';
     return `<div class="htbl" style="grid-template-columns:${cols};grid-template-rows:${rows}${mg}">${cells}</div>`;
   }
-  /* 공통 서식 위쪽: 서식 제목(원래 제목 칸 글) + 설정한 결재 칸 */
-  function headHtml(tpl) {
-    const t0 = tpl.blocks[0];
-    const tc = t0.cells.find((c) => c.r === 0 && c.c === 0) || { body: [] };
-    const ps = tc.body.filter((b) => b.t === 'p' && b.text.trim());
-    const size = Math.max(...ps.map((b) => b.size || 18), 16);
-    const width = t0.cols.reduce((n, w) => n + +w, 0);
-    return `<div class="sf-head" style="width:${width.toFixed(1)}px"><div class="sf-title" style="font-size:calc(var(--fs, 1) * ${(size * 1.333).toFixed(1)}px)">${ps.map((b) => esc(b.text.trim())).join('<br>')}</div>
-      <table class="sf-appr"><tr><th rowspan="2" class="k">결<br>재</th>${SCH.appr.map((a) => `<th>${esc(a)}</th>`).join('')}</tr><tr>${SCH.appr.map(() => '<td></td>').join('')}</tr></table></div>`;
+  /* 공통 서식 위쪽 결재 칸: 원본과 같은 선·글꼴·높이로, 칸 이름·수·전결만 설정대로(hwpx-fill.js applyAppr와 같은 모양) */
+  const headNames = (t0) => t0.cells.filter((c) => c.r === 0 && c.c >= 7).sort((a, b) => a.c - b.c);
+  const sameHead = (t0) => { const n = headNames(t0).map((c) => c.body[0].text.replace(/\s+/g, '')); return SCH.jeon && n.length === SCH.appr.length && n.every((x, i) => x === SCH.appr[i].replace(/\s+/g, '')); };
+  function headHtml(tpl, R) {
+    const t0 = tpl.blocks[0], cellAt = (r, c) => t0.cells.find((x) => x.r === r && x.c === c);
+    const title = cellAt(0, 0), label = t0.cells.find((x) => x.r === 0 && x.c === title.cs), names = headNames(t0);
+    const colW = (from, n) => t0.cols.slice(from, from + n).reduce((a, w) => a + +w, 0);
+    const NAMES = SCH.appr, N = NAMES.length, X0 = colW(0, 7), W = (colW(0, t0.cols.length) - X0) / N;
+    const half = R === 3 && SCH.jeon;
+    const cols = [colW(0, title.cs), colW(title.cs, label.cs)];
+    for (let i = 0; i < N; i++) { if (half && i === N - 1) cols.push(W / 2, W / 2); else cols.push(W); }
+    const rows = t0.rows.slice(0, R);
+    const nm = (i) => { const p = names[i < N - 1 ? 0 : names.length - 1]; return { ...p, c: 2 + i, cs: half && i === N - 1 ? 2 : 1, r: 0, rs: 1, body: [{ ...p.body[0], text: NAMES[i], runs: undefined, brk: undefined, one: 1, align: 'center', left: 0, mb: 0 }] }; };
+    const sign = names[0].c, last = names[names.length - 1];
+    const signMid = cellAt(1, sign);
+    const cells = [{ ...title, c: 0, cs: 1 }, { ...label, c: 1, cs: 1 }];
+    for (let i = 0; i < N; i++) {
+      cells.push(nm(i));
+      if (i < N - 1) { cells.push({ ...signMid, r: 1, c: 2 + i, rs: R - 1, cs: 1 }); continue; }
+      if (half) { for (const x of t0.cells.filter((y) => y.r >= 1 && y.r < R && y.c >= last.c)) cells.push({ ...x, c: 2 + i + (x.c - last.c), cs: 1 }); continue; }
+      const lastSign = cellAt(1, last.c) || signMid;
+      const bd = { ...signMid.bd, r: last.bd.r, b: signMid.bd.b };
+      cells.push({ ...(R === 2 ? lastSign : signMid), r: 1, c: 2 + i, rs: R - 1, cs: 1, bd, body: SCH.jeon ? lastSign.body : [{ ...lastSign.body[0], text: '', runs: undefined, one: undefined }] });
+    }
+    cells.sort((a, b) => a.r - b.r || a.c - b.c);
+    return `<div class="sf-head" data-appr="${esc(NAMES.join('|'))}">${tblHtml({ ...t0, cols, rows, cells, mb: 0, ob: 0 }, 'h', {})}</div>`;
   }
   function pageHtml(kind, O) {
     const tpl = FORMS()[kind];
     if (!tpl) return `<div class="sf-page"><p>서식(${esc(kind)})이 없어요.</p></div>`;
     const pg = tpl.page;
-    const skip = SCH.form === 'common' ? HEAD_ROWS[kind] || 0 : 0;
-    const body = skip ? headHtml(tpl) + tblHtml(tpl.blocks[0], 't0', O, skip) + blocksHtml(tpl.blocks.slice(1), '', O, 1) : blocksHtml(tpl.blocks, '', O);
+    const R = SCH.form === 'common' ? HEAD_ROWS[kind] || 0 : 0;
+    const skip = R && !sameHead(tpl.blocks[0]) ? R : 0;
+    const body = skip ? headHtml(tpl, R) + tblHtml({ ...tpl.blocks[0], mt: 0 }, 't0', O, skip) + blocksHtml(tpl.blocks.slice(1), '', O, 1) : blocksHtml(tpl.blocks, '', O);
     return `<div class="sf-page" data-form="${esc(kind)}" data-h="${(Math.min(pg.h, 1122.5) - pg.mt - pg.mb - 4).toFixed(1)}" style="padding:${pg.mt}px ${pg.mr}px ${pg.mb}px ${pg.ml}px"><div class="sf-in">${body}</div></div>`;
   }
   function photoPages(doc) {
@@ -613,7 +671,7 @@
     for (let i = 0; i < list.length; i += 2) {
       out.push(`<div class="sf-page sf-photos" data-form="photos">
         <div class="sf-ph-head">교외체험학습 사진 증빙 (${i / 2 + 1}/${Math.ceil(list.length / 2)}) · ${esc(hakbunOf(doc.cls, doc.no))} ${esc(doc.name)}</div>
-        ${list.slice(i, i + 2).map((d) => `<figure><img class="sf-photo" alt="${esc(md(d.date))} 사진" src="${d.photo}"><figcaption>${esc(md(d.date))}(${esc(dayName(d.date))}) · ${esc(String(d.text || '').slice(0, 60))}</figcaption></figure>`).join('')}
+        ${list.slice(i, i + 2).map((d) => `<figure><img class="sf-photo" alt="${esc(md(d.date))} 사진" src="${d.photo}"></figure>`).join('')}
       </div>`);
     }
     return out.join('');
@@ -638,9 +696,11 @@
 .sf-page .htc > .hp:last-child, .sf-page .hbox > .hp:last-child { margin-bottom: calc(0px - var(--h, 0em)); }
 .sf-page .htbl { margin: var(--tmt, 0px) 0 var(--tmb, 0px); }
 .sf-page .htc > .htbl:last-child { margin-bottom: var(--tob, 0px); }
-.sf-page .hp.fit { white-space: pre; overflow-wrap: normal; }
+.sf-page .hp.fit { white-space: pre; overflow-wrap: normal; overflow-x: clip; }
 .sf-page .htbl { display: grid; }
-.sf-page .htc { display: flex; flex-direction: column; padding: 2px 4px; min-width: 0; overflow: hidden; }
+.sf-page .htc { display: flex; flex-direction: column; padding: 2px 4px; min-width: 0; }
+.sf-page .hb { display: block; width: 100%; height: 100%; contain: size; z-index: 1; overflow: visible; pointer-events: none; }
+.sf-page .hb line { stroke: #000; stroke-width: max(var(--w), .7px); stroke-linecap: square; }
 .sf-page .v { color: #000; font-weight: inherit; letter-spacing: var(--sn, inherit); }
 .sf-page .hn { letter-spacing: var(--sn, inherit); }
 .sf-page .ln { display: block; }
@@ -649,18 +709,11 @@
 .sf-page .hbox { box-sizing: border-box; display: flex; flex-direction: column; max-width: 100%; }
 .sf-page .sf-circ { display: inline-block; min-width: 1.3em; border: 1px solid #000; border-radius: 50%; text-align: center; line-height: 1.2; }
 .sf-page .sf-sign { position: relative; display: inline-block; text-align: center; }
-.sf-page .sf-sig { position: absolute; left: 50%; top: 50%; width: 7.5em; height: 3em; object-fit: contain; transform: translate(-50%, -55%); pointer-events: none; }
-.sf-head { display: flex; align-items: center; gap: 12px; margin: 0 auto 6px; }
-.sf-title { flex: 1; text-align: center; font-weight: 400; line-height: 1.3; font-family: "HY울릉도M", "HYwulM", "HYGothic-Medium", "Malgun Gothic", sans-serif; }
-.sf-appr { border-collapse: collapse; border: 1.51px solid #000; }
-.sf-appr th, .sf-appr td { border: 0.45px solid #000; min-width: 58px; padding: 2px 4px; font-size: calc(var(--fs, 1) * 14.7px); font-weight: 400; text-align: center; font-family: "GulimChe", "굴림체", "Gulim", "Malgun Gothic", sans-serif; }
-.sf-appr th.k { min-width: 26px; width: 26px; line-height: 1.4; }
-.sf-appr td { height: 52px; }
+.sf-page .sf-sig { position: absolute; left: 50%; top: 50%; width: 5.6em; height: 2.5em; object-fit: contain; transform: translate(-50%, -55%); pointer-events: none; }
 .sf-photos { padding: 56px 64px; display: flex; flex-direction: column; gap: 18px; }
 .sf-ph-head { font-size: 15px; font-weight: 700; border-bottom: 2px solid #111; padding-bottom: 6px; }
 .sf-photos figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; }
-.sf-photos .sf-photo { max-width: 100%; max-height: 440px; object-fit: contain; border: 1px solid #ccc; }
-.sf-photos figcaption { font-size: 13.5px; }
+.sf-photos .sf-photo { max-width: 100%; max-height: 460px; object-fit: contain; border: 1px solid #ccc; }
 @media print {
   html, body { background: #fff !important; }
   @page { size: A4; margin: 0; }
@@ -670,6 +723,7 @@
   .sf-page:last-child { break-after: auto; page-break-after: auto; }
   .sf-page .v { color: #000; }
   .sf-page .sf-circ { border-color: #000; }
+  .sf-page .hb line { stroke-width: var(--w); }
 }`;
   function ensureStyle(doc = root.document) {
     if (!doc || doc.getElementById('sf-style')) return;
@@ -696,7 +750,40 @@
       for (let fs = 1; fs >= 0.73 && inner.offsetHeight > room; fs = Math.round((fs - 0.03) * 100) / 100) pg.style.setProperty('--fs', String(fs - 0.03));
     });
     fit();
+    /* 서명은 빈 테두리를 덜고 굵게(이미 낸 서류의 서명도) */
+    host.querySelectorAll('img.sf-sig').forEach((im) => { thickSig(im.getAttribute('src'), 20, 9).then((s) => { if (im.isConnected) im.src = s; }, () => {}); });
     return { fit, pages: host.querySelectorAll('.sf-page').length };
+  }
+
+  /* 서명 그림 다듬기(교사 요청 2026-11-02 '사인할 때 글씨가 좀 두껍게'): 글씨 둘레의 빈 곳을 덜고, 서식에 놓일 크기(mmW×mmH) 기준으로 인쇄물에서 선이 SIG_ADD_MM만큼 굵어지게 한다 */
+  const SIG_ADD_MM = 0.35;
+  async function thickSig(src, mmW, mmH) {
+    if (!imgOk(src) || !/^data:image\/png/.test(src)) return src;
+    const im = await new Promise((ok, no) => { const x = new Image(); x.onload = () => ok(x); x.onerror = () => no(new Error('서명 그림을 읽지 못했어요.')); x.src = src; });
+    const w = im.naturalWidth, h = im.naturalHeight;
+    if (!w || !h) return src;
+    const cv = document.createElement('canvas');
+    cv.width = w; cv.height = h;
+    const cx = cv.getContext('2d', { willReadFrequently: true });
+    cx.drawImage(im, 0, 0);
+    const px = cx.getImageData(0, 0, w, h).data;
+    let x0 = w, y0 = h, x1 = -1, y1 = -1;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (px[(y * w + x) * 4 + 3] > 32) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    if (x1 < 0) return src;
+    const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+    /* 마구 작게 쓴 서명이 너무 커지지 않게 글씨 폭을 서명 칸의 40% 이상으로 셈 */
+    const mmPerPx = Math.min(mmW / Math.max(bw, w * 0.4), mmH / Math.max(bh, h * 0.4));
+    const r = Math.max(0.6, (SIG_ADD_MM / 2) / mmPerPx), pad = Math.ceil(r) + 1;
+    const out = document.createElement('canvas');
+    out.width = bw + pad * 2; out.height = bh + pad * 2;
+    const ox = out.getContext('2d');
+    ox.drawImage(im, pad - x0, pad - y0);
+    const STEPS = 16;
+    for (let i = 0; i < STEPS; i++) { const a = (i / STEPS) * Math.PI * 2; ox.drawImage(im, pad - x0 + Math.cos(a) * r, pad - y0 + Math.sin(a) * r); }
+    ox.globalCompositeOperation = 'source-in';
+    ox.fillStyle = '#000';
+    ox.fillRect(0, 0, out.width, out.height);
+    return out.toDataURL('image/png');
   }
 
   /* ── 폰에서 쓰는 도구: 손가락 서명, 사진 줄이기 ───────────── */
@@ -709,12 +796,12 @@
       const keep = dirty ? canvas.toDataURL('image/png') : '';
       canvas.width = Math.round(r.width * dpr); canvas.height = Math.round(r.height * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.lineWidth = 2.6; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#111';
+      ctx.lineWidth = 3.6; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#111';
       if (keep) { const im = new Image(); im.onload = () => ctx.drawImage(im, 0, 0, r.width, r.height); im.src = keep; }
     };
     const pt = (e) => { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
     canvas.style.touchAction = 'none';
-    canvas.addEventListener('pointerdown', (e) => { drawing = true; last = pt(e); try { canvas.setPointerCapture(e.pointerId); } catch { /* 일부 브라우저 */ } ctx.beginPath(); ctx.arc(last[0], last[1], 1.2, 0, Math.PI * 2); ctx.fillStyle = '#111'; ctx.fill(); dirty = true; });
+    canvas.addEventListener('pointerdown', (e) => { drawing = true; last = pt(e); try { canvas.setPointerCapture(e.pointerId); } catch { /* 일부 브라우저 */ } ctx.beginPath(); ctx.arc(last[0], last[1], 1.8, 0, Math.PI * 2); ctx.fillStyle = '#111'; ctx.fill(); dirty = true; });
     canvas.addEventListener('pointermove', (e) => {
       if (!drawing) return;
       const p = pt(e);
@@ -757,6 +844,6 @@
     dateOf, isoOf, today, addDays, isWeekend, weekdays, nextSchoolDay, dayName, md, range, submitDateProblem,
     normName, classParts, hakbunOf, parseHakbun, stuHash, telOk, imgOk,
     proofGroup, proofsFor, needsGuardianNote, problems, meta, summary,
-    paths, fill, fillMore, reportFlow, wrapAt, pagesHtml, mount, ensureStyle, sigPad, shrinkPhoto, esc, school, APPR,
+    paths, fill, fillMore, reportFlow, wrapAt, pagesHtml, mount, ensureStyle, sigPad, thickSig, shrinkPhoto, esc, school, APPR,
   };
 })(typeof window !== 'undefined' ? window : globalThis);
