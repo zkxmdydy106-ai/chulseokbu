@@ -1028,6 +1028,9 @@ window.SCHOOL_FORMS = {"absence":{"title":"결석신고서","page":{"w":793.71,"
     if (screen === 'home') home();
   }
 
+  /* 열어 둔 화면으로 돌아오면 선생님 요청을 새로 받는다 */
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && P.me && screen === 'home') refresh(true); });
+
   const view = (d) => ({ kind: d.kind, cls: P.cfg.c, no: P.me.no, name: P.me.name, f: d.f || {} });
   const STATUS = (d) => d.status === 'locked' ? '<span class="badge ok">선생님 확인 끝</span>'
     : d.status === 'sent' ? (d.dirty ? '<span class="badge fill">고친 뒤 아직 안 냄</span>' : '<span class="badge ok">제출함 · 고칠 수 있음</span>')

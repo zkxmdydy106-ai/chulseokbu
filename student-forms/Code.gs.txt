@@ -22,7 +22,8 @@
  */
 var FOLDER_NAME = '학생 서류 제출 (출석부)';
 var KINDS = { 'absence': '결석신고서', 'field-apply': '교외체험학습 신청서', 'field-report': '교외체험학습 결과보고서' };
-var REQ_KINDS = { 'absence': 1, 'field-report': 1 };
+var REQ_KINDS = { 'absence': 1, 'field-apply': 1, 'field-report': 1 };
+var BRIDGE_V = 3; /* 받는 곳 판: 2 = 창 없는 연결·미리 받기, 3 = 저절로 요청·판 번호(head) */
 var MAX_BODY = 15 * 1024 * 1024;
 var ALLOWED_ORIGINS = [
   'https:' + '/' + '/zkxmdydy106-ai.github.io',
@@ -73,6 +74,7 @@ function teacherApi(b) {
     owner_();
     var a = String(x.a || '');
     if (a === 'ping') return { ok: true, email: Session.getEffectiveUser().getEmail() };
+    if (a === 'head') return { ok: true, v: BRIDGE_V, rev: props_().getProperty('rev') || '' };
     if (a === 'class') return locked_(function () { return setClass_(x); });
     if (a === 'request') return locked_(function () { return request_(x); });
     if (a === 'unrequest') return locked_(function () { props_().deleteProperty('rq:' + id_(x.id)); return { ok: true }; });
@@ -239,11 +241,20 @@ function submit_(b) {
     var rq = getJson_('rq:' + id_(b.req));
     if (rq && rq.c === s.c && String(rq.no) === s.no) { rq.done = id; setJson_('rq:' + rq.id, rq); req = rq.id; }
   }
+  /* 요청을 누르지 않고 먼저 낸 서류도 같은 종류·겹치는 날짜의 요청을 끝낸다 */
+  var mf = iso_(m.from), mt = iso_(m.to) || mf;
+  if (mf) all_('rq:').forEach(function (r) {
+    if (r.done || r.c !== s.c || String(r.no) !== s.no || r.kind !== kind || r.from > mt || (r.to || r.from) < mf) return;
+    r.done = id;
+    setJson_('rq:' + r.id, r);
+    if (!req) req = r.id;
+  });
   setJson_('sm:' + id, {
     id: id, kind: kind, c: s.c, no: s.no, name: s.name, h: s.h, file: file.getId(),
     eh: old ? old.eh : hex_(edit), at: at, up: doc.up, seen: '', lock: '', req: req || (old ? old.req : ''),
     from: iso_(m.from), to: iso_(m.to), att: /^(결석|지각|조퇴|결과)$/.test(m.att || '') ? m.att : '', n: Math.min(60, +m.n || 0), proxy: !!m.proxy
   });
+  props_().setProperty('rev', String(Date.now())); /* 교사 앱이 새 서류를 바로 알아보게 */
   return { ok: true, id: id, edit: edit, at: at, up: doc.up };
 }
 
@@ -252,18 +263,21 @@ function request_(b) {
   var c = cls_(b.c), kind = String(b.kind || '');
   if (!REQ_KINDS[kind]) fail_('bad', '요청할 수 없는 서류예요.');
   if (!/^[0-9a-f]{16}$/.test(String(b.h || ''))) fail_('bad', '학생 값이 이상해요.');
-  var id = rand_(16).toLowerCase();
-  setJson_('rq:' + id, { id: id, c: c, h: b.h, no: String(+b.no || ''), kind: kind, att: /^(결석|지각|조퇴|결과)$/.test(b.att || '') ? b.att : '결석', from: iso_(b.from), to: iso_(b.to) || iso_(b.from), at: now_(), done: '' });
+  /* auto: 출결 기록 번호. 저절로 보낸 요청은 번호를 정해 두 기기가 보내도 겹치지 않고 날짜만 고쳐진다 */
+  var auto = /^[a-z0-9]{4,32}$/.test(String(b.auto || '')) ? String(b.auto) : '';
+  var id = auto ? hex_('auto|' + c + '|' + auto + '|' + kind, 16) : rand_(16).toLowerCase();
+  var old = auto ? getJson_('rq:' + id) : null;
+  setJson_('rq:' + id, { id: id, c: c, h: b.h, no: String(+b.no || ''), kind: kind, att: /^(결석|지각|조퇴|결과)$/.test(b.att || '') ? b.att : '결석', from: iso_(b.from), to: iso_(b.to) || iso_(b.from), at: old ? old.at : now_(), done: old ? old.done : '', auto: auto });
   return { ok: true, id: id };
 }
 function list_() {
   var subs = all_('sm:').map(function (m) {
     return { id: m.id, kind: m.kind, c: m.c, no: m.no, name: m.name, at: m.at, up: m.up, seen: m.seen, lock: m.lock, req: m.req, from: m.from, to: m.to, att: m.att, n: m.n, proxy: m.proxy };
   }).sort(function (x, y) { return x.up < y.up ? 1 : -1; });
-  var reqs = all_('rq:').map(function (r) { return { id: r.id, c: r.c, no: r.no, kind: r.kind, att: r.att, from: r.from, to: r.to, at: r.at, done: r.done }; });
+  var reqs = all_('rq:').map(function (r) { return { id: r.id, c: r.c, no: r.no, kind: r.kind, att: r.att, from: r.from, to: r.to, at: r.at, done: r.done, auto: r.auto || '' }; });
   var blocked = all_('bx:').map(function (x) { return { c: x.c, no: x.no, at: x.at, n: x.n }; });
   var binds = all_('bd:').map(function (x) { return { c: x.c, no: x.no, by: x.e || x.u ? 'account' : 'device' }; });
-  return { ok: true, v: 2, subs: subs, reqs: reqs, blocked: blocked, binds: binds }; /* v: 받는 곳 판(2 = 창 없는 연결·미리 받기) */
+  return { ok: true, v: BRIDGE_V, rev: props_().getProperty('rev') || '', subs: subs, reqs: reqs, blocked: blocked, binds: binds };
 }
 function get_(b) {
   var id = id_(b.id), m = getJson_('sm:' + id);

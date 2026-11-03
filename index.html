@@ -355,8 +355,11 @@ body.sfv-open { overflow: hidden; }
   const SY = { conf: readJson(SYNC_KEY), meta: readJson(SYNC_META) || { rev: 0, dirty: false, at: 0 }, busy: false, again: false, timer: null, status: '', making: false, sent: null, lastPull: 0 };
   let saveTimer = null;
   // remote: 구글에서 받은 자료를 넣을 때(다시 올리지 않음)
+  let reqT = 0;
   function save(now = false, { remote = false } = {}) {
     syncBoxTab();
+    clearTimeout(reqT);
+    reqT = setTimeout(() => syncReqs(), 2000); // 출결이 바뀌면 학생 서류 요청도 맞춘다
     if (!remote) { S.editedAt = Date.now(); syncMark(); }
     clearTimeout(saveTimer);
     const write = () => {
@@ -660,6 +663,7 @@ body.sfv-open { overflow: hidden; }
       if (b.dataset.sub) cs.sub = b.dataset.sub;
       if (b.dataset.doc) cs.docs[b.dataset.doc] = b.checked;
       if (b.dataset.ph) cs.docs.photo = Math.max(0, Math.min(docState(cs).days, (cs.docs.photo || 0) + +b.dataset.ph));
+      if (b.dataset.sfoff) { cs.reqOff = true; if (S.cases[cs.id]) { S.cases[cs.id].reqOff = true; save(true); } draw(); return; }
       if (b.dataset.sfreq) { if (!sfWake()) return; requestDoc(S.cases[cs.id]).then(() => { if (S.cases[cs.id]) cs.req = S.cases[cs.id].req; draw(); }); return; }
       if (b.id === 'dsClose') { close(); return; }
       if (b.id === 'dsSave') {
@@ -916,10 +920,16 @@ body.sfv-open { overflow: hidden; }
           <label class="field"><span>체험학습 최대 (일)</span><input type="number" min="1" max="60" id="cfgTrip" value="${+S.cfg.tripMax || 15}"></label>
         </div>`, { note: `${+S.cfg.deadline || 7}일 · ${+S.cfg.tripMax || 15}일` })}
         ${fold('docsRules', '서류 규칙', `<p class="how">경우마다 받을 서류예요. 학교에 맞게 눌러서 바꾸세요.</p>
+        <label style="display:block;margin:0 0 10px"><input type="checkbox" id="reqAutoChk" ${S.cfg.reqAuto === false ? '' : 'checked'}> 출결을 넣으면 학생 서류 요청을 저절로 보내기 (결석신고서·교외체험학습 서류, 제출 기한 안의 기록)</label>
         <table class="list"><tbody>${RULE_ROWS.map(([k, label]) => `<tr><td style="width:34%;font-weight:600">${esc(label)}</td><td><div class="chips wrap">${Object.entries(DOC).map(([d, name]) => `<button class="chip ${(rules()[k] || []).includes(d) ? 'on' : ''}" style="min-height:34px;font-size:12.5px;padding:2px 8px" data-rule="${k}" data-rdoc="${d}">${esc(name.split(' (')[0])}</button>`).join('')}</div></td></tr>`).join('')}</tbody></table>
         <div class="row"><button class="btn small" id="rulesReset">처음 규칙으로 되돌리기</button></div>`)}
       </div>`;
   }
+  $('#main').addEventListener('change', (e) => {
+    if (e.target.id !== 'reqAutoChk') return;
+    if (e.target.checked) delete S.cfg.reqAuto; else S.cfg.reqAuto = false;
+    save(true);
+  });
   $('#main').addEventListener('click', (e) => {
     if (tab !== 'docs') return;
     const f = e.target.closest('[data-docs]');
@@ -936,6 +946,8 @@ body.sfv-open { overflow: hidden; }
       return;
     }
     if (e.target.id === 'rulesReset' && confirm('서류 규칙을 처음 값으로 되돌릴까요?')) { delete S.cfg.rules; save(true); renderDocs(); return; }
+    const off = e.target.closest('[data-sfoff]');
+    if (off) { if (S.cases[off.dataset.sfoff]) S.cases[off.dataset.sfoff].reqOff = true; save(true); renderDocs(); return; }
     const rq = e.target.closest('[data-sfreq]');
     if (rq) { if (!sfWake()) return; requestDoc(S.cases[rq.dataset.sfreq]).then(() => { if (tab === 'docs') renderDocs(); }); return; }
     const b = e.target.closest('[data-case]');
@@ -1671,7 +1683,8 @@ body.sfv-open { overflow: hidden; }
   const SF_URL_RE = /^https:\/\/script\.google\.com\/(macros|a\/macros\/[\w.-]+)\/s\/[\w-]{20,}\/exec$/;
   const KINDNAME = { absence: '결석신고서', 'field-apply': '교외체험학습 신청서', 'field-report': '교외체험학습 결과보고서' };
   const SUB_DOC = { absence: 'singo', 'field-apply': 'tripApp', 'field-report': 'tripRep' };
-  const BOX = { subs: [], reqs: [], blocked: [], binds: [], at: '', err: '', busy: false, qr: '', dev: false, making: false, v: 0, gen: 0, seenQ: new Set() };
+  const SF_V = 3; // 받는 곳 판(gas/student-forms BRIDGE_V): 3부터 저절로 요청·판 번호
+  const BOX = { rev: '', subs: [], reqs: [], blocked: [], binds: [], at: '', err: '', busy: false, qr: '', dev: false, making: false, v: 0, gen: 0, seenQ: new Set() };
   let formsLib = null;
   function loadForms() {
     if (window.StudentForms) return Promise.resolve(window.StudentForms);
@@ -1709,7 +1722,11 @@ body.sfv-open { overflow: hidden; }
   const bridgeOld = () => !!S.cfg.sf && (BOX.v === 1 || (BR.frameFailed && !BOX.v && !S.cfg.sf.v));
   // 창이 뜨는 까닭과 없애는 법을 [서류함] 맨 위에(교사 제보 2026-11-02: 버튼마다 연결 창이 뜸 — 받는 곳이 옛 판이었음)
   function bridgeNote() {
-    if (BR.inFrame || !S.cfg.sf) return '';
+    if (!S.cfg.sf) return '';
+    if (BOX.v === 2 && MAKER_URL) return `<div class="card"><h2 class="sec">받는 곳을 새 판으로 바꿔 주세요</h2>
+      <p class="hint">새 판이면 출결에 맞춰 학생 서류 요청이 저절로 가고, 낸 서류도 더 빨리 들어와요. 낸 서류와 반 링크는 그대로예요.</p>
+      <div class="row"><button class="btn main" id="bxUpdateNow">${BOX.making ? '바꾸는 중… 작은 창을 확인해 주세요' : '새 판으로 바꾸기'}</button></div></div>`;
+    if (BR.inFrame) return '';
     if (bridgeOld()) return MAKER_URL ? `<div class="card"><h2 class="sec">버튼마다 작은 창이 뜨나요?</h2>
       <p class="hint">받는 곳이 옛 판이라 그래요. 한 번만 새 판으로 바꾸면 창이 안 뜨고 서류도 저절로 들어와요. 낸 서류와 반 링크는 그대로예요.</p>
       <div class="row"><button class="btn main" id="bxUpdateNow">${BOX.making ? '바꾸는 중… 작은 창을 확인해 주세요' : '새 판으로 바꾸기'}</button></div></div>` : '';
@@ -1832,10 +1849,74 @@ body.sfv-open { overflow: hidden; }
   const linkText = (c) => `결석신고서·체험학습 서류는 여기서 내 주세요(학교 구글 계정 로그인) ${studentLink(c)}`;
   function reqHtml(cs) {
     if (!S.cfg.sf) return '<p class="hint dim">[서류함]을 연결하면 학생에게 서류를 폰으로 요청할 수 있어요.</p>';
+    const want = wantKinds(cs);
+    if (want.length) {
+      const names = want.map((k) => KINDNAME[k]).join('·');
+      const line = want.every((k) => reqOf(cs, k)) ? `학생 화면에 ${names} 요청이 떠 있어요`
+        : BOX.v && BOX.v < SF_V ? `받는 곳을 새 판으로 바꾸면 ${names} 요청이 저절로 가요`
+          : bridgeOpen() ? `${names} 요청을 학생에게 보내는 중이에요` : `연결되면 ${names} 요청이 학생에게 저절로 가요`;
+      return `<p class="hint">${esc(line)} · <button class="textbtn" data-sfoff="${esc(cs.id)}">요청 빼기</button></p>`;
+    }
     const kind = isTrip(cs) ? 'field-report' : 'absence';
     if (cs.sf && cs.sf[kind]) return `<p class="hint">학생이 ${KINDNAME[kind]}를 냈어요. [서류함]에서 보고 인쇄하세요.</p>`;
     if (cs.req && cs.req.kind === kind) return `<p class="hint">${KINDNAME[kind]} 요청함 (${+cs.req.at.slice(4, 6)}/${+cs.req.at.slice(6)}) · <button class="textbtn" data-sfreq="${esc(cs.id)}">다시 요청</button></p>`;
     return `<div class="row"><button class="btn small" data-sfreq="${esc(cs.id)}">학생에게 ${KINDNAME[kind]} 요청</button></div>`;
+  }
+  // 출결에 맞춰 학생 서류 요청을 저절로(교사 요청 2026-11-02, 결정 2026-11-03: 구글 로그인 확인 유지 → 연결돼 있을 때만 보내고, 안 되면 다음 연결 때 함께)
+  const DOC_KIND = { singo: 'absence', tripApp: 'field-apply', tripRep: 'field-report' };
+  // 이 기록에 학생이 낼 서류(규칙에 있고 아직 안 받음)
+  function needKinds(cs) {
+    if (APP === 'class' || S.cfg.reqAuto === false || cs.reqOff || !qrClasses().some((x) => x.id === cs.classId)) return [];
+    return docState(cs).miss.map((d) => DOC_KIND[d]).filter(Boolean);
+  }
+  // 그중 지금 보낼 것: 제출 기한 안의 기록만, 결과보고서는 체험학습 마지막 날부터
+  function wantKinds(cs) {
+    const today = ymdOf(new Date());
+    if (addDays(cs.to, +S.cfg.deadline || 7) < today) return [];
+    return needKinds(cs).filter((k) => k !== 'field-report' || cs.to <= today);
+  }
+  const reqOf = (cs, k) => BOX.reqs.find((r) => r.kind === k && (r.auto === cs.id || (cs.req && r.id === cs.req.id)));
+  // 이 기기에서 본 기록: 자동 저장이 늦은 기기가 모르는 기록의 요청을 지우지 않게(이 기기에서 봤는데 없어진 기록만 지움)
+  const REQ_SEEN = 'chulseokbu.reqSeen';
+  let reqBusy = false;
+  async function syncReqs() {
+    if (reqBusy || APP === 'class' || S.cfg.reqAuto === false || !S.cfg.sf || BOX.v < SF_V || !bridgeOpen() || !qrClasses().length) return;
+    reqBusy = true;
+    let seen = {};
+    try { seen = JSON.parse(localStorage.getItem(REQ_SEEN) || '{}'); } catch { /* 처음부터 */ }
+    let changed = 0;
+    try {
+      const SFm = await loadForms();
+      for (const cs of Object.values(S.cases)) {
+        const c = qrClasses().find((x) => x.id === cs.classId);
+        const s = c && c.students.find((x) => x.no === cs.no);
+        if (!s) continue;
+        seen[cs.id] = 1;
+        const from = isoOf(cs.from), to = isoOf(cs.to);
+        for (const kind of wantKinds(cs)) {
+          const have = reqOf(cs, kind);
+          if (have && (have.done || (have.from === from && have.to === to && have.att === cs.type))) continue;
+          await syncClass(c);
+          const h = await SFm.stuHash(c.sk, s.no, s.name);
+          const j = await sfApi({ a: 'request', c: c.name, h, no: s.no, kind, att: cs.type, from, to, auto: cs.id });
+          BOX.reqs = [...BOX.reqs.filter((r) => r.id !== j.id), { id: j.id, c: c.name, no: s.no, kind, att: cs.type, from, to, done: '', auto: cs.id }];
+          changed++;
+        }
+      }
+      // 기록을 지웠거나 서류가 필요 없는 구분으로 바꾸면 요청도 뺀다(이미 낸 것·이 기기에 없는 반은 그대로)
+      for (const r of BOX.reqs.slice()) {
+        if (!r.auto || r.done || !qrClasses().some((x) => x.name === r.c)) continue;
+        const cs = S.cases[r.auto];
+        if (cs ? needKinds(cs).includes(r.kind) : !seen[r.auto]) continue;
+        await sfApi({ a: 'unrequest', id: r.id });
+        BOX.reqs = BOX.reqs.filter((x) => x.id !== r.id);
+        changed++;
+      }
+      for (const id of Object.keys(seen)) if (!S.cases[id] && !BOX.reqs.some((r) => r.auto === id)) delete seen[id];
+    } catch { /* 연결이 끊김: 다음에 다시 */ }
+    try { localStorage.setItem(REQ_SEEN, JSON.stringify(seen)); } catch { /* 저장 못 함 */ }
+    reqBusy = false;
+    if (changed && !document.querySelector('.sfv') && !document.querySelector('.sheet')) { if (tab === 'box') renderBox(); else if (tab === 'docs') renderDocs(); }
   }
   async function requestDoc(cs) {
     const c = cs && S.classes.find((x) => x.id === cs.classId);
@@ -1858,7 +1939,11 @@ body.sfv-open { overflow: hidden; }
     const c = S.classes.find((x) => x.name === sub.c && isHome(x)) || S.classes.find((x) => x.name === sub.c);
     if (!c) return null;
     const all = Object.values(S.cases).filter((cs) => cs.classId === c.id && cs.no === String(sub.no));
-    if (sub.req) { const r = all.find((cs) => cs.req && cs.req.id === sub.req); if (r) return r; }
+    if (sub.req) {
+      const auto = BOX.reqs.find((x) => x.id === sub.req)?.auto;
+      const r = all.find((cs) => (cs.req && cs.req.id === sub.req) || cs.id === auto);
+      if (r) return r;
+    }
     const f = isoDate(sub.from), t = isoDate(sub.to) || f;
     if (!f) return null;
     const trip = sub.kind !== 'absence';
@@ -1930,9 +2015,12 @@ body.sfv-open { overflow: hidden; }
       flushSeen();
       const j = await sfApi({ a: 'list' });
       const sig = JSON.stringify([BOX.subs, BOX.reqs, BOX.blocked, BOX.binds]);
-      BOX.subs = j.subs || []; BOX.reqs = j.reqs || []; BOX.at = nowHM(); BOX.err = ''; BOX.v = j.v || 1;
+      const had = BOX.at ? new Set(BOX.subs.map((s) => s.id)) : null;
+      BOX.subs = j.subs || []; BOX.reqs = j.reqs || []; BOX.at = nowHM(); BOX.err = ''; BOX.v = j.v || 1; BOX.rev = j.rev || '';
+      const fresh = had ? BOX.subs.filter((s) => !had.has(s.id)).length : 0;
+      if (fresh) toast(`새 서류 ${fresh}건이 들어왔어요`);
       if (S.cfg.sf && S.cfg.sf.v !== BOX.v) { S.cfg.sf.v = BOX.v; save(true); }
-      if (BOX.v === 1 && !BOX.email) sfApi({ a: 'ping' }).then((r) => { BOX.email = r.email || ''; }).catch(() => {}); // [새 판으로 바꾸기]를 같은 계정으로 바로
+      if (BOX.v < SF_V && !BOX.email) sfApi({ a: 'ping' }).then((r) => { BOX.email = r.email || ''; }).catch(() => {}); // [새 판으로 바꾸기]를 같은 계정으로 바로
       paintBridge();
       if (gen === BOX.gen) { BOX.blocked = j.blocked || []; BOX.binds = j.binds || []; } // 받는 사이 [풀기]를 눌렀으면 그 결과를 지킨다
       if (sig !== JSON.stringify([BOX.subs, BOX.reqs, BOX.blocked, BOX.binds])) changed = true;
@@ -1942,16 +2030,20 @@ body.sfv-open { overflow: hidden; }
     } catch (e) { if (!quiet) { BOX.err = e.message; changed = true; toast(e.message); } } // 저절로 받기 실패는 조용히(다음에 다시)
     BOX.busy = false;
     paintBadge();
+    syncReqs();
     if (tab === 'box' && changed && !document.querySelector('.sfv')) renderBox(); // 바뀐 것이 없거나 서류를 보는 중이면 다시 그리지 않음(깜빡임·스크롤 튐 없게)
   }
   // 저절로 최신화(교사 요청 2026-11-02 '새로 받기 안 눌러도'): 창 없이 연결돼 있으면 서류함을 보는 동안 1분마다, 다른 탭이면 5분마다.
   // 작은 창은 버튼을 눌러야 열 수 있어(브라우저 규칙) 저절로 못 받는다
   let boxTick = 0;
   setInterval(() => {
-    if (!S.cfg.sf || !BR.inFrame || document.hidden) return;
+    if (!S.cfg.sf || !BR.inFrame || document.hidden || BOX.busy) return;
     boxTick++;
-    if (tab === 'box' || boxTick % 5 === 0) refreshBox(true);
-  }, 60000);
+    if (boxTick % 20 === 0) { refreshBox(true); return; } // 5분마다 전체(잠긴 학생 등)
+    if (tab !== 'box' && boxTick % 4) return; // 서류함을 보는 동안 15초, 다른 화면이면 1분(교사 요청 2026-11-02 '제출하면 바로')
+    if (BOX.v < SF_V) { if (tab === 'box' && boxTick % 4 === 0) refreshBox(true); return; }
+    sfApi({ a: 'head' }).then((j) => { if ((j.rev || '') !== BOX.rev) refreshBox(true); else syncReqs(); }).catch(() => {}); // 판 번호만 먼저 봐서 부담을 줄임
+  }, 15000);
   const stuName = (cname, no) => (S.classes.find((x) => x.name === cname && isHome(x)) || S.classes.find((x) => x.name === cname))?.students.find((s) => s.no === String(no))?.name || '';
   // 학생 서류는 담임 반만(교사 결정 2026-10-28) — 수업 반에는 학생 링크를 만들지 않음
   const qrClasses = () => S.classes.filter(isHome).filter((c) => /^\d-\d{1,2}$/.test(c.name));
@@ -2009,12 +2101,13 @@ body.sfv-open { overflow: hidden; }
         ${subs.length ? `<ul class="docs bx">${subs.map((s) => `<li><span><b>${esc(KINDNAME[s.kind] || s.kind)}</b> · ${esc(s.c)} ${esc(s.no)}번 ${esc(s.name)}<br><small class="dim">${esc(rangeIso(s.from, s.to))}${s.kind === 'absence' && s.att ? ` ${esc(s.att)}` : ''}${s.proxy ? ' · 대리 인솔 위임장' : ''}${s.n ? ` · 사진 ${s.n}장` : ''} · ${esc(whenOf(s.up))} 제출</small></span>${isNewSub(s) ? `<span class="badge late">${s.seen ? '고침' : '새 서류'}</span>` : s.lock ? '<span class="badge ok">인쇄함</span>' : ''}<button class="btn small" data-sub="${esc(s.id)}">보기</button></li>`).join('')}</ul>`
           : `<p class="empty" style="padding:16px">${BOX.busy ? '받는 중…' : BOX.at ? '아직 낸 서류가 없어요.' : '[새로 받기]를 눌러 주세요.'}</p>`}
         <div class="row"><button class="btn small" id="bxRefresh" ${BOX.busy ? 'disabled' : ''}>${BOX.busy ? '받는 중…' : '새로 받기'}</button></div>
-        <p class="hint dim">${BOX.at ? `${esc(BOX.at)}에 받음. ` : ''}${BR.inFrame ? '새로 낸 서류를 저절로 받아요(1분마다).' : BR.frameFailed ? "이 브라우저에서는 저절로 받지 못해요. [새로 받기]를 누르면 작은 '서류함 연결 창'이 열렸다가 끝나면 저절로 닫혀요." : "[새로 받기]를 누르면 작은 '서류함 연결 창'이 열렸다가 끝나면 저절로 닫혀요(선생님 구글 계정)."} 인쇄한 서류는 [보기 → 삭제]로 지워 주세요(구글 드라이브 파일까지 지워져요).</p>
+        <p class="hint dim">${BOX.at ? `${esc(BOX.at)}에 받음. ` : ''}${BR.inFrame ? '새로 낸 서류를 저절로 받아요(15초쯤).' : BR.frameFailed ? "이 브라우저에서는 저절로 받지 못해요. [새로 받기]를 누르면 작은 '서류함 연결 창'이 열렸다가 끝나면 저절로 닫혀요." : "[새로 받기]를 누르면 작은 '서류함 연결 창'이 열렸다가 끝나면 저절로 닫혀요(선생님 구글 계정)."} 인쇄한 서류는 [보기 → 삭제]로 지워 주세요(구글 드라이브 파일까지 지워져요).</p>
       </div>
       <div class="card">
         <h2 class="sec">학생에게 보낸 요청</h2>
         ${open.length ? `<ul class="docs">${open.map((r) => `<li><span>${esc(KINDNAME[r.kind])} · ${esc(r.c)} ${esc(r.no)}번 ${esc(stuName(r.c, r.no))} <small class="dim">${esc(rangeIso(r.from, r.to))}</small></span><button class="btn small" data-unreq="${esc(r.id)}">취소</button></li>`).join('')}</ul>` : '<p class="hint">기다리는 요청이 없어요.</p>'}
-        <p class="hint dim">요청은 [출석]에서 학생을 눌러 기록을 연 뒤, 또는 [서류] 목록에서 [학생에게 … 요청]으로 보내요. 학생 화면에는 서류 종류와 날짜만 보여요.</p>
+        <p class="hint dim">${S.cfg.reqAuto === false ? '요청은 [출석]에서 학생을 눌러 기록을 연 뒤, 또는 [서류] 목록에서 [학생에게 … 요청]으로 보내요.' : '출결을 넣으면 [서류 규칙]에 맞는 요청이 저절로 가요. 옛 기록은 [서류] 목록에서 [학생에게 … 요청]으로 보내요.'} 학생 화면에는 서류 종류와 날짜만 보여요.</p>
+        ${S.cfg.reqAuto !== false && !BR.inFrame ? '<p class="hint">이 기기는 창 없이 연결되지 않아서 저절로 보내지 못해요. [새로 받기]를 누르면 밀린 요청도 함께 보내요.</p>' : ''}
       </div>
       ${BOX.blocked.length ? `<div class="card">
         <h2 class="sec">잠긴 학생 (다른 계정·기기에서 열려고 함)</h2>
@@ -2121,7 +2214,7 @@ body.sfv-open { overflow: hidden; }
     if (!SF_URL_RE.test(String(r.url))) return;
     BOX.making = false; BOX.err = '';
     if (!S.cfg.sf || S.cfg.sf.u !== r.url) { S.cfg.sf = { u: r.url }; for (const c of S.classes) delete c.skSig; }
-    if (r.made || r.updated || BOX.updating) { S.cfg.sf.v = 2; BOX.v = 2; }
+    if (r.made || r.updated || BOX.updating) { S.cfg.sf.v = SF_V; BOX.v = SF_V; }
     if (BOX.updating) { try { BOX.makerWin?.close(); } catch { /* 이미 닫힘 */ } }
     BOX.updating = false;
     save(true);
@@ -2276,6 +2369,8 @@ body.sfv-open { overflow: hidden; }
     if (b.dataset.sub) { openSub(b.dataset.sub); return; }
     if (b.dataset.unreq) {
       try { await sfApi({ a: 'unrequest', id: b.dataset.unreq }); } catch (err) { toast(err.message); return; }
+      const auto = BOX.reqs.find((r) => r.id === b.dataset.unreq)?.auto;
+      if (auto && S.cases[auto]) S.cases[auto].reqOff = true; // 뺀 요청이 저절로 다시 가지 않게
       BOX.reqs = BOX.reqs.filter((r) => r.id !== b.dataset.unreq);
       for (const cs of Object.values(S.cases)) if (cs.req && cs.req.id === b.dataset.unreq) delete cs.req;
       save(true); renderBox(); return;
@@ -2636,7 +2731,7 @@ body.sfv-open { overflow: hidden; }
         <h2 class="sec">서류 챙기기</h2>
         <ol class="step-list">
           <li><b>[서류]</b>에 받아야 할 서류와 기한이 모여요. 받으면 체크해요.</li>
-          <li><b>[서류함]</b>에서 반 링크를 복사해 반 카톡방에 올리면 학생이 폰으로 내요. 선생님은 학교 서식 그대로 보고 인쇄해요.</li>
+          <li><b>[서류함]</b>에서 반 링크를 복사해 반 카톡방에 올리면 학생이 폰으로 내요. 출결을 넣으면 낼 서류가 학생 화면에 저절로 떠요. 선생님은 학교 서식 그대로 보고 인쇄해요.</li>
         </ol>
       </div>` : ''}
       <div class="card">
