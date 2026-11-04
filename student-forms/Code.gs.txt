@@ -126,6 +126,7 @@ function setClass_(b) {
   var x = b.sch || {};
   var sch = { form: x.form === 'gg' ? 'gg' : 'common', name: String(x.name || '').slice(0, 30),
     appr: (Array.isArray(x.appr) ? x.appr : []).map(function (a) { return String(a || '').trim().slice(0, 8); }).filter(function (a) { return a; }).slice(0, 7) };
+  if (typeof x.jeon === 'boolean') sch.jeon = x.jeon; /* 맨 끝 결재 칸 '전결' 표시 */
   setJson_('cl:' + c, { k: k, r: r, sch: sch, at: now_() }); /* 학교 이름·결재 칸: 학생 미리 보기가 교사 인쇄와 같은 모양이 되게 */
   return { ok: true, n: r.length };
 }
