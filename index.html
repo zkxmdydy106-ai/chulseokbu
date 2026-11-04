@@ -336,7 +336,7 @@ body.sfv-open { overflow: hidden; }
   const BELLS_TEXT = ['조회 08:40-08:50', '1교시 08:50-09:40', '2교시 09:50-10:40', '3교시 10:50-11:40', '4교시 11:50-12:40', '5교시 13:30-14:20', '6교시 14:30-15:20', '7교시 15:40-16:30'].join('\n');
   // marks: 교과(교시별 / Ø), cases·daily·cleared: 담임 일일출결(사안 하나가 여러 날일 수 있음), cfg: 서류 기한·체험학습 최대 일수
   // school: 학생 서류 서식(교사 결정 2026-10-28: 공통 서식 + 학교 이름·결재 칸, 강경고 서식은 고를 수 있게)
-  const SCHOOL0 = { name: '', appr: ['담임', '담당', '부장', '교감'], form: 'common', jeon: true }; // 원본 서식 그대로(교사 요청 2026-11-02 '교감 선생님 전결')
+  const SCHOOL0 = { name: '', appr: ['담임', '부장', '교감', '교장'], form: 'common' };
   const blank = () => ({ v: 1, classes: [], marks: {}, cases: {}, daily: {}, cleared: {}, cfg: { deadline: 7, tripMax: 15, bells: BELLS_TEXT, school: { ...SCHOOL0 } }, ui: { pir: 1, classId: '' } });
   function loadState() {
     try {
@@ -1175,20 +1175,13 @@ body.sfv-open { overflow: hidden; }
   // ── 학교(학생 서류 서식): 학교 이름 · 서식(공통/강경고) · 결재 칸(칸 수·이름·순서) ──
   function schoolCfg() {
     const x = S.cfg.school || {};
-    let appr = (Array.isArray(x.appr) ? x.appr : SCHOOL0.appr).map((a) => String(a || '').trim().slice(0, 8)).filter(Boolean).slice(0, 7);
-    if (!appr.length) appr = SCHOOL0.appr.slice();
-    let jeon = x.jeon;
-    if (typeof jeon !== 'boolean') { // 전결을 고른 적 없는 설정: 예전 기본값(담임·부장·교감·교장)은 새 기본으로, 맨 끝 칸이 교감이면 전결
-      if (appr.join() === '담임,부장,교감,교장') appr = SCHOOL0.appr.slice();
-      jeon = appr[appr.length - 1] === '교감';
-    }
-    return { name: String(x.name || '').trim().slice(0, 30), appr, form: x.form === 'gg' ? 'gg' : 'common', jeon };
+    const appr = (Array.isArray(x.appr) ? x.appr : SCHOOL0.appr).map((a) => String(a || '').trim().slice(0, 8)).filter(Boolean).slice(0, 7);
+    return { name: String(x.name || '').trim().slice(0, 30), appr: appr.length ? appr : SCHOOL0.appr.slice(), form: x.form === 'gg' ? 'gg' : 'common' };
   }
-  let apprEdit = null, jeonEdit = null; // 고치는 중인 결재 칸·전결(저장 전)
+  let apprEdit = null; // 고치는 중인 결재 칸(저장 전)
   function schoolCard() {
     const sc = schoolCfg();
     const ap = apprEdit || sc.appr;
-    const jeon = jeonEdit === null ? sc.jeon : jeonEdit;
     const form = (S.ui.schForm || sc.form);
     return fold('school', '학교 서식', `
         <label class="field"><span>학교 이름</span><input id="schName" maxlength="30" value="${esc(sc.name)}" placeholder="예: ○○고등학교"></label>
@@ -1198,8 +1191,7 @@ body.sfv-open { overflow: hidden; }
         ${form === 'common' ? `<p class="lab">결재 칸 (왼쪽부터, 최대 7칸)</p>
         <ul class="docs">${ap.map((a, i) => `<li><input class="appr-input" data-appr="${i}" value="${esc(a)}" maxlength="8" aria-label="결재 칸 ${i + 1}"><button class="btn small" data-apup="${i}" ${i ? '' : 'disabled'} aria-label="앞으로">↑</button><button class="btn small" data-apdel="${i}" ${ap.length > 1 ? '' : 'disabled'} aria-label="지우기">×</button></li>`).join('')}</ul>
         <div class="row"><button class="btn small" id="apAdd" ${ap.length >= 7 ? 'disabled' : ''}>칸 더하기</button><button class="btn small" id="apReset">기본으로</button></div>
-        <label class="field" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="apJeon" style="width:20px;height:20px" ${jeon ? 'checked' : ''}><span style="margin:0">맨 끝 칸(${esc(ap[ap.length - 1] || '')})에 '전결' 표시</span></label>
-        <table class="list" style="margin-top:10px;text-align:center"><tbody><tr><th rowspan="2" style="width:28px;text-align:center">결<br>재</th>${ap.map((a) => `<th style="text-align:center">${esc(a)}</th>`).join('')}</tr><tr>${ap.map((a, i) => `<td style="height:34px;vertical-align:top;text-align:left;padding:2px">${jeon && i === ap.length - 1 ? '<span style="display:inline-block;border:1px solid var(--line-3);padding:0 3px;font-size:11px">전결</span>' : ''}</td>`).join('')}</tr></tbody></table>`
+        <table class="list" style="margin-top:10px;text-align:center"><tbody><tr><th rowspan="2" style="width:28px;text-align:center">결<br>재</th>${ap.map((a) => `<th style="text-align:center">${esc(a)}</th>`).join('')}</tr><tr>${ap.map(() => '<td style="height:34px"></td>').join('')}</tr></tbody></table>`
           : '<p class="hint">강경고등학교 원래 서식(결재: 담임·담당·부장·교감 전결) 그대로 인쇄해요.</p>'}
         <div class="row"><button class="btn small main" id="schSave">저장</button></div>
         <p class="hint dim">학생 미리 보기에도 같은 모양이 보이도록 [서류함]을 쓸 때 학교 이름·결재 칸만 받는 곳에 함께 보내요(학생 정보 아님).</p>`, { id: 'schoolCard', note: esc(sc.name) });
@@ -1207,21 +1199,19 @@ body.sfv-open { overflow: hidden; }
   function readAppr() { const list = [...document.querySelectorAll('[data-appr]')].map((el) => el.value.trim().slice(0, 8)); return list.length ? list : (apprEdit || schoolCfg().appr).slice(); }
   $('#main').addEventListener('click', (e) => {
     if (tab !== 'setup' || !e.target.closest('#schoolCard')) return;
-    const nameNow = $('#schName') ? $('#schName').value : '';
-    const keep = () => { renderSetup(); const n = $('#schName'); if (n) n.value = nameNow; const c = $('#schoolCard'); if (c) c.scrollIntoView({ block: 'nearest' }); };
-    if (e.target.id === 'apJeon') { apprEdit = readAppr(); jeonEdit = e.target.checked; keep(); return; }
     const t = e.target.closest('button');
     if (!t) return;
+    const nameNow = $('#schName') ? $('#schName').value : '';
+    const keep = () => { renderSetup(); const n = $('#schName'); if (n) n.value = nameNow; const c = $('#schoolCard'); if (c) c.scrollIntoView({ block: 'nearest' }); };
     if (t.dataset.schform) { if (document.querySelector('[data-appr]')) apprEdit = readAppr(); S.ui.schForm = t.dataset.schform; keep(); return; }
     if (t.id === 'apAdd') { apprEdit = [...readAppr(), '교장'].slice(0, 7); keep(); return; }
-    if (t.id === 'apReset') { apprEdit = SCHOOL0.appr.slice(); jeonEdit = true; keep(); return; }
+    if (t.id === 'apReset') { apprEdit = SCHOOL0.appr.slice(); keep(); return; }
     if (t.dataset.apup) { const a = readAppr(), i = +t.dataset.apup; [a[i - 1], a[i]] = [a[i], a[i - 1]]; apprEdit = a; keep(); return; }
     if (t.dataset.apdel) { const a = readAppr(); a.splice(+t.dataset.apdel, 1); apprEdit = a; keep(); return; }
     if (t.id === 'schSave') {
       const appr = document.querySelector('[data-appr]') ? readAppr().filter(Boolean) : schoolCfg().appr;
-      const jn = $('#apJeon') ? $('#apJeon').checked : schoolCfg().jeon;
-      S.cfg.school = { name: nameNow.trim().slice(0, 30), appr: appr.length ? appr : SCHOOL0.appr.slice(), form: S.ui.schForm || schoolCfg().form, jeon: jn };
-      delete S.ui.schForm; apprEdit = null; jeonEdit = null;
+      S.cfg.school = { name: nameNow.trim().slice(0, 30), appr: appr.length ? appr : SCHOOL0.appr.slice(), form: S.ui.schForm || schoolCfg().form };
+      delete S.ui.schForm; apprEdit = null;
       for (const c of S.classes) delete c.skSig; // 다음에 [서류함]을 쓸 때 받는 곳에 다시 맞춤
       save(true);
       renderSetup();
@@ -1709,22 +1699,7 @@ body.sfv-open { overflow: hidden; }
     }
     return formsLib;
   }
-  // 원본 한글 파일에 채우는 도구: [한글로 받기]를 누를 때만 불러온다(교사 요청 2026-11-02 '원본과 똑같이')
-  let hwpxLib = null;
-  function loadHwpx() {
-    if (window.HwpxFill && window.SCHOOL_HWPX) return Promise.resolve(window.HwpxFill);
-    if (!hwpxLib) {
-      hwpxLib = (async () => {
-        for (const f of ['school-hwpx.js', 'hwpx-fill.js']) {
-          await new Promise((ok, no) => { const sc = document.createElement('script'); sc.src = f; sc.onload = ok; sc.onerror = () => no(new Error('서식 파일을 불러오지 못했어요. 인터넷을 확인해 주세요.')); document.head.append(sc); });
-        }
-        return window.HwpxFill;
-      })();
-      hwpxLib.catch(() => { hwpxLib = null; });
-    }
-    return hwpxLib;
-  }
-  const randKey =(n) => { const a = new Uint8Array(n); crypto.getRandomValues(a); return b64u(a); };
+  const randKey = (n) => { const a = new Uint8Array(n); crypto.getRandomValues(a); return b64u(a); };
   const isoDate = (s) => String(s || '').replace(/-/g, '');
   const rangeIso = (a, b) => { if (!a) return ''; const f = isoDate(a), t = isoDate(b) || f; const s = (y) => `${+y.slice(4, 6)}/${+y.slice(6)}`; return f === t ? s(f) : `${s(f)}~${s(t)}`; };
   const whenOf = (iso) => { const d = new Date(iso); return Number.isNaN(+d) ? '' : `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
@@ -2285,42 +2260,21 @@ body.sfv-open { overflow: hidden; }
       return '맞는 출결 기록이 없어요(날짜를 확인해 주세요).';
     };
     box.innerHTML = `
-      <div class="sfv-bar"><button class="btn small" id="svClose">닫기</button><span class="sp"><b>${esc(KINDNAME[doc.kind] || '')}</b> ${esc(doc.c)} ${esc(doc.no)}번 ${esc(doc.name)}</span><button class="btn small main" id="svHwpx">한글로 받기</button><button class="btn small" id="svPrint">바로 인쇄</button><button class="btn small danger" id="svDel">삭제</button></div>
+      <div class="sfv-bar"><button class="btn small" id="svClose">닫기</button><span class="sp"><b>${esc(KINDNAME[doc.kind] || '')}</b> ${esc(doc.c)} ${esc(doc.no)}번 ${esc(doc.name)}</span><button class="btn small main" id="svPrint">인쇄</button><button class="btn small danger" id="svDel">삭제</button></div>
       <div class="sfv-info"><div>제출 ${esc(whenOf(doc.at))}${doc.up && doc.up !== doc.at ? ` · 고침 ${esc(whenOf(doc.up))}` : ''}${j.lock ? ' · <b>인쇄함(학생은 더 못 고침)</b>' : ''}</div><div id="svCase">${caseLine()}</div><div id="svNote"></div></div>
       <div class="sfv-pages" id="svPages"></div>`;
     document.body.append(box);
     document.body.classList.add('sfv-open');
     // 명단 없는 PC(패널 [받은 서류함])에는 학교 설정이 없다 → 받는 곳에 실어 둔 폰 설정으로(2026-11-02 실제: 학교 이름·결재 칸이 기본값으로 나옴)
-    const schoolNow = S.classes.length ? schoolCfg() : (j.sch || schoolCfg());
-    const mnt = SFm.mount($('#svPages', box), v, { school: schoolNow });
+    const mnt = SFm.mount($('#svPages', box), v, { school: S.classes.length ? schoolCfg() : (j.sch || schoolCfg()) });
     const onResize = () => mnt.fit();
     window.addEventListener('resize', onResize);
     const close = () => { box.remove(); document.body.classList.remove('sfv-open', 'sf-printing'); window.removeEventListener('resize', onResize); if (tab === 'box') renderBox(); };
     $('#svClose', box).addEventListener('click', close);
-    const lockForPrint = async () => {
-      try { const r = await sfApi({ a: 'lock', id }); sub.lock = r.lock; return true; } catch (e) { if (confirm(`학생이 더 고치지 못하게 잠그지 못했어요(${e.message}). 그래도 인쇄할까요?`)) return true; toast(`인쇄하지 않았어요: ${e.message}`); return false; }
-    };
-    // 원본 한글 파일에 채워 내려받기(교사 요청 2026-11-02): 표·테두리·글꼴이 원본 그대로. 파일은 이 기기에만 생긴다
-    $('#svHwpx', box).addEventListener('click', async () => {
-      if (!sfWake()) return;
-      const btn = $('#svHwpx', box);
-      btn.disabled = true;
-      try {
-        const HF = await loadHwpx();
-        const made = await HF.build(v, { school: schoolNow });
-        if (!(await lockForPrint())) return;
-        const url = URL.createObjectURL(made.blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = made.name;
-        document.body.append(a); a.click(); a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 60000);
-        $('#svNote', box).textContent = `'${made.name}'을 내려받았어요. 한글에서 열어 인쇄한 뒤, 내려받기 폴더의 파일과 이 서류를 [삭제]로 지워 주세요. 학생은 이제 이 서류를 고칠 수 없어요.`;
-      } catch (e) { toast(`한글 파일을 만들지 못했어요: ${e.message}`); } finally { btn.disabled = false; }
-    });
     $('#svPrint', box).addEventListener('click', async () => {
       if (!sfWake()) return;
-      if (!(await lockForPrint())) return;
-      const done =() => { document.body.classList.remove('sf-printing'); window.removeEventListener('afterprint', done); };
+      try { const r = await sfApi({ a: 'lock', id }); sub.lock = r.lock; } catch (e) { if (!confirm(`학생이 더 고치지 못하게 잠그지 못했어요(${e.message}). 그래도 인쇄할까요?`)) { toast(`인쇄하지 않았어요: ${e.message}`); return; } }
+      const done = () => { document.body.classList.remove('sf-printing'); window.removeEventListener('afterprint', done); };
       window.addEventListener('afterprint', done);
       document.body.classList.add('sf-printing');
       window.print();
