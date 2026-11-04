@@ -360,7 +360,11 @@ body.sfv-open { overflow: hidden; }
     syncBoxTab();
     clearTimeout(reqT);
     reqT = setTimeout(() => syncReqs(), 2000); // 출결이 바뀌면 학생 서류 요청도 맞춘다
-    if (!remote) { S.editedAt = Date.now(); syncMark(); }
+    // 실제로 바뀐 것이 있을 때만 '고쳤다'고 친다. 2026-11-04 교사 제보: 화면을 닫기만 해도 고친 시각이 새로 찍혀, 옛 자료가 든 PC가 '더 최근'이 되어 폰의 출결을 덮어씀
+    if (!remote) {
+      const now_ = JSON.stringify(syncable());
+      if (now_ !== SY.known) { SY.known = now_; S.editedAt = Date.now(); syncMark(); }
+    }
     clearTimeout(saveTimer);
     const write = () => {
       try { localStorage.setItem(KEY, JSON.stringify(S)); return true; } catch { toast('저장 공간이 부족해요. 오래된 기록을 내보내고 지워 주세요.'); return false; }
@@ -781,7 +785,8 @@ body.sfv-open { overflow: hidden; }
   });
 
   // 전화·문자: 폰의 전화·문자 앱을 연다(이 앱은 아무 데도 보내지 않음)
-  const telOf = (p) => String(p || '').replace(/[^\d+]/g, '');
+  // 엑셀이 맨 앞 0을 지운 휴대전화(1012345678)도 되살린다
+  const telOf = (p) => { const t = String(p || '').replace(/[^\d+]/g, ''); return /^1[0-9]{9}$/.test(t) ? `0${t}` : t; };
   const showTel = (p) => { const d = telOf(p); return /^010\d{8}$/.test(d) ? `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}` : d; };
   function contactRow(who, phone) {
     const t = telOf(phone);
@@ -1258,7 +1263,8 @@ body.sfv-open { overflow: hidden; }
         ${fold('roster', '명단 · 연락처 불러오기', `
         <p class="hint">나이스 명단은 PC 패널 [출석부 앱]에서 나온 QR을 찍으면 들어가요. 파일로 받았다면 아래 [명단 파일 넣기]로 넣어요.</p>
         <div class="row"><label class="btn small" style="display:flex;align-items:center;justify-content:center">명단 파일 넣기<input type="file" id="rsLoad" accept=".json" hidden></label></div>
-        <p class="hint">연락처는 엑셀·CSV나 구글 시트에서 불러와 이 폰에만 저장해요. 칸 예시: 반 · 번호 · 이름 · 학생 연락처 · 보호자 연락처. 반 칸이 없으면 지금 고른 반에 넣어요.</p>
+        <p class="hint">[명단 든 양식 받기]를 눌러 빈칸을 채운 뒤 [연락처 엑셀·CSV 넣기]로 넣어요. 빈칸은 건너뛰고, 넣은 연락처는 이 기기에 저장돼요. 구글 자동 저장을 켜 두면 암호로 잠근 사본이 선생님 구글 계정에도 저장돼요.</p>
+        <div class="row"><button class="btn small" id="ctTpl">명단 든 양식 받기</button></div>
         <div class="row"><label class="btn small" style="display:flex;align-items:center;justify-content:center">연락처 엑셀·CSV 넣기<input type="file" id="ctLoad" accept=".xlsx,.csv,.txt" hidden></label><button class="btn small" id="ctGoogle">구글 시트에서 불러오기</button></div>
         <p class="hint" id="ctMsg"></p>
         ${contactCount() ? `<p class="hint">연락처가 있는 학생 ${contactCount()}명 · <button class="textbtn" id="ctWipe">연락처만 지우기</button></p>
@@ -1343,7 +1349,7 @@ body.sfv-open { overflow: hidden; }
       renderSetup();
     }
     if (id === 'bkSave') download(new Blob([JSON.stringify(S)], { type: 'application/json' }), `출석부_백업_${ymdOf(new Date())}.json`);
-    if (id === 'wipe' && confirm(SY.conf ? '이 폰의 출석부 자료를 모두 지우고 이 폰의 구글 자동 저장도 끌까요? 구글에 저장된 출석부는 그대로 있어요.' : '이 폰의 출석부 자료를 모두 지울까요? 되돌릴 수 없어요.')) { syncOff(); S = blank(); save(true); toast('모두 지웠어요'); renderSetup(); }
+    if (id === 'wipe' && confirm(SY.conf ? '이 폰의 출석부 자료를 모두 지우고 이 폰의 구글 자동 저장도 끌까요? 구글에 저장된 출석부는 그대로 있어요.' : '이 폰의 출석부 자료를 모두 지울까요? 되돌릴 수 없어요.')) { syncOff(); writeJson(BACK_KEY, null); S = blank(); save(true); toast('모두 지웠어요'); renderSetup(); }
   });
   $('#main').addEventListener('change', async (e) => {
     if (e.target.id !== 'bkLoad' || !e.target.files[0]) return;
@@ -1679,6 +1685,15 @@ body.sfv-open { overflow: hidden; }
     if (e.target.id === 'fmRead') { const F = formInfo(); if (F) openBridge({ sheet: F.sheetId }); }
     if (e.target.id === 'fmCopy') { const F = formInfo(); if (F) navigator.clipboard.writeText(F.formUrl).then(() => toast('링크를 복사했어요'), () => toast(F.formUrl)); }
     if (e.target.id === 'fmNew' && confirm('새 설문지를 만들까요? 지금 설문지와 응답 시트는 선생님 구글 드라이브에 그대로 남아요.')) { try { localStorage.removeItem(FORM_KEY); } catch { /* 없음 */ } renderSetup(); }
+    if (e.target.id === 'ctTpl') {
+      const cell = (v) => (/[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
+      const head = ['반', '번호', '이름', '학생 연락처', '주소', '보호자1 관계', '보호자1 휴대전화', '보호자2 관계', '보호자2 휴대전화', '주 연락처'];
+      const rows = S.classes.flatMap((c) => c.students.map((s) => [c.name, s.no, s.name, '', '', '', '', '', '', '']));
+      if (!rows.length) { toast('명단을 먼저 넣어 주세요'); return; }
+      download(`\ufeff${[head, ...rows].map((r) => r.map(cell).join(',')).join('\r\n')}\r\n`, '연락처_양식.csv', 'text/csv;charset=utf-8');
+      toast('양식을 내려받았어요. 다 쓰면 지워 주세요');
+      return;
+    }
     if (e.target.id === 'ctWipe' && confirm('이 폰에 저장된 연락처만 모두 지울까요?')) {
       S.classes.forEach((c) => c.students.forEach((s) => CONTACT_KEYS.forEach((k) => delete s[k])));
       save(true);
@@ -2439,6 +2454,54 @@ body.sfv-open { overflow: hidden; }
   // 기기마다 다른 것(ui: 고른 반·교시)은 보내지 않는다. 두 기기가 거의 동시에 고치면 나중에 고친 쪽을 남기고 다른 쪽은 이 기기에 보관
   const STORE_RE = /^https:\/\/script\.google\.com\/macros\/s\/[\w-]{20,}\/exec$/;
   const syncable = () => { const { ui, editedAt, ...rest } = S; return rest; };
+  SY.known = JSON.stringify(syncable());
+  // 바뀌기 전 자료 보관(이 기기 안에만, 최근 5개). 받은 자료로 바뀔 때 사라지는 기록이 있으면 여기에 남긴다
+  const BACK_KEY = `${KEY}.backups`;
+  // 이 기기가 폰인지: 겹치면 폰에서 체크한 것이 우선(교사 결정 2026-11-04)
+  const IS_PHONE = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+  function keepBack(box, at = Date.now()) {
+    if (!box || !box.data || !(box.data.classes || []).length) return;
+    const list = readJson(BACK_KEY) || [];
+    if (list[0] && JSON.stringify(list[0].box.data) === JSON.stringify(box.data)) return;
+    let next = [{ at, box }, ...list].slice(0, 5);
+    while (next.length) {
+      try { localStorage.setItem(BACK_KEY, JSON.stringify(next)); return; } catch { next = next.slice(0, -1); }
+    }
+  }
+  { // 옛 판이 남긴 보관 자료를 옮김
+    const old = readJson(`${KEY}.conflict`);
+    if (old && old.box) keepBack(old.box, old.at);
+    writeJson(`${KEY}.conflict`, null);
+  }
+  // 이 기기에만 있고 받은 자료에는 없는 기록 수
+  const lostCount = (mine, up) => {
+    let n = 0;
+    for (const id of Object.keys(mine.cases || {})) if (!(up.cases || {})[id]) n += 1;
+    for (const [k, rec] of Object.entries(mine.marks || {})) for (const [no, e] of Object.entries(rec || {})) if (e && e.m && !((up.marks || {})[k] || {})[no]) n += 1;
+    return n;
+  };
+  // 두 기기가 모두 고쳤을 때: 어느 한쪽을 버리지 않고 기록마다 합친다. 같은 학생·같은 날이면 앞선 쪽(newer: 폰 > PC, 같은 종류면 나중에 고친 쪽)
+  function mergeData(newer, older) {
+    const nest = (a, b) => {
+      const out = {};
+      for (const k of new Set([...Object.keys(b || {}), ...Object.keys(a || {})])) out[k] = { ...((b || {})[k] || {}), ...((a || {})[k] || {}) };
+      return out;
+    };
+    const m = { ...older, ...newer, cfg: { ...(older.cfg || {}), ...(newer.cfg || {}) } };
+    m.classes = [...(newer.classes || []), ...(older.classes || []).filter((c) => !(newer.classes || []).some((x) => x.id === c.id))];
+    m.marks = nest(newer.marks, older.marks);
+    m.daily = nest(newer.daily, older.daily);
+    m.cleared = nest(newer.cleared, older.cleared);
+    m.cases = { ...(older.cases || {}), ...(newer.cases || {}) };
+    // 나중에 고친 쪽에서 '출석으로 바꿈'이면 지움, 나중에 고친 쪽에 기록이 있으면 그 표시는 뗀다
+    for (const [k, rec] of Object.entries(newer.cleared || {})) for (const no of Object.keys(rec || {})) if (rec[no] && !((newer.daily || {})[k] || {})[no] && m.daily[k]) delete m.daily[k][no];
+    for (const [k, rec] of Object.entries(newer.daily || {})) for (const no of Object.keys(rec || {})) if (m.cleared[k]) delete m.cleared[k][no];
+    // 칸을 빼앗긴 기록은 정리
+    const used = new Set(Object.values(m.daily).flatMap((r) => Object.values(r)));
+    const placed = new Set([...Object.values(newer.daily || {}), ...Object.values(older.daily || {})].flatMap((r) => Object.values(r)));
+    for (const id of Object.keys(m.cases)) if (placed.has(id) && !used.has(id)) delete m.cases[id];
+    return m;
+  }
   const hhmm = (t) => { const d = new Date(t); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
   async function syncKeyOf(t) {
     const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`key|${t}`));
@@ -2478,6 +2541,8 @@ body.sfv-open { overflow: hidden; }
   // 구글 자료를 이 기기에 넣음(고른 반·교시는 이 기기 것 그대로)
   function syncApply(box, rev) {
     const ui = S.ui;
+    const lost = lostCount(S, box.data || {});
+    if (lost) keepBack({ v: 1, data: syncable(), editedAt: S.editedAt || 0 });
     const loaded = { ...blank(), ...box.data, cfg: { ...blank().cfg, ...(box.data.cfg || {}) }, ui };
     loaded.editedAt = box.editedAt || 0;
     if (!loaded.classes.some((c) => c.id === ui.classId)) loaded.ui = { ...ui, classId: loaded.classes[0]?.id || '' };
@@ -2485,21 +2550,30 @@ body.sfv-open { overflow: hidden; }
     save(true, { remote: true });
     setMeta({ rev, dirty: false, at: Date.now() });
     SY.sent = JSON.stringify(syncable());
+    SY.known = SY.sent;
     switchTab(tab);
+    return lost;
   }
-  // 두 기기가 모두 고쳤을 때: 나중에 고친 쪽을 남기고, 진 쪽은 이 기기 '되돌리기'에 보관
+  // 두 기기가 모두 고쳤을 때: 둘 다 보관하고 기록마다 합쳐서 올린다(교사 제보 2026-11-04: 한쪽 전체를 버리면 출결이 사라짐)
   async function syncResolve(r) {
     const box = await unseal(r.blob, SY.conf.t);
     const mine = { v: 1, data: syncable(), editedAt: S.editedAt || 0 };
-    if ((box.editedAt || 0) > (S.editedAt || 0)) {
-      writeJson(`${KEY}.conflict`, { at: Date.now(), box: mine });
-      syncApply(box, r.rev);
-      toast('다른 기기에서 더 나중에 고친 출석부로 바꿨어요. 이 기기 자료는 [설정 → 구글 자동 저장 → 더 보기]에서 되돌릴 수 있어요.');
-      return;
-    }
-    writeJson(`${KEY}.conflict`, { at: Date.now(), box });
-    setMeta({ rev: r.rev });
+    keepBack(box);
+    keepBack(mine);
+    // 구글 자료에 기기 표시가 없으면(옛 판) 폰에서 올린 것으로 본다
+    const boxPhone = box.dev !== 'p';
+    const mineNewer = IS_PHONE !== boxPhone ? IS_PHONE : (mine.editedAt || 0) >= (box.editedAt || 0);
+    const merged = mineNewer ? mergeData(mine.data, box.data) : mergeData(box.data, mine.data);
+    const ui = S.ui;
+    S = { ...blank(), ...merged, cfg: { ...blank().cfg, ...(merged.cfg || {}) }, ui };
+    if (!S.classes.some((c) => c.id === ui.classId)) S.ui = { ...ui, classId: S.classes[0]?.id || '' };
+    S.editedAt = Math.max(mine.editedAt || 0, box.editedAt || 0, Date.now());
+    SY.known = JSON.stringify(syncable());
+    save(true, { remote: true });
+    setMeta({ rev: r.rev, dirty: true });
     SY.busy = false;
+    switchTab(tab);
+    toast('다른 기기 기록과 합쳤어요');
     await syncPush();
   }
   async function syncPush({ force = false } = {}) {
@@ -2512,7 +2586,7 @@ body.sfv-open { overflow: hidden; }
     if (!S.editedAt) S.editedAt = Date.now(); // 자동 저장 전에 만든 자료
     const stamp = S.editedAt;
     try {
-      const blob = await seal({ v: 1, data, editedAt: stamp }, SY.conf.t);
+      const blob = await seal({ v: 1, data, editedAt: stamp, dev: IS_PHONE ? 'm' : 'p' }, SY.conf.t);
       const r = await storeCall({ a: 'put', base: SY.meta.rev, blob, at: stamp, force });
       if (r.ok) { SY.sent = j; SY.status = ''; setMeta({ rev: r.rev, dirty: S.editedAt !== stamp, at: Date.now() }); }
       else if (r.err === 'conflict') { SY.busy = false; await syncResolve(r); return; }
@@ -2538,7 +2612,10 @@ body.sfv-open { overflow: hidden; }
     try {
       if (r.rev > SY.meta.rev) {
         if (SY.meta.dirty) await syncResolve(r);
-        else { syncApply(await unseal(r.blob, SY.conf.t), r.rev); toast('다른 기기에서 고친 출석부를 받았어요'); }
+        else {
+          const lost = syncApply(await unseal(r.blob, SY.conf.t), r.rev);
+          toast(lost ? `다른 기기 자료를 받았어요. 이 기기에만 있던 ${lost}건은 [설정 → 구글 자동 저장 → 더 보기]에 보관했어요.` : '다른 기기에서 고친 출석부를 받았어요');
+        }
       } else if (SY.meta.dirty) await syncPush();
       else setMeta({ at: Date.now() });
     } catch (e) { SY.status = e.message; }
@@ -2592,7 +2669,7 @@ body.sfv-open { overflow: hidden; }
       const keepUp = (note) => {
         const mineNow = { v: 1, data: syncable(), editedAt: S.editedAt || 0 };
         const here = S.classes;
-        if (myN) writeJson(`${KEY}.conflict`, { at: Date.now(), box: mineNow });
+        if (myN) keepBack(mineNow);
         syncApply(box, r.rev);
         // 이 기기 명단은 버리지 않는다: 구글에 없는 반은 더하고, 구글에 기록이 없으면 이 기기 명단(QR로 막 받은 새 명단)을 쓴다
         const sameClass = (a, b) => a.name === b.name && (a.subject || '') === (b.subject || '');
@@ -2610,7 +2687,7 @@ body.sfv-open { overflow: hidden; }
       // 양쪽에 다른 출결이 있을 때만 묻는다. 고르지 않은 쪽은 이 기기 [되돌리기]에 남김. 구글에 기록이 없으면 이 기기 자료로
       const pick = upN ? await askWhichSide({ myN, upN, myAt: S.editedAt || 0, upAt: box.editedAt || r.at || 0, myC: S.classes.length, upC: (box.data.classes || []).length }) : 'device';
       if (pick === 'google') { keepUp('구글에 저장된 출석부로 바꿨어요. 이 기기 자료는 [더 보기 → 되돌리기]에 있어요.'); return; }
-      if (upN) writeJson(`${KEY}.conflict`, { at: Date.now(), box });
+      if (upN) keepBack(box);
       setMeta({ rev: r.rev });
     }
     if (S.classes.length) { await syncPush({ force: true }); toast('구글 자동 저장을 켰어요'); }
@@ -2642,7 +2719,7 @@ body.sfv-open { overflow: hidden; }
       : SY.status ? SY.status
         : !on ? '' : SY.busy ? '구글과 맞추는 중…' : SY.meta.dirty ? '저장 대기' : SY.meta.at ? `저장됨 · ${hhmm(SY.meta.at)}` : '켜짐';
     const bad = !!SY.status && !/대기/.test(SY.status);
-    const back = readJson(`${KEY}.conflict`);
+    const backs = readJson(BACK_KEY) || [];
     return `<div class="card" id="syncCard">
         <h2 class="sec">구글 자동 저장 <span class="dim">PC로 가는 길</span></h2>
         ${on ? `<p class="hint"><b class="${bad ? 'sy-bad' : 'sy-ok'}">${esc(st)}</b></p>
@@ -2651,7 +2728,7 @@ body.sfv-open { overflow: hidden; }
           <div class="row"><button class="btn small" id="syNow">지금 맞추기</button><button class="btn small" id="syQr">다른 기기 연결 QR</button><button class="btn small" id="syOff">이 기기에서 끄기</button></div>
           <div id="syQrBox"></div>
           <details><summary class="hint">더 보기</summary>
-            ${back ? `<p class="hint">겹쳐서 바뀌기 전 자료(${hhmm(back.at)}) <button class="textbtn" id="syBack">그 자료로 되돌리기</button></p>` : ''}
+            ${backs.length ? `<p class="hint">바뀌기 전에 보관한 자료(이 기기 안에만)</p>${backs.map((b, i) => `<p class="hint">${hhmm(b.at)} · 출결 ${recordCount(b.box.data)}건 <button class="textbtn" data-syback="${i}">되돌리기</button></p>`).join('')}` : ''}
             <p class="hint">구글에 저장된 이 출석부를 지우려면 <button class="textbtn danger" id="syWipe">구글에 저장된 출석부 지우기</button> (이 기기 자료는 그대로)</p>
           </details>`
         : `<p class="hint">켜면 체크한 출결이 몇 초 뒤 선생님 <b>교육청 구글 계정</b>에 저장되고, PC 패널로 저절로 들어가요. 이 기기에서 암호로 잠근 뒤 보내서 구글에는 알아볼 수 없는 글자로만 남아요.</p>
@@ -2697,12 +2774,12 @@ body.sfv-open { overflow: hidden; }
       renderSetup();
       return;
     }
-    if (id === 'syBack') {
-      const back = readJson(`${KEY}.conflict`);
-      if (!back || !confirm('겹쳐서 바뀌기 전 자료로 되돌릴까요? 지금 자료는 덮어써져요.')) return;
+    if (e.target.dataset && e.target.dataset.syback != null) {
+      const back = (readJson(BACK_KEY) || [])[+e.target.dataset.syback];
+      if (!back || !confirm(`${hhmm(back.at)}에 보관한 자료(출결 ${recordCount(back.box.data)}건)로 되돌릴까요? 지금 자료는 이 목록에 보관해요.`)) return;
+      keepBack({ v: 1, data: syncable(), editedAt: S.editedAt || 0 });
       const ui = S.ui;
       S = { ...blank(), ...back.box.data, cfg: { ...blank().cfg, ...(back.box.data.cfg || {}) }, ui };
-      writeJson(`${KEY}.conflict`, null);
       save(true);
       toast('되돌렸어요');
       renderSetup();
