@@ -173,6 +173,9 @@ main { max-width: 760px; margin: 0 auto; padding: 8px 0 12px; }
 .field input, .field textarea, .field select { display: block; width: 100%; min-width: 0; max-width: 100%; padding: 10px; border: 1px solid var(--line-3); border-radius: 4px; background: var(--panel); font-size: 15px; }
 /* 아이폰: 날짜·시각 칸은 제 폭이 넓어 그대로 두면 옆 칸·화면을 넘어감 */
 .field input[type="date"], .field input[type="time"] { -webkit-appearance: none; appearance: none; min-height: 46px; text-align: left; }
+.time-now { display: flex; align-items: flex-end; gap: 8px; margin-top: 10px; }
+.time-now .field { flex: 1 1 0; margin: 0; }
+.time-now .btn { flex: none; min-height: 48px; }
 input::-webkit-date-and-time-value { text-align: left; min-width: 0; }
 /* 폰: 16px보다 작은 칸은 누를 때 아이폰이 화면을 확대함 */
 @media (pointer: coarse) { input, textarea, select { font-size: 16px !important; } }
@@ -454,6 +457,8 @@ body.sfv-open { overflow: hidden; }
     else return null;
     const hit = B.filter((x) => x.s < to && x.e > from).map((x) => x.p);
     if (type === '조퇴' && !hit.includes(99)) hit.push(99);
+    // 조회 때 먼저 지각으로 표시한 뒤 온 시각을 고친다(교사 2026-11-04): 조회 전 시각의 지각은 조회 칸만. 5시 전은 오전·오후를 잘못 고른 것으로 본다
+    if (type === '지각' && !hit.length && a >= 300) hit.push(B[0].p);
     if (!hit.length) return { list: [], text: '', token: '' };
     // 나이스로 넘길 교시 칸: 조퇴는 'n~종례'(그날 있는 교시 전부), 나머지는 목록
     const token = type === '조퇴' ? `${pName(hit[0]).replace('교시', '')}~종례` : hit.map((p) => pName(p).replace('교시', '')).join(',');
@@ -581,6 +586,12 @@ body.sfv-open { overflow: hidden; }
       const used = isTrip(cs) ? tripDays(cs) : 0;
       return `평일 <b>${days}</b>일${isTrip(cs) ? ` · 올해 교외체험학습 <b class="${used + days > S.cfg.tripMax ? 'over' : ''}">${used + days}</b> / ${S.cfg.tripMax}일${used + days > S.cfg.tripMax ? ' — 최대 일수를 넘어요' : ''}` : ''}`;
     };
+    // 시각 칸 + [현재 시각 넣기](교사 요청 2026-11-04). 오늘 기록에만: 지난 날 기록에 지금 시각을 넣으면 틀린 값이 된다
+    const timeRow = (label, id, field) => `
+          <div class="time-now">
+            <label class="field"><span>${label}</span><input type="time" id="${id}" value="${esc(cs[field] || '')}"></label>
+            ${(cs.from || day) === ymdOf(new Date()) ? `<button class="btn small" data-now="${field}">현재 시각 넣기</button>` : ''}
+          </div>`;
     const pickSig = () => [cs.from, cs.to, cs.t1, cs.t2].join('|');
     function paintLive() {
       const h = $('#dsHint', sh), t = $('#dsTrip', sh);
@@ -608,10 +619,8 @@ body.sfv-open { overflow: hidden; }
             <label class="field"><span>끝</span><input type="date" id="dsTo" value="${isoOf(cs.to)}"></label>
           </div>
           <p class="trip" id="dsTrip">${tripHtml()}</p>` : `
-          <div class="row">
-            <label class="field"><span>${t1Label}</span><input type="time" id="dsT1" value="${esc(cs.t1 || '')}"></label>
-            ${cs.type === '결과' ? `<label class="field"><span>돌아온 시각</span><input type="time" id="dsT2" value="${esc(cs.t2 || '')}"></label>` : ''}
-          </div>
+          ${timeRow(t1Label, 'dsT1', 't1')}
+          ${cs.type === '결과' ? timeRow('돌아온 시각', 'dsT2', 't2') : ''}
           <p class="hint" id="dsHint">${periodHtml()}</p>`}
         <label class="field"><span>사유${cs.kind === '기타' && cs.type === '결석' ? ' (필수)' : ''}</span><input id="dsReason" maxlength="100" value="${esc(cs.reason)}" placeholder="예: 감기로 병원 진료"></label>
         <p class="hint dim">나이스 사유 칸: ${cs.kind === '기타' ? '이 글이 그대로 들어가요.' : cs.kind === '출석인정' && ['교외체험학습', '생리'].includes(cs.sub) ? `'${esc(cs.sub)}'만 들어가요.` : '빈칸으로 가요(이 글에 \'면접\'이 있으면 \'면접\'만).'}</p>
@@ -663,6 +672,7 @@ body.sfv-open { overflow: hidden; }
       if (!b) return;
       keep();
       if (b.dataset.type) { present = b.dataset.type === '출석'; if (!present) { cs.type = b.dataset.type; if (cs.type !== '결석') { cs.from = cs.to = old ? cs.from : day; if (cs.sub === '교외체험학습') cs.sub = ''; if (!cs.t1 && day === ymdOf(new Date())) cs.t1 = nowHM(); if (cs.t1) { const pf = periodsFor(cs.type, cs.t1, cs.t2); cs.period = pf?.text || ''; cs.pt = pf?.token || ''; } } } }
+      if (b.dataset.now) { cs[b.dataset.now] = nowHM(); const pf = periodsFor(cs.type, cs.t1, cs.t2); cs.period = pf?.text || ''; cs.pt = pf?.token || ''; }
       if (b.dataset.kind) { cs.kind = b.dataset.kind; if (cs.kind !== '출석인정') cs.sub = ''; else if (!cs.sub) cs.sub = '생리'; }
       if (b.dataset.sub) cs.sub = b.dataset.sub;
       if (b.dataset.doc) cs.docs[b.dataset.doc] = b.checked;
@@ -676,6 +686,8 @@ body.sfv-open { overflow: hidden; }
           save(true); close(); renderCheck(); toast('출석으로 바꿨어요'); return;
         }
         if (cs.kind === '기타' && cs.type === '결석' && !cs.reason) { toast('기타결석은 사유를 꼭 적어야 해요'); return; }
+        // 오후 12:45를 오전으로 고르면(00:45) 겹치는 교시가 없어 나이스에 교시가 빠진 채 간다(교사 제보 2026-11-04)
+        if (cs.type !== '결석') { const pf = periodsFor(cs.type, cs.t1, cs.t2); if (pf && !pf.text) { toast('이 시각에는 겹치는 교시가 없어요. 오전·오후를 확인해 주세요'); return; } }
         if (cs.type !== '결석') cs.from = cs.to = cs.from || day;
         if (!weekdays(cs.from, cs.to).length) { toast('기간에 평일이 없어요'); return; }
         S.cases[cs.id] = cs;
@@ -2451,7 +2463,7 @@ body.sfv-open { overflow: hidden; }
   // ── 구글 자동 저장 ───────────────────────────────────────
   // 선생님 구글 계정의 '출석부 저장소'(gas/sync-store, 만들기 다리가 만듦)에 출석부를 저절로 올리고 받는다.
   // 보내기 전에 이 기기에서 압축 + AES-GCM 암호화(열쇠 = sha256('key|'+t)) → 구글에는 알아볼 수 없는 글자만 남는다.
-  // 기기마다 다른 것(ui: 고른 반·교시)은 보내지 않는다. 두 기기가 거의 동시에 고치면 나중에 고친 쪽을 남기고 다른 쪽은 이 기기에 보관
+  // 기기마다 다른 것(ui: 고른 반·교시)은 보내지 않는다. 두 기기가 모두 고치면 기록마다 합치고(같은 칸은 폰 우선) 합치기 전 자료는 이 기기에 보관
   const STORE_RE = /^https:\/\/script\.google\.com\/macros\/s\/[\w-]{20,}\/exec$/;
   const syncable = () => { const { ui, editedAt, ...rest } = S; return rest; };
   SY.known = JSON.stringify(syncable());
