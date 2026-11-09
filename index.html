@@ -377,7 +377,7 @@ body.sfv-open { overflow: hidden; }
     return true;
   }
   window.addEventListener('pagehide', () => save(true));
-  document.addEventListener('visibilitychange', () => { if (document.hidden) save(true); else if (S.cfg.sf && BR.inFrame) refreshBox(true); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) save(true); else if (S.cfg.sf && boxLive()) refreshBox(true); });
 
   // ── 도구 ──────────────────────────────────────────────
   const $ = (s, r = document) => r.querySelector(s);
@@ -1759,7 +1759,26 @@ body.sfv-open { overflow: hidden; }
   // 작은 연결 창(?p=t)을 띄우고 postMessage로 명령·결과를 주고받는다(연락처 다리와 같은 방식). 창은 버튼을 누를 때만 연다.
   const BR = { win: null, src: null, origin: '', ready: false, q: [], seq: 0, wait: new Map(), closeT: 0, frame: null, inFrame: false, frameT: 0, frameFailed: false };
   const popupOpen = () => !!(BR.win && !BR.win.closed);
-  const bridgeOpen = () => BR.inFrame || popupOpen();
+  // 로그인 없는 교사 연결(교사 결정 2026-11-09 '폰 로그인 없이 QR로 끝'): 배포 ID와 열쇠가 있으면 창·틀 없이 POST로 주고받는다
+  const SF_ID_RE = /^[\w-]{20,}$/;
+  const sfDirect = () => !!(S.cfg.sf && SF_ID_RE.test(S.cfg.sf.d || '') && (S.cfg.sf.t || SY.conf));
+  const boxLive = () => sfDirect() || BR.inFrame;
+  async function sfToken() {
+    if (S.cfg.sf.t) return S.cfg.sf.t;
+    const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`forms|${SY.conf.t}`));
+    return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  }
+  async function sfPost(body) {
+    const NEED = '서류함에 닿지 못했어요. 인터넷을 확인해 주세요. 계속되면 PC 업무 도우미에서 [출석부 웹앱 만들기]의 [학생 서류 저장 허락]을 한 번 눌러 주세요.';
+    let r;
+    try { r = await fetch(`https://script.google.com/macros/s/${S.cfg.sf.d}/exec`, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ t: await sfToken(), b: body }) }); }
+    catch { throw Object.assign(new Error(NEED), { code: 'net' }); }
+    let j;
+    try { j = JSON.parse(await r.text()); } catch { throw Object.assign(new Error(NEED), { code: 'consent' }); }
+    if (!j || !j.ok) throw Object.assign(new Error((j && j.msg) || '실패했어요.'), { code: j && j.err });
+    return j;
+  }
+  const bridgeOpen = () => boxLive() || popupOpen();
   // 창 없는 연결(교사 요청 2026-11-02 '계속 안 뜨게', '렉 안 걸리게'): 화면에 안 보이는 틀로 연결 화면을 열어 둔다.
   // 구글 로그인이 돼 있고 받는 곳이 새 판이면 창 없이 주고받는다. 안 되면(옛 받는 곳·로그인 전·다른 사이트 쿠키를 막는 브라우저)
   // 조용히 그만두고 버튼을 누를 때 작은 창을 쓴다. 접속 계정 = 배포 계정 확인은 다리가 그대로 한다
@@ -1767,7 +1786,7 @@ body.sfv-open { overflow: hidden; }
   const frameKnown = () => { try { return localStorage.getItem(FR_KEY) === '1'; } catch { return false; } };
   const frameRemember = (on) => { try { if (on) localStorage.setItem(FR_KEY, '1'); else localStorage.removeItem(FR_KEY); } catch { /* 저장 못 함 */ } };
   function paintBridge() {
-    const st = $('#bxBridge'); if (st) st.textContent = BR.inFrame ? '창 없이 연결됨' : '버튼을 누를 때 작은 창이 열려요';
+    const st = $('#bxBridge'); if (st) st.textContent = boxLive() ? '창 없이 연결됨' : '버튼을 누를 때 작은 창이 열려요';
     const note = $('#bxNote'); if (note) note.innerHTML = bridgeNote();
   }
   // 받는 곳이 옛 판으로 보임(판 번호 없음, 또는 판을 모르는데 틀이 안 뜸)
@@ -1775,8 +1794,9 @@ body.sfv-open { overflow: hidden; }
   // 창이 뜨는 까닭과 없애는 법을 [서류함] 맨 위에(교사 제보 2026-11-02: 버튼마다 연결 창이 뜸 — 받는 곳이 옛 판이었음)
   function bridgeNote() {
     if (!S.cfg.sf) return '';
-    if (BOX.v === 2 && MAKER_URL) return `<div class="card"><h2 class="sec">받는 곳을 새 판으로 바꿔 주세요</h2>
-      <p class="hint">새 판이면 출결에 맞춰 학생 서류 요청이 저절로 가고, 낸 서류도 더 빨리 들어와요. 낸 서류와 반 링크는 그대로예요.</p>
+    if (sfDirect()) return '';
+    if (BOX.v >= 2 && BOX.v < 4 && MAKER_URL) return `<div class="card"><h2 class="sec">받는 곳을 새 판으로 바꿔 주세요</h2>
+      <p class="hint">새 판이면 구글 로그인이나 작은 창 없이 서류함이 열려요. 낸 서류와 반 링크는 그대로예요.</p>
       <div class="row"><button class="btn main" id="bxUpdateNow">${BOX.making ? '바꾸는 중… 작은 창을 확인해 주세요' : '새 판으로 바꾸기'}</button></div></div>`;
     if (BR.inFrame) return '';
     if (bridgeOld()) return MAKER_URL ? `<div class="card"><h2 class="sec">버튼마다 작은 창이 뜨나요?</h2>
@@ -1787,7 +1807,7 @@ body.sfv-open { overflow: hidden; }
     return '';
   }
   function sfFrameStart() {
-    if (!S.cfg.sf || BR.frame || BR.frameFailed) return;
+    if (!S.cfg.sf || BR.frame || BR.frameFailed || sfDirect()) return;
     const acc = gAccount();
     const f = document.createElement('iframe');
     f.src = `${S.cfg.sf.u}?${new URLSearchParams({ p: 't', origin: location.origin, frame: '1', ...(acc ? { authuser: acc } : {}) })}`;
@@ -1827,7 +1847,7 @@ body.sfv-open { overflow: hidden; }
     }, 1200);
   }
   function sfWake() {
-    if (!S.cfg.sf || BR.inFrame) return true;
+    if (!S.cfg.sf || boxLive()) return true;
     if (BR.frame && frameKnown()) return true; // 곧 연결된다. 창을 띄우지 않고 기다림
     if (popupOpen()) { if (BR.ready && !BR.wait.size) sfIdle(); return true; }
     BR.ready = false; BR.src = null; BR.origin = '';
@@ -1837,6 +1857,7 @@ body.sfv-open { overflow: hidden; }
     return true;
   }
   function sfApi(body) {
+    if (sfDirect()) return sfPost(body);
     return new Promise((ok, no) => {
       if (!S.cfg.sf) { no(new Error('서류함이 연결되지 않았어요.')); return; }
       if (!sfWake()) { no(new Error('서류함 연결 창을 열지 못했어요(팝업 차단).')); return; }
@@ -2039,7 +2060,7 @@ body.sfv-open { overflow: hidden; }
     if (BOX.v < 2) return;
     const keep = new Set(BOX.subs.map(docKey));
     for (const k of DOCS.keys()) if (!keep.has(k)) DOCS.delete(k);
-    const todo = BOX.subs.filter((s) => !DOCS.has(docKey(s)) && (BR.inFrame || isNewSub(s))).slice(0, BR.inFrame ? 30 : 10);
+    const todo = BOX.subs.filter((s) => !DOCS.has(docKey(s)) && (boxLive() || isNewSub(s))).slice(0, boxLive() ? 30 : 10);
     let i = 0;
     const worker = async () => { while (i < todo.length) await docOf(todo[i++]).catch(() => {}); };
     await Promise.all([worker(), worker(), worker()]);
@@ -2089,7 +2110,7 @@ body.sfv-open { overflow: hidden; }
   // 작은 창은 버튼을 눌러야 열 수 있어(브라우저 규칙) 저절로 못 받는다
   let boxTick = 0;
   setInterval(() => {
-    if (!S.cfg.sf || !BR.inFrame || document.hidden || BOX.busy) return;
+    if (!S.cfg.sf || !boxLive() || document.hidden || BOX.busy) return;
     boxTick++;
     if (boxTick % 20 === 0) { refreshBox(true); return; } // 5분마다 전체(잠긴 학생 등)
     if (tab !== 'box' && boxTick % 4) return; // 서류함을 보는 동안 15초, 다른 화면이면 1분(교사 요청 2026-11-02 '제출하면 바로')
@@ -2153,13 +2174,13 @@ body.sfv-open { overflow: hidden; }
         ${subs.length ? `<ul class="docs bx">${subs.map((s) => `<li><span><b>${esc(KINDNAME[s.kind] || s.kind)}</b> · ${esc(s.c)} ${esc(s.no)}번 ${esc(s.name)}<br><small class="dim">${esc(rangeIso(s.from, s.to))}${s.kind === 'absence' && s.att ? ` ${esc(s.att)}` : ''}${s.proxy ? ' · 대리 인솔 위임장' : ''}${s.n ? ` · 사진 ${s.n}장` : ''} · ${esc(whenOf(s.up))} 제출</small></span>${isNewSub(s) ? `<span class="badge late">${s.seen ? '고침' : '새 서류'}</span>` : s.lock ? '<span class="badge ok">인쇄함</span>' : ''}<button class="btn small" data-sub="${esc(s.id)}">보기</button></li>`).join('')}</ul>`
           : `<p class="empty" style="padding:16px">${BOX.busy ? '받는 중…' : BOX.at ? '아직 낸 서류가 없어요.' : '[새로 받기]를 눌러 주세요.'}</p>`}
         <div class="row"><button class="btn small" id="bxRefresh" ${BOX.busy ? 'disabled' : ''}>${BOX.busy ? '받는 중…' : '새로 받기'}</button></div>
-        <p class="hint dim">${BOX.at ? `${esc(BOX.at)}에 받음. ` : ''}${BR.inFrame ? '새로 낸 서류를 저절로 받아요(15초쯤).' : BR.frameFailed ? "이 브라우저에서는 저절로 받지 못해요. [새로 받기]를 누르면 작은 '서류함 연결 창'이 열렸다가 끝나면 저절로 닫혀요." : "[새로 받기]를 누르면 작은 '서류함 연결 창'이 열렸다가 끝나면 저절로 닫혀요(선생님 구글 계정)."} 인쇄한 서류는 [보기 → 삭제]로 지워 주세요(구글 드라이브 파일까지 지워져요).</p>
+        <p class="hint dim">${BOX.at ? `${esc(BOX.at)}에 받음. ` : ''}${boxLive() ? '새로 낸 서류를 저절로 받아요(15초쯤).' : BR.frameFailed ? "이 브라우저에서는 저절로 받지 못해요. [새로 받기]를 누르면 작은 '서류함 연결 창'이 열렸다가 끝나면 저절로 닫혀요." : "[새로 받기]를 누르면 작은 '서류함 연결 창'이 열렸다가 끝나면 저절로 닫혀요(선생님 구글 계정)."} 인쇄한 서류는 [보기 → 삭제]로 지워 주세요(구글 드라이브 파일까지 지워져요).</p>
       </div>
       <div class="card">
         <h2 class="sec">학생에게 보낸 요청</h2>
         ${open.length ? `<ul class="docs">${open.map((r) => `<li><span>${esc(KINDNAME[r.kind])} · ${esc(r.c)} ${esc(r.no)}번 ${esc(stuName(r.c, r.no))} <small class="dim">${esc(rangeIso(r.from, r.to))}</small></span><button class="btn small" data-unreq="${esc(r.id)}">취소</button></li>`).join('')}</ul>` : '<p class="hint">기다리는 요청이 없어요.</p>'}
         <p class="hint dim">${S.cfg.reqAuto === false ? '요청은 [출석]에서 학생을 눌러 기록을 연 뒤, 또는 [서류] 목록에서 [학생에게 … 요청]으로 보내요.' : '출결을 넣으면 [서류 규칙]에 맞는 요청이 저절로 가요. 옛 기록은 [서류] 목록에서 [학생에게 … 요청]으로 보내요.'} 학생 화면에는 서류 종류와 날짜만 보여요.</p>
-        ${S.cfg.reqAuto !== false && !BR.inFrame ? '<p class="hint">이 기기는 창 없이 연결되지 않아서 저절로 보내지 못해요. [새로 받기]를 누르면 밀린 요청도 함께 보내요.</p>' : ''}
+        ${S.cfg.reqAuto !== false && !boxLive() ? '<p class="hint">이 기기는 창 없이 연결되지 않아서 저절로 보내지 못해요. [새로 받기]를 누르면 밀린 요청도 함께 보내요.</p>' : ''}
       </div>
       ${BOX.blocked.length ? `<div class="card">
         <h2 class="sec">잠긴 학생 (다른 계정·기기에서 열려고 함)</h2>
@@ -2225,6 +2246,7 @@ body.sfv-open { overflow: hidden; }
       const o = JSON.parse(new TextDecoder().decode(unb64u(b64)));
       if (!SF_URL_RE.test(o.u)) throw new Error();
       if (!S.cfg.sf || S.cfg.sf.u !== o.u) { S.cfg.sf = { u: o.u }; for (const c of S.classes) delete c.skSig; }
+      if (SF_ID_RE.test(o.d || '')) { S.cfg.sf.d = o.d; if (/^[0-9a-f]{32,}$/.test(o.t || '')) S.cfg.sf.t = o.t; else delete S.cfg.sf.t; }
       if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(o.a || '') && !gAccount()) { try { localStorage.setItem(ACC_KEY, o.a); } catch { /* 저장 못 함 */ } }
       for (const c of S.classes) if (o.ks && /^[A-Za-z0-9_-]{16,64}$/.test(o.ks[c.name] || '')) { c.sk = o.ks[c.name]; delete c.skSig; }
       save(true);
@@ -2266,6 +2288,8 @@ body.sfv-open { overflow: hidden; }
     if (!SF_URL_RE.test(String(r.url))) return;
     BOX.making = false; BOX.err = '';
     if (!S.cfg.sf || S.cfg.sf.u !== r.url) { S.cfg.sf = { u: r.url }; for (const c of S.classes) delete c.skSig; }
+    if (r.fk && SF_ID_RE.test(r.fk.d || '') && /^[0-9a-f]{32,}$/.test(r.fk.t || '')) { S.cfg.sf.d = r.fk.d; S.cfg.sf.t = r.fk.t; }
+    if (r.email && !gAccount()) { try { localStorage.setItem(ACC_KEY, String(r.email).toLowerCase()); } catch { /* 저장 못 함 */ } }
     if (r.made || r.updated || BOX.updating) { S.cfg.sf.v = SF_V; BOX.v = SF_V; }
     if (BOX.updating) { try { BOX.makerWin?.close(); } catch { /* 이미 닫힘 */ } }
     BOX.updating = false;

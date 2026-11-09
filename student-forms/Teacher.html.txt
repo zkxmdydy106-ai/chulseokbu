@@ -30,6 +30,7 @@
 <script>
   var ORIGIN = <?!= JSON.stringify(origin) ?>;
   var FRAMED = <?!= JSON.stringify(framed) ?>;
+  var FIRST = <?!= JSON.stringify(first) ?>;
   var msg = document.getElementById('msg');
   var done = 0;
   function target() {
@@ -56,7 +57,17 @@
       })
       .teacherApi(d.body);
   });
-  (function hello() {
+  /* 처음 한 번 허락(만들기 창에서 옴): 드라이브까지 닿는지 보고 창을 닫는다 */
+  if (FIRST) {
+    say('학생 서류 저장 허락을 확인하는 중…');
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (res && res.ok) { say('허락이 끝났어요. 이 창을 닫아도 돼요.', 'ok'); try { window.top.close(); } catch (e) { } }
+        else say((res && res.msg) || '허락을 확인하지 못했어요.', 'err');
+      })
+      .withFailureHandler(function (err) { say((err && err.message) || '허락을 확인하지 못했어요.', 'err'); })
+      .teacherApi({ a: 'ping' });
+  } else (function hello() {
     var to = target();
     if (!to) { say('출석부 창을 찾지 못했어요. 출석부 [서류함]에서 다시 열어 주세요.', 'err'); return; }
     to.postMessage({ type: 'sf-ready', frame: FRAMED ? 1 : 0 }, ORIGIN);

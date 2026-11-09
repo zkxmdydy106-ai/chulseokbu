@@ -17,13 +17,18 @@
  *   선생님이 [풀기]를 누르면 다음에 처음 여는 계정·기기로 다시 묶인다. 반 링크를 새로 만들어도 묶음은 그대로.
  * - 교사: 목록·내려받기·잠그기·삭제·요청 만들기는 이 스크립트를 배포한 선생님 계정으로 로그인했을 때만
  *   (접속한 계정 = 실행 계정). 비밀값 없음.
+ * - 로그인 없는 교사 연결(교사 결정 2026-11-09 '폰 로그인 없이 QR로 끝'): 만들기 다리가 같은 코드로 배포를 하나 더 만든다(액세스 '모든 사용자',
+ *   TEACHER_ONLY = true, 학생 화면 없음). 출석부 웹앱이 POST로 열쇠 + 명령을 보내면 sha256('auth|'+열쇠)가 TEACHER_AUTH와 같을 때만 교사 일을 한다.
+ *   코드에는 확인값만 있고 열쇠는 없다. 열쇠는 교사 PC·폰에만, 잃어버리면 [연결 열쇠 바꾸기].
  * - 삭제: 교사가 [삭제]하면 파일을 바로 완전 삭제(Drive 고급 서비스, 안 되면 내용 비우고 휴지통).
  * - HTML 파일(Student.html은 tools/build-student-gas.js로 만듦)의 인라인 스크립트에는 슬래시 두 개를 쓰지 않는다.
  */
 var FOLDER_NAME = '학생 서류 제출 (출석부)';
 var KINDS = { 'absence': '결석신고서', 'field-apply': '교외체험학습 신청서', 'field-report': '교외체험학습 결과보고서' };
 var REQ_KINDS = { 'absence': 1, 'field-apply': 1, 'field-report': 1 };
-var BRIDGE_V = 3; /* 받는 곳 판: 2 = 창 없는 연결·미리 받기, 3 = 저절로 요청·판 번호(head) */
+var BRIDGE_V = 4; /* 받는 곳 판: 2 = 창 없는 연결·미리 받기, 3 = 저절로 요청·판 번호(head), 4 = 로그인 없는 교사 연결 */
+var TEACHER_AUTH = '__TEACHER_AUTH__'; /* 만들기 다리가 확인값으로 바꿔 넣는다 */
+var TEACHER_ONLY = false; /* 로그인 없는 교사 연결 배포에서만 true */
 var MAX_BODY = 15 * 1024 * 1024;
 var ALLOWED_ORIGINS = [
   'https:' + '/' + '/zkxmdydy106-ai.github.io',
@@ -33,6 +38,7 @@ var ALLOWED_ORIGINS = [
 
 function doGet(e) {
   var p = (e && e.parameter) || {};
+  if (TEACHER_ONLY) return ContentService.createTextOutput('학생 서류 받는 곳 교사 연결입니다.');
   if (p.p === 's') {
     var t = HtmlService.createTemplateFromFile('Student');
     var ok = /^\d-\d{1,2}$/.test(p.b || '') && /^[A-Za-z0-9_-]{16,64}$/.test(p.k || '');
@@ -42,6 +48,7 @@ function doGet(e) {
   if (p.p === 't') {
     var tt = HtmlService.createTemplateFromFile('Teacher');
     tt.origin = ALLOWED_ORIGINS.indexOf(p.origin) >= 0 ? p.origin : '';
+    tt.first = p.first === '1'; /* 처음 한 번 학생 서류 저장 허락(만들기 창에서 옴): 허락 뒤 확인하고 닫는다 */
     tt.framed = !!tt.origin && p.frame === '1'; /* 창 없는 연결(2026-11-02): 허용 주소가 frame=1로 열 때만 숨은 틀에 들어갈 수 있다. 누를 곳 없는 화면이고 대답은 허용 주소로만 간다 */
     var page = tt.evaluate().setTitle('서류함 연결').addMetaTag('viewport', 'width=device-width, initial-scale=1');
     return tt.framed ? page.setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL) : page;
@@ -61,6 +68,7 @@ function safe_(fn) {
 /** 학생 화면(google.script.run): 요청·상태 보기, 제출 */
 function studentApi(b) {
   return safe_(function (x) {
+    if (TEACHER_ONLY) fail_('bad', '모르는 요청이에요.');
     var a = String(x.a || '');
     if (a === 'hello') return locked_(function () { return hello_(x); });
     if (a === 'submit') return locked_(function () { return submit_(x); });
@@ -72,6 +80,20 @@ function studentApi(b) {
 function teacherApi(b) {
   return safe_(function (x) {
     owner_();
+    return teacherDo_(x);
+  }, b);
+}
+
+/** 로그인 없는 교사 연결: 열쇠가 맞을 때만. 값은 POST 안에만 오고 주소에 안 남는다 */
+function doPost(e) {
+  var body;
+  try { body = JSON.parse((e && e.postData && e.postData.contents) || '{}'); } catch (err) { return jsonOut_({ ok: false, err: 'bad', msg: '요청 모양이 달라요.' }); }
+  if (TEACHER_AUTH.indexOf('__') === 0 || !body.t || hex_('auth|' + body.t) !== TEACHER_AUTH) return jsonOut_({ ok: false, err: 'auth', msg: '연결 열쇠가 바뀌었어요. PC 도우미에서 새 QR을 찍어 주세요.' });
+  return jsonOut_(safe_(teacherDo_, body.b || {}));
+}
+function jsonOut_(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
+
+function teacherDo_(x) {
     var a = String(x.a || '');
     if (a === 'ping') return { ok: true, email: Session.getEffectiveUser().getEmail() };
     if (a === 'head') return { ok: true, v: BRIDGE_V, rev: props_().getProperty('rev') || '' };
@@ -86,7 +108,6 @@ function teacherApi(b) {
     if (a === 'deleteAll') return locked_(function () { return deleteAll_(); });
     if (a === 'unbind') return locked_(function () { return unbind_(x); });
     fail_('bad', '모르는 요청이에요.');
-  }, b);
 }
 
 // 접속한 계정이 이 스크립트를 배포한(실행하는) 선생님 계정과 같아야 한다
