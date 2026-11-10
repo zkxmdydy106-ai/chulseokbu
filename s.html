@@ -14,6 +14,10 @@
   a.btn, button { display: block; width: 100%; margin: 10px 0 0; padding: 11px; border: 1px solid #2a64d6; border-radius: 4px; background: #2a64d6; color: #fff; font: inherit; font-weight: 600; text-align: center; text-decoration: none; }
   button.line { background: #fff; color: #2a64d6; }
   .err { color: #c4392b; }
+.dim { font-size: 13px; color: #6b7280; }
+input { box-sizing: border-box; width: 100%; margin-top: 6px; padding: 10px; border: 1px solid #c5ccd6; border-radius: 4px; font: inherit; }
+.nums { display: flex; gap: 6px; margin-top: 6px; }
+.nums a { flex: 1; padding: 6px 0; border: 1px solid #c5ccd6; border-radius: 4px; color: #222; text-align: center; text-decoration: none; font-size: 13px; }
 </style>
 </head>
 <body>
@@ -57,7 +61,41 @@
       return;
     }
     if (inApp) { manual('이 앱 안에서는 구글 로그인이 안 될 수 있어요.'); return; }
-    location.replace(target);
+    // 폰에 구글 계정이 여러 개면 첫 계정으로 열려 안 열릴 수 있다(교사 결정 2026-11-10 '학교 계정 주소 한 번'):
+    // 학교 계정 주소를 한 번 받아 이 폰에만 기억하고, 구글 계정 선택을 거쳐 그 계정으로 연다. 주소는 구글에만 가고 선생님·이 공개판으로는 가지 않는다
+    var KEY = 'chulseokbu.stuAcct';
+    var EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    function saved() { try { return localStorage.getItem(KEY) || ''; } catch (e) { return ''; } }
+    function open(email) {
+      var t = target + '&authuser=' + encodeURIComponent(email);
+      location.replace('https://accounts.google.com/AccountChooser?' + new URLSearchParams({ Email: email, continue: t }));
+    }
+    function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    var nums = '<p class="dim">계속 안 열리면 폰에 로그인한 순서로 열어 보세요.</p><div class="nums">'
+      + [0, 1, 2].map(function (n) { return '<a href="' + (target + '&authuser=' + n).replace(/&/g, '&amp;') + '">' + (n + 1) + '번째 계정</a>'; }).join('') + '</div>';
+    function ask(note) {
+      box.innerHTML = '<h1>학교 구글 계정으로 열어요</h1>'
+        + '<p>학교 구글 계정 주소를 한 번만 적어 주세요. 다음부터는 저절로 그 계정으로 열려요. 주소는 이 폰에만 기억해요.</p>'
+        + '<input id="em" type="email" autocomplete="email" placeholder="예: 20301@school.cnehs.kr" aria-label="학교 구글 계정 주소">'
+        + '<p id="emMsg" class="err">' + (note || '') + '</p>'
+        + '<button id="go">이 계정으로 열기</button>'
+        + '<p class="dim">구글 계정이 하나뿐이면 <a href="' + target.replace(/&/g, '&amp;') + '">그냥 열기</a></p>' + nums;
+      var em = document.getElementById('em');
+      var go = function () {
+        var v = String(em.value || '').trim().toLowerCase();
+        if (!EMAIL.test(v)) { document.getElementById('emMsg').textContent = '계정 주소 모양이 달라요.'; return; }
+        try { localStorage.setItem(KEY, v); } catch (e) { /* 기억 못 해도 이번엔 연다 */ }
+        open(v);
+      };
+      document.getElementById('go').onclick = go;
+      em.onkeydown = function (e) { if (e.key === 'Enter') go(); };
+      em.focus();
+    }
+    var me = saved();
+    if (!EMAIL.test(me)) { ask(''); return; }
+    box.innerHTML = '<h1>여는 중…</h1><p><b>' + esc(me) + '</b> 계정으로 열어요.</p><button id="other" class="line">다른 계정 주소 적기</button>' + nums;
+    var timer = setTimeout(function () { open(me); }, 900);
+    document.getElementById('other').onclick = function () { clearTimeout(timer); try { localStorage.removeItem(KEY); } catch (e) { } ask(''); };
   })();
 </script>
 </body>
