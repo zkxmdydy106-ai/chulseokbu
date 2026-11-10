@@ -194,9 +194,11 @@
   /* ── 학교 서식에 값 채우기 ───────────────────────────────── */
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const textHtml = (s) => esc(s).replace(/\t/g, '    ').replace(/\r?\n/g, '<br>');
-  const V = (s) => `<span class="v">${textHtml(s)}</span>`;
   /* 서식 글: 숫자·영문·기호는 한글보다 폭이 좁아 자간도 그만큼(.hn) */
-  const formText = (s) => String(s ?? '').split(/([!-~]+)/).map((x, i) => (i % 2 ? `<span class="hn">${esc(x)}</span>` : textHtml(x))).join('');
+  /* 한글 '고정폭 빈칸'(서식의 　)은 글자 크기의 반 — 크롬은 전각 빈칸(1em)으로 그려 '☑ 질병결석' 사이가 벌어짐(2026-11-10) → 반 폭 칸에 담는다(글은 그대로) */
+  const formText = (s) => String(s ?? '').split(/([!-~]+)/).map((x, i) => (i % 2 ? `<span class="hn">${esc(x)}</span>` : textHtml(x).replace(/　/g, '<span class="fw">　</span>'))).join('');
+  /* 넣은 값: 한글은 서식 글과 같은 자간, 숫자·영문만 .hn(예전엔 값 전체가 숫자 자간이라 한글 이름이 넓게 벌어짐, 2026-11-10) */
+  const V = (s) => `<span class="v">${formText(s)}</span>`;
   const reEsc = (s) => s.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
   const ON = '<span class="v">☑</span>';
   /* 원래 글의 □/▢ 중 label 앞의 것만 ☑(체크 표시 — 까맣게 채운 칸 아님, 교사 요청 2026-10-29) */
@@ -209,13 +211,15 @@
   /* 서명 줄. src(원래 서식 글, 예: '학  생               (인)')가 있으면 빈칸 자리에 이름을 넣어 글 폭을 그대로 둔다(손으로 쓴 것처럼) */
   function signLine(before, name, mark, s, src) {
     const at = src ? src.lastIndexOf(mark) : -1;
-    if (at > 0 && name) {
+    /* 한글에서 한 줄인 서명 줄은 인쇄에서도 한 줄(fit) — 예전엔 인쇄 때 앞 빈칸에서 줄이 넘어가 이름이 왼쪽으로 밀림(2026-11-10) */
+    if (at > 0 && !name) return { html: `${esc(src.slice(0, at))}<span class="sf-sign">${esc(mark)}${sigImg(s)}</span>`, fit: true };
+    if (at > 0) {
       const head = src.slice(0, at), label = head.replace(/\s+$/, ''), gap = head.length - label.length;
       const w = [...String(name)].reduce((n, ch) => n + (/[\x20-\x7e]/.test(ch) ? 1 : 2), 0);
       const rest = Math.max(2, gap - w), l = rest >> 1;
-      return { html: `${esc(label)}${' '.repeat(l)}${V(name)}${' '.repeat(rest - l)}<span class="sf-sign">${esc(mark)}${sigImg(s)}</span>` };
+      return { html: `${esc(label)}${' '.repeat(l)}${V(name)}${' '.repeat(rest - l)}<span class="sf-sign">${esc(mark)}${sigImg(s)}</span>`, fit: true };
     }
-    return { html: `${esc(before)}${name ? ` ${V(name)} ` : ''}<span class="sf-sign">${esc(mark)}${sigImg(s)}</span>` };
+    return { html: `${esc(before)}${name ? ` ${V(name)} ` : ''}<span class="sf-sign">${esc(mark)}${sigImg(s)}</span>`, fit: true };
   }
   /* 원본 글의 빈칸 자리에 값을 넣어 글 폭을 그대로 둔다(원본과 같은 자리에 오게, 교사 요청 2026-11-02). vals[k]: k번째 빈칸 덩이에 넣을 값, 비면 빈칸 그대로 */
   const textWidth = (s) => [...String(s)].reduce((n, ch) => n + (/[\x20-\x7e]/.test(ch) ? 1 : 2), 0);
@@ -238,8 +242,8 @@
     const d = dateOf(iso);
     if (!d) return undefined;
     const Y = d.getFullYear(), M = d.getMonth() + 1, D = d.getDate();
-    if (!src) return { html: `${V(Y)}년 ${V(M)}월 ${V(D)}일` };
-    return { html: src.startsWith(' ') ? gapFill(src, [Y, M, D]) : V(Y) + gapFill(src, [M, D]) };
+    if (!src) return { html: `${V(Y)}년 ${V(M)}월 ${V(D)}일`, fit: true };
+    return { html: src.startsWith(' ') ? gapFill(src, [Y, M, D]) : V(Y) + gapFill(src, [M, D]), fit: true };
   }
   const left = (s) => ({ html: V(s), align: 'left' });
   /* 연락처: 줄바꿈 없이 한 줄, 칸보다 길면 글자만 줄임(교사 요청 2026-10-29) */
@@ -515,8 +519,11 @@
   /* 한글 서식 글꼴 → 이 기기 글꼴(한글이 깔린 PC는 원래 글꼴 그대로, 없으면 비슷한 글꼴) */
   const FONT = {
     '휴먼고딕': "'휴먼고딕', 'HYGothic-Medium', 'Malgun Gothic', '맑은 고딕', sans-serif",
-    'HY울릉도M': "'HY울릉도M', 'HYwulM', 'HYGothic-Medium', 'Malgun Gothic', sans-serif",
-    '굴림체': "'GulimChe', '굴림체', 'Gulim', '굴림', 'Malgun Gothic', sans-serif",
+    /* HY울릉도M은 한글 프로그램이 켜져 있을 때만 크롬이 쓸 수 있다(2026-11-10) → 없으면 윈도에 깔린 굵은 HY견고딕(가는 맑은 고딕 말고) */
+    'HY울릉도M': "'HY울릉도M', 'HYwulM', 'HY견고딕', 'HYGothic-Extra', 'HYGothic-Medium', 'Malgun Gothic', sans-serif",
+    /* 굴림체는 크롬이 인쇄할 때만 글자 속 비트맵 폭(14.7px 글자를 16px 폭)으로 찍어 서명 줄이 8% 넓어진다(2026-11-10 PDF로 잼).
+       한글 모양이 같은 굴림은 화면·인쇄 폭이 같아 굴림으로 그린다(영문·숫자 폭만 조금 다름) */
+    '굴림체': "'Gulim', '굴림', 'GulimChe', '굴림체', 'Malgun Gothic', sans-serif",
     '굴림': "'Gulim', '굴림', 'Malgun Gothic', sans-serif",
     '함초롬바탕': "'함초롬바탕', 'HCR Batang', 'Batang', '바탕', serif",
     '함초롬돋움': "'함초롬돋움', 'HCR Dotum', 'Dotum', '돋움', 'Malgun Gothic', sans-serif",
@@ -526,21 +533,101 @@
   /* 한컴 글자 놓기(한글 2018로 시험 문서를 그려 잰 규칙): 글자마다 (제 폭 × 장평) × (1 + 자간%), 빈칸은 늘 글자 크기의 반.
      크롬은 글꼴의 제 폭 + letter-spacing이라 그 차이만큼 준다. FM: 이 PC 글꼴의 [한글 폭, 빈칸 폭](em) */
   const FM = { '함초롬바탕': [0.97, 0.3], '함초롬돋움': [0.97, 0.3], '휴먼고딕': [1, 0.5], 'HY울릉도M': [1, 0.333], '굴림체': [1, 0.5], '굴림': [1, 0.333], '맑은 고딕': [1, 0.352] };
-  function spacingCss(font, sp, rt) {
+  /* 가짜 굵게: 굴림체처럼 굵은 글꼴이 없으면 크롬은 굵게 할 때 글자 폭을 늘리는데, 그 폭이 화면과 인쇄에서 다르고(인쇄 약 12%)
+     인쇄(PDF)에서는 굵기까지 빠진다. 한글은 폭을 늘리지 않는다(서명 줄 '보호자(법정대리인) 성명:'이 넓어 왼쪽으로 밀림, 2026-11-10)
+     → 그런 글꼴은 보통 굵기로 놓고 글자 테두리(--sb)로 굵게 보이게 한다. 화면·인쇄 폭이 같아진다 */
+  const FAKE = {};
+  let MDOC = null;
+  const measureW = (font, bold, s, px) => {
+    const box = MDOC.createElement('span');
+    box.style.cssText = `position:absolute;left:-9999px;top:0;visibility:hidden;white-space:pre;font-size:${px}px;line-height:1;letter-spacing:0;word-spacing:0;font-family:${FONT[font]};font-weight:${bold ? 700 : 400}`;
+    box.textContent = s;
+    MDOC.body.appendChild(box);
+    const w = box.getBoundingClientRect().width / px / s.length;
+    box.remove();
+    return w;
+  };
+  const MH = '가나다라마바사아자차'.repeat(4), MS = ' '.repeat(40);
+  /* 굵게 했을 때 한글 폭이 늘면 가짜 굵게(진짜 굵은 글꼴 — 맑은 고딕·함초롬 — 은 한글 폭이 그대로). 글꼴마다 한 번 */
+  function fakeBold(font) {
+    if (!MDOC || !FONT[font]) return false;
+    if (FAKE[font] === undefined) { try { FAKE[font] = measureW(font, 1, MH, 15) - measureW(font, 0, MH, 15) > 0.005; } catch { FAKE[font] = false; } }
+    return FAKE[font];
+  }
+  const weightCss = (font, bold) => `font-weight:${bold && !fakeBold(font) ? 700 : 400}`;
+  /* 이 기기에서 실제로 쓰이는 글꼴의 폭을 한 번 잰다(한글 글꼴이 없는 PC·폰도 맞게). 못 재면 위 값 그대로 */
+  let measured = false;
+  function measureFonts(d) {
+    if (measured || !d || !d.body) return;
+    measured = true;
+    try {
+      MDOC = d;
+      for (const f of Object.keys(FONT)) {
+        const hw = measureW(f, 0, MH, 16), sw = measureW(f, 0, MS, 16);
+        if (hw > 0.5 && hw < 1.5 && sw > 0.1 && sw < 1) FM[f] = [hw, sw];
+      }
+    } catch { MDOC = null; /* 재지 못하면 기본값 */ }
+  }
+  function spacingCss(font, sp, rt, bold) {
     const [hw, sw] = FM[font] || [1, 0.5];
     const k = ((+rt || 100) / 100) * (1 + (+sp || 0) / 100);
     const lh = hw * (k - 1), ln = 0.5 * (k - 1), ws = 0.5 * k - sw - lh; /* 한글 · 숫자·영문(폭 약 0.5) · 빈칸 */
-    return `letter-spacing:${lh.toFixed(3)}em;--sn:${ln.toFixed(3)}em;word-spacing:${ws.toFixed(3)}em`;
+    const sb = bold && fakeBold(font) ? 0.03 : 0; /* 가짜 굵게 대신 글자 테두리(em) */
+    return `letter-spacing:${lh.toFixed(3)}em;--sn:${ln.toFixed(3)}em;word-spacing:${ws.toFixed(3)}em;--sb:${sb}em`;
   }
-  /* 글자 모양 한 묶음(크기·굵기·글꼴·자간·색) → style. 서식 글자 색은 원본대로(교사 결정 2026-11-03 — 파란 글씨 그대로), 값은 검정 */
+  /* 글자 모양 한 묶음(크기·굵기·글꼴·자간·색·글자 테두리) → style. 서식 글자 색은 원본대로(교사 결정 2026-11-03 — 파란 글씨 그대로), 값은 검정 */
   function runStyle(r, base) {
     const st = [];
     if (!base || r.size !== base.size) st.push(`font-size:calc(var(--fs, 1) * ${(r.size * 1.333).toFixed(1)}px)`);
-    if (!base || !!r.bold !== !!base.bold) st.push(`font-weight:${r.bold ? 700 : 400}`);
+    if (!base || !!r.bold !== !!base.bold || r.font !== base.font) st.push(weightCss(r.font || (base && base.font), r.bold));
     if (r.font && (!base || r.font !== base.font)) st.push(fontCss(r.font));
     if (!base || (r.color || '#000000') !== (base.color || '#000000')) st.push(`color:${r.color || '#000000'}`);
-    if (!base || r.font !== base.font || r.sp !== base.sp || r.rt !== base.rt) st.push(spacingCss(r.font, r.sp, r.rt));
+    if (!base || r.font !== base.font || r.sp !== base.sp || r.rt !== base.rt || !!r.bold !== !!base.bold) st.push(spacingCss(r.font, r.sp, r.rt, r.bold));
+    if (r.bdr) st.push(`border:${Math.max(0.7, +r.bdr).toFixed(2)}px solid #000;padding:0 1px`);
+    if (r.ul) st.push('text-decoration:underline;text-underline-offset:.15em');
     return st.filter(Boolean).join(';');
+  }
+  /* 채운 글(서식 글 + 넣은 값)을 원래 글자 모양 묶음대로 다시 입힌다: 서식 글자는 제 모양, 넣은 값은 그 자리 글자 모양을 잇는다
+     ([한글로 받기]의 글자 맞대기와 같은 규칙). 예전엔 문단 전체가 첫 글자 모양이라 '☑ 진료확인서'가 □ 크기(13pt)로 커짐(2026-11-10) */
+  function restyle(html, b) {
+    const runs = b.runs, text = b.text, at = [];
+    runs.forEach((r, i) => { for (let j = 0; j < r.text.length; j++) at.push(i); });
+    const runAt = (p) => (at.length ? at[Math.min(p, at.length - 1)] : 0);
+    const ENT = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'", '&nbsp;': ' ' };
+    let pos = 0, out = '', buf = '', cur = -1;
+    const wrap = (i, inner) => { const st = runStyle(runs[i], b); return st ? `<span style="${st}">${inner}</span>` : inner; };
+    const flush = () => { if (buf) out += wrap(cur, formText(buf)); buf = ''; };
+    for (let i = 0; i < html.length;) {
+      if (html[i] === '<') {
+        if (html.startsWith('<span class="v"', i)) { /* 넣은 값: 짝 맞는 </span>까지 */
+          let depth = 0, j = i;
+          for (; j < html.length; j++) {
+            if (html.startsWith('<span', j)) depth++;
+            else if (html.startsWith('</span>', j) && --depth === 0) { j += 7; break; }
+          }
+          flush();
+          out += wrap(runAt(pos), html.slice(i, j));
+          i = j;
+          continue;
+        }
+        const j = html.indexOf('>', i) + 1 || html.length;
+        flush();
+        out += html.slice(i, j);
+        i = j;
+        continue;
+      }
+      let ch = html[i], n = 1;
+      if (ch === '&') { const m = /^&[a-z#0-9]+;/i.exec(html.slice(i, i + 8)); if (m) { ch = ENT[m[0]] ?? m[0]; n = m[0].length; } }
+      let k =text[pos] === ch ? pos : text.indexOf(ch, pos);
+      if (k < 0 || k - pos > 12) k = -1;
+      const r = runAt(k < 0 ? pos : k);
+      if (r !== cur) { flush(); cur = r; }
+      buf += ch;
+      if (k >= 0) pos = k + 1;
+      i += n;
+    }
+    flush();
+    return out;
   }
   /* 한글과 같은 자리에서 줄을 나눈다: 줄마다 한 덩이, 마지막 줄 말고는 양쪽 맞춤으로 폭을 꽉 채움 */
   function linesHtml(b) {
@@ -567,15 +654,27 @@
     let v = O[path];
     if (v === undefined && SCH.form === 'common' && TO_SCHOOL.test(b.text)) v = { html: esc(`${SCH.name || '학교'}장 귀하`) };
     if (v && v.skip) return '';
+    /* 한글은 줄 끝 빈칸을 가운데·오른쪽 맞춤과 폭 재기에 넣지 않는다(결과보고서 제목 '학교장 허가 ', 결석신고서 자르는 점선 줄, 2026-11-10) */
+    if (v === undefined && b.one && /\s$/.test(b.text)) {
+      const cut = b.text.length - b.text.replace(/\s+$/, '').length;
+      let left = cut;
+      const runs = b.runs && b.runs.slice().reverse().map((r) => { const n = Math.min(left, r.text.length); left -= n; return { ...r, text: r.text.slice(0, r.text.length - n) }; }).reverse().filter((r) => r.text);
+      b = { ...b, text: b.text.slice(0, b.text.length - cut), runs: runs && runs.length ? runs : undefined };
+    }
     let align = b.align === 'distribute' ? 'justify' : b.align, size = b.size, inner;
     const last = b.align === 'distribute' && v === undefined ? ';text-align-last:justify' : '';
-    if (v === undefined) inner = b.brk ? linesHtml(b) : b.runs ? b.runs.map((r) => `<span style="${runStyle(r, b)}">${formText(r.text)}</span>`).join('') : formText(b.text);
+    /* 자르는 점선 줄(----): 굴림 '-'는 인쇄에서 폭이 달라져 줄이 짧아짐 → 한글 '-' 폭(0.625em)대로 점선 그림(글은 숨은 채 그대로, 2026-11-10) */
+    if (v === undefined && !b.runs && /^-{8,}$/.test(b.text)) inner = `<span class="dl" style="width:${(b.text.length * 0.625).toFixed(3)}em"><span>${b.text}</span></span>`;
+    else if (v === undefined) inner = b.brk ? linesHtml(b) : b.runs ? b.runs.map((r) => `<span style="${runStyle(r, b)}">${formText(r.text)}</span>`).join('') : formText(b.text);
     else if (typeof v === 'string') inner = V(v);
-    else { if (v.align) align = v.align; if (v.size) size = v.size; inner = v.html !== undefined ? v.html : V(v.text); }
-    const st = [`text-align:${align}${last}`, `font-size:calc(var(--fs, 1) * ${(size * 1.333).toFixed(1)}px)`, `font-weight:${b.bold ? 700 : 400}`];
+    else {
+      if (v.align) align = v.align; if (v.size) size = v.size; inner = v.html !== undefined ? v.html : V(v.text);
+      if (b.runs && v.html !== undefined && !v.size && !v.plain) inner = restyle(inner, b);
+    }
+    const st = [`text-align:${align}${last}`, `font-size:calc(var(--fs, 1) * ${(size * 1.333).toFixed(1)}px)`, weightCss(b.font || '휴먼고딕', b.bold)];
     if (b.font) st.push(fontCss(b.font));
     if (v === undefined && b.color && b.color !== '#000000') st.push(`color:${b.color}`);
-    st.push(spacingCss(b.font || '휴먼고딕', b.sp, b.rt));
+    st.push(spacingCss(b.font || '휴먼고딕', b.sp, b.rt, b.bold));
     /* 한글 줄 배치: 글자는 줄 맨 위, 줄 간격(%)만큼 아래를 띄움(칸 끝 줄의 띄움은 셈하지 않음 — CSS .hp). 줄 간격이 없는 옛 서식(결석신고서)은 그대로 */
     if (b.ls) st.push(`line-height:${(b.ls / 100).toFixed(2)}`, `--h:${((b.ls - 100) / 200).toFixed(3)}em`);
     const ind = +b.ind || 0, left = +b.left || 0;
@@ -625,7 +724,11 @@
       }).join('');
       return `<div class="htc" style="${st.join(';')}">${blocksHtml(c.body, `${tp}.r${c.r}c${c.c}.`, O)}</div>${lines ? `<svg class="hb" aria-hidden="true" style="${area}">${lines}</svg>` : ''}`;
     }).join('');
-    const mg = t.mt !== undefined ? `;--tmt:${(+t.mt).toFixed(1)}px;--tmb:${(+t.mb).toFixed(1)}px;--tob:${(+t.ob || 0).toFixed(1)}px` : '';
+    let mg = t.mt !== undefined ? `;--tmt:${(+t.mt).toFixed(1)}px;--tmb:${(+t.mb).toFixed(1)}px;--tob:${(+t.ob || 0).toFixed(1)}px` : '';
+    /* 문단 안 표의 가로 자리: 앞 글 폭만큼(ml) 또는 문단 정렬(가운데·오른쪽) — 보호자 확인서 점선 칸 등(2026-11-10) */
+    if (t.ml) mg += `;margin-left:${(+t.ml).toFixed(1)}px`;
+    else if (t.align === 'center') mg += ';margin-left:auto;margin-right:auto';
+    else if (t.align === 'right') mg += ';margin-left:auto';
     return `<div class="htbl" style="grid-template-columns:${cols};grid-template-rows:${rows}${mg}">${cells}</div>`;
   }
   /* 공통 서식 위쪽 결재 칸: 원본과 같은 선·글꼴·높이로, 칸 이름·수·전결만 설정대로(hwpx-fill.js applyAppr와 같은 모양) */
@@ -655,6 +758,7 @@
     cells.sort((a, b) => a.r - b.r || a.c - b.c);
     return `<div class="sf-head" data-appr="${esc(NAMES.join('|'))}">${tblHtml({ ...t0, cols, rows, cells, mb: 0, ob: 0 }, 'h', {})}</div>`;
   }
+  const A4H = 1122.5;
   function pageHtml(kind, O) {
     const tpl = FORMS()[kind];
     if (!tpl) return `<div class="sf-page"><p>서식(${esc(kind)})이 없어요.</p></div>`;
@@ -662,7 +766,10 @@
     const R = SCH.form === 'common' ? HEAD_ROWS[kind] || 0 : 0;
     const skip = R && !sameHead(tpl.blocks[0]) ? R : 0;
     const body = skip ? headHtml(tpl, R) + tblHtml({ ...tpl.blocks[0], mt: 0 }, 't0', O, skip) + blocksHtml(tpl.blocks.slice(1), '', O, 1) : blocksHtml(tpl.blocks, '', O);
-    return `<div class="sf-page" data-form="${esc(kind)}" data-h="${(Math.min(pg.h, 1122.5) - pg.mt - pg.mb - 4).toFixed(1)}" style="padding:${pg.mt}px ${pg.mr}px ${pg.mb}px ${pg.ml}px"><div class="sf-in">${body}</div></div>`;
+    /* A4보다 긴 서식(결석신고서 원본은 210×300mm): 한글이 A4에 그대로 찍듯 위 여백은 두고 아래 여백만 줄인다.
+       예전엔 A4 높이에 넣으려고 글자를 94%로 줄여 아래로 갈수록 줄이 어긋남(교사 제보 2026-11-10) */
+    const mb = Math.max(0, pg.mb - Math.max(0, pg.h - A4H));
+    return `<div class="sf-page" data-form="${esc(kind)}" data-h="${(Math.min(pg.h, A4H) - pg.mt - mb - 4).toFixed(1)}" style="padding:${pg.mt}px ${pg.mr}px ${mb.toFixed(2)}px ${pg.ml}px"><div class="sf-in">${body}</div></div>`;
   }
   function photoPages(doc) {
     const f = doc.f || {};
@@ -701,7 +808,11 @@
 .sf-page .htc { display: flex; flex-direction: column; padding: 2px 4px; min-width: 0; }
 .sf-page .hb { display: block; width: 100%; height: 100%; contain: size; z-index: 1; overflow: visible; pointer-events: none; }
 .sf-page .hb line { stroke: #000; stroke-width: max(var(--w), .7px); stroke-linecap: square; }
-.sf-page .v { color: #000; font-weight: inherit; letter-spacing: var(--sn, inherit); }
+.sf-page .v { color: #000; font-weight: inherit; }
+.sf-page .hp, .sf-page .hp * { -webkit-text-stroke: var(--sb, 0) currentColor; }
+.sf-page .dl { display: inline-block; max-width: 100%; height: .5em; vertical-align: middle; background: repeating-linear-gradient(90deg, #000 0 .47em, transparent .47em .625em) 0 50% / 100% .055em no-repeat; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.sf-page .dl > span { font-size: 0; }
+.sf-page .fw { display: inline-block; width: .5em; overflow: clip; text-indent: 0; letter-spacing: 0; }
 .sf-page .hn { letter-spacing: var(--sn, inherit); }
 .sf-page .ln { display: block; }
 .sf-page .ln + .ln { text-indent: 0; }
@@ -735,7 +846,8 @@
   /* host 안에 쪽들을 그리고 화면 폭에 맞춘다 */
   function mount(host, doc, opts) {
     ensureStyle(host.ownerDocument);
-    host.innerHTML = `<div class="sf-scale"><div class="sf-pages">${pagesHtml(doc, opts)}</div></div>`;
+    measureFonts(host.ownerDocument);
+    host.innerHTML =`<div class="sf-scale"><div class="sf-pages">${pagesHtml(doc, opts)}</div></div>`;
     const sc = host.querySelector('.sf-scale');
     const fit = () => sc.style.setProperty('--sf-z', String(Math.min(1, Math.max(0.3, (host.clientWidth - 8) / 794))));
     /* 한 쪽에 들어가게: 이 기기 글꼴이 한글 서식 글꼴보다 넓으면 글자만 조금씩 줄인다(표 칸 폭은 그대로, 최소 70%). A4 높이 기준 */
