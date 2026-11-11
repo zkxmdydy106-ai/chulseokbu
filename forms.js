@@ -208,18 +208,21 @@
     return h;
   }
   const sigImg = (s) => (imgOk(s) ? `<img class="sf-sig" alt="서명" src="${s}">` : '');
+  /* '(인)'처럼 표시가 짧은 줄은 서명 자리도 좁아 서명을 비율대로 줄인다(hwpx-fill.js와 같은 15mm, 교사 제보 2026-11-11) */
+  const signCls = (mark) => `sf-sign${String(mark).length <= 3 ? ' sm' : ''}`;
   /* 서명 줄. src(원래 서식 글, 예: '학  생               (인)')가 있으면 빈칸 자리에 이름을 넣어 글 폭을 그대로 둔다(손으로 쓴 것처럼) */
   function signLine(before, name, mark, s, src) {
     const at = src ? src.lastIndexOf(mark) : -1;
-    /* 한글에서 한 줄인 서명 줄은 인쇄에서도 한 줄(fit) — 예전엔 인쇄 때 앞 빈칸에서 줄이 넘어가 이름이 왼쪽으로 밀림(2026-11-10) */
-    if (at > 0 && !name) return { html: `${esc(src.slice(0, at))}<span class="sf-sign">${esc(mark)}${sigImg(s)}</span>`, fit: true };
+    /* 한글에서 한 줄인 서명 줄은 인쇄에서도 한 줄(nowrap) — 인쇄 때 앞 빈칸에서 줄이 넘어가 이름이 왼쪽으로 밀림(2026-11-10).
+       fit(넘치면 자르고 글자를 줄임)은 안 쓴다: 서명 그림이 칸 밖으로 나오면 오른쪽이 잘리고 글자가 작아짐(교사 제보 2026-11-11) */
+    if (at > 0 && !name) return { html: `${esc(src.slice(0, at))}<span class="${signCls(mark)}">${esc(mark)}${sigImg(s)}</span>`, nowrap: true };
     if (at > 0) {
       const head = src.slice(0, at), label = head.replace(/\s+$/, ''), gap = head.length - label.length;
       const w = [...String(name)].reduce((n, ch) => n + (/[\x20-\x7e]/.test(ch) ? 1 : 2), 0);
       const rest = Math.max(2, gap - w), l = rest >> 1;
-      return { html: `${esc(label)}${' '.repeat(l)}${V(name)}${' '.repeat(rest - l)}<span class="sf-sign">${esc(mark)}${sigImg(s)}</span>`, fit: true };
+      return { html: `${esc(label)}${' '.repeat(l)}${V(name)}${' '.repeat(rest - l)}<span class="${signCls(mark)}">${esc(mark)}${sigImg(s)}</span>`, nowrap: true };
     }
-    return { html: `${esc(before)}${name ? ` ${V(name)} ` : ''}<span class="sf-sign">${esc(mark)}${sigImg(s)}</span>`, fit: true };
+    return { html: `${esc(before)}${name ? ` ${V(name)} ` : ''}<span class="${signCls(mark)}">${esc(mark)}${sigImg(s)}</span>`, nowrap: true };
   }
   /* 원본 글의 빈칸 자리에 값을 넣어 글 폭을 그대로 둔다(원본과 같은 자리에 오게, 교사 요청 2026-11-02). vals[k]: k번째 빈칸 덩이에 넣을 값, 비면 빈칸 그대로 */
   const textWidth = (s) => [...String(s)].reduce((n, ch) => n + (/[\x20-\x7e]/.test(ch) ? 1 : 2), 0);
@@ -683,7 +686,7 @@
     if (ind) st.push(`text-indent:${ind.toFixed(1)}px`);
     if (b.mt) st.push(`--mt:${(+b.mt).toFixed(1)}px`);
     if (b.mb) st.push(`--mb:${(+b.mb).toFixed(1)}px`);
-    const fit = (v && v.fit) || (v === undefined && b.one) ? ' fit' : '';
+    const fit = (v && v.fit) || (v === undefined && b.one) ? ' fit' : v && v.nowrap ? ' nw' : '';
     return `<div class="hp${b.serif ? ' serif' : ''}${fit}" style="${st.join(';')}">${inner || '&nbsp;'}</div>`;
   }
   function blocksHtml(blocks, prefix, O, from = 0) {
@@ -804,6 +807,7 @@
 .sf-page .htbl { margin: var(--tmt, 0px) 0 var(--tmb, 0px); }
 .sf-page .htc > .htbl:last-child { margin-bottom: var(--tob, 0px); }
 .sf-page .hp.fit { white-space: pre; overflow-wrap: normal; overflow-x: clip; }
+.sf-page .hp.nw { white-space: pre; overflow-wrap: normal; }
 .sf-page .htbl { display: grid; }
 .sf-page .htc { display: flex; flex-direction: column; padding: 2px 4px; min-width: 0; }
 .sf-page .hb { display: block; width: 100%; height: 100%; contain: size; z-index: 1; overflow: visible; pointer-events: none; }
@@ -820,7 +824,8 @@
 .sf-page .hbox { box-sizing: border-box; display: flex; flex-direction: column; max-width: 100%; }
 .sf-page .sf-circ { display: inline-block; min-width: 1.3em; border: 1px solid #000; border-radius: 50%; text-align: center; line-height: 1.2; }
 .sf-page .sf-sign { position: relative; display: inline-block; text-align: center; }
-.sf-page .sf-sig { position: absolute; left: 50%; top: 50%; width: 5.6em; height: 2.5em; object-fit: contain; transform: translate(-50%, -55%); pointer-events: none; }
+.sf-page .sf-sig { position: absolute; left: 50%; top: 50%; width: 5.6em; height: 2.5em; object-fit: contain; transform: translate(calc(-50% - var(--sx, 0px)), -55%); pointer-events: none; }
+.sf-page .sf-sign.sm .sf-sig { width: 3.55em; }
 .sf-photos { padding: 56px 64px; display: flex; flex-direction: column; gap: 18px; }
 .sf-ph-head { font-size: 15px; font-weight: 700; border-bottom: 2px solid #111; padding-bottom: 6px; }
 .sf-photos figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; }
@@ -860,6 +865,13 @@
     host.querySelectorAll('.sf-page[data-h]').forEach((pg) => {
       const inner = pg.querySelector('.sf-in'), room = +pg.dataset.h;
       for (let fs = 1; fs >= 0.73 && inner.offsetHeight > room; fs = Math.round((fs - 0.03) * 100) / 100) pg.style.setProperty('--fs', String(fs - 0.03));
+    });
+    /* 서명이 오른쪽으로 넘치면 왼쪽으로 당긴다: 표 칸 안이면 칸 선 안쪽까지, 맨 위 문단은 오른쪽 여백을 2mm만 넘게(교사 제보 2026-11-11 '오른쪽이 잘려요') */
+    host.querySelectorAll('img.sf-sig').forEach((im) => {
+      const cell = im.closest('.htc'), box = cell || im.closest('.sf-in');
+      if (!box) return;
+      const over = im.getBoundingClientRect().right - (box.getBoundingClientRect().right + (cell ? -3 : 8));
+      if (over > 0) im.style.setProperty('--sx', `${over.toFixed(1)}px`);
     });
     fit();
     /* 서명은 빈 테두리를 덜고 굵게(이미 낸 서류의 서명도) */

@@ -584,10 +584,13 @@
     for (const { p, s } of pendingSigs) {
       const src = await thick(s.src), img = dataBytes(src);
       if (!img) continue;
-      const px = pngSize(img.bytes), z = Math.min(SIGN_MM.w * MM / px.w, SIGN_MM.h * MM / px.h);
+      /* '(인)'처럼 표시가 짧은 줄은 서명 자리가 좁아 15mm 안으로 비율대로 줄인다(교사 제보 2026-11-11) */
+      const signW = String(s.mark || '').length <= 3 ? 15 : SIGN_MM.w;
+      const px = pngSize(img.bytes), z = Math.min(signW * MM / px.w, SIGN_MM.h * MM / px.h);
       const W = Math.round(px.w * z), Ht = Math.round(px.h * z);
-      /* 표시 글자((인) 등) 가운데에 서명 가운데를 맞춘다. 오른쪽 여백을 많이 넘지 않게 왼쪽으로 조금 당긴다 */
-      const x = Math.min(markCenter(p, s.mark, H) - W / 2, paraWidth(p) + 4 * MM - W);
+      /* 표시 글자((인) 등) 가운데에 서명 가운데를 맞춘다. 표 칸 안이면 칸 오른쪽 선을 넘으면 잘리므로 칸 안으로(교사 제보 2026-11-11), 맨 위 문단은 오른쪽 여백을 조금만 넘게 왼쪽으로 당긴다 */
+      const inCell = p.parentNode && p.parentNode.localName === 'subList';
+      const x = Math.max(0, Math.min(markCenter(p, s.mark, H) - W / 2, paraWidth(p) + (inCell ? -1 : 2) * MM - W));
       const y = -(Ht / 2 - 2.1 * MM);
       const run = mk(sdoc, 'hp', 'run', { charPrIDRef: kids(p, 'run').slice(-1)[0].getAttribute('charPrIDRef') });
       run.appendChild(picEl(sdoc, bin(img, s.src), px, W, Ht, { x, y }));
