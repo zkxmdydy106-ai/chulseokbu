@@ -278,6 +278,8 @@ table.list .c { text-align: center; }
 .sfv-bar .sp { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
 .sfv-info { padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--line); font-size: 13px; color: var(--text-2); }
 .sfv-info b { color: var(--text); }
+.sfv-date { padding: 6px 12px; background: var(--panel); border-bottom: 1px solid var(--line); font-size: 13px; color: var(--text-2); }
+.sfv-date input { margin-left: 4px; font: inherit; }
 .sfv-pages { flex: 1; overflow: auto; padding: 0 6px; }
 body.sfv-open { overflow: hidden; }
 
@@ -296,7 +298,7 @@ body.sfv-open { overflow: hidden; }
   body.sf-printing { padding: 0; background: #fff; }
   body.sf-printing > *:not(.sfv) { display: none !important; }
   body.sf-printing .sfv { position: static; display: block; background: #fff; }
-  body.sf-printing .sfv-bar, body.sf-printing .sfv-info { display: none !important; }
+  body.sf-printing .sfv-bar, body.sf-printing .sfv-info, body.sf-printing .sfv-date { display: none !important; }
   body.sf-printing .sfv-pages { overflow: visible; padding: 0; }
 }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
@@ -1721,6 +1723,7 @@ body.sfv-open { overflow: hidden; }
   const KINDNAME = { absence: '결석신고서', 'field-apply': '교외체험학습 신청서', 'field-report': '교외체험학습 결과보고서' };
   const SUB_DOC = { absence: 'singo', 'field-apply': 'tripApp', 'field-report': 'tripRep' };
   const SF_V = 3; // 받는 곳 판(gas/student-forms BRIDGE_V): 3부터 저절로 요청·판 번호
+  const SF_NEW = 5; // 지금 받는 곳 판: 5 = 인쇄한 서류 잠금 풀기(2026-11-13). 이보다 낮으면 [서류함] 맨 위에 [새 판으로 바꾸기]
   const BOX = { rev: '', subs: [], reqs: [], blocked: [], binds: [], at: '', err: '', busy: false, qr: '', dev: false, making: false, v: 0, gen: 0, seenQ: new Set() };
   let formsLib = null;
   function loadForms() {
@@ -1794,9 +1797,8 @@ body.sfv-open { overflow: hidden; }
   // 창이 뜨는 까닭과 없애는 법을 [서류함] 맨 위에(교사 제보 2026-11-02: 버튼마다 연결 창이 뜸 — 받는 곳이 옛 판이었음)
   function bridgeNote() {
     if (!S.cfg.sf) return '';
-    if (sfDirect()) return '';
-    if (BOX.v >= 2 && BOX.v < 4 && MAKER_URL) return `<div class="card"><h2 class="sec">받는 곳을 새 판으로 바꿔 주세요</h2>
-      <p class="hint">새 판이면 구글 로그인이나 작은 창 없이 서류함이 열려요. 낸 서류와 반 링크는 그대로예요.</p>
+    if (BOX.v >= 2 && BOX.v < SF_NEW && MAKER_URL) return `<div class="card"><h2 class="sec">받는 곳을 새 판으로 바꿔 주세요</h2>
+      <p class="hint">새 판이면 인쇄한 서류의 잠금을 풀어 학생이 다시 고치게 할 수 있어요${BOX.v < 4 ? '. 구글 로그인이나 작은 창 없이 서류함이 열려요' : ''}. 낸 서류와 반 링크는 그대로예요.</p>
       <div class="row"><button class="btn main" id="bxUpdateNow">${BOX.making ? '바꾸는 중… 작은 창을 확인해 주세요' : '새 판으로 바꾸기'}</button></div></div>`;
     if (BR.inFrame) return '';
     if (bridgeOld()) return MAKER_URL ? `<div class="card"><h2 class="sec">버튼마다 작은 창이 뜨나요?</h2>
@@ -2290,7 +2292,7 @@ body.sfv-open { overflow: hidden; }
     if (!S.cfg.sf || S.cfg.sf.u !== r.url) { S.cfg.sf = { u: r.url }; for (const c of S.classes) delete c.skSig; }
     if (r.fk && SF_ID_RE.test(r.fk.d || '') && /^[0-9a-f]{32,}$/.test(r.fk.t || '')) { S.cfg.sf.d = r.fk.d; S.cfg.sf.t = r.fk.t; }
     if (r.email && !gAccount()) { try { localStorage.setItem(ACC_KEY, String(r.email).toLowerCase()); } catch { /* 저장 못 함 */ } }
-    if (r.made || r.updated || BOX.updating) { S.cfg.sf.v = SF_V; BOX.v = SF_V; }
+    if (r.made || r.updated || BOX.updating) { S.cfg.sf.v = SF_NEW; BOX.v = SF_NEW; }
     if (BOX.updating) { try { BOX.makerWin?.close(); } catch { /* 이미 닫힘 */ } }
     BOX.updating = false;
     save(true);
@@ -2329,6 +2331,11 @@ body.sfv-open { overflow: hidden; }
     if (cs) linkSubs([{ ...sub, ...m, kind: doc.kind, c: doc.c, no: doc.no }]);
     const box = document.createElement('div');
     box.className = 'sfv';
+    // 인쇄한 서류 잠금 풀기(교사 결정 2026-11-13): 풀면 처음 낸 폰에 내용이 돌아가 학생이 고쳐 다시 낸다
+    const lockLine = () => (j.lock ? ' · <b>인쇄함(학생은 더 못 고침)</b> <button class="textbtn" id="svUnlock">잠금 풀기</button>' : '');
+    // 결석신고서·결과보고서 날짜 = 끝난 다음 등교일(교사 결정 2026-11-13). 공휴일·재량휴업일이면 여기서 바꿔 인쇄(저장 안 함)
+    const dateRow = () => (doc.kind === 'absence' || doc.kind === 'field-report'
+      ? `<div class="sfv-date"><label>서류 날짜 <input type="date" id="svDateIn" value="${esc(SFm.printDate(doc.kind, v.f))}"></label> <span class="hint">끝난 다음 등교일이에요. 휴일이면 바꿔서 인쇄해 주세요.</span></div>` : '');
     const caseLine = () => {
       if (!S.classes.length) return ''; // 명단 없는 PC: 출결 기록은 폰에 있어 맞춰 보지 않음
       if (cs) return `출결 기록: <b>${esc(cs.from === cs.to ? showDay(cs.from) : `${showDay(cs.from)} ~ ${showDay(cs.to)}`)} ${esc(labelOf(cs))}</b> — ${esc(DOC[SUB_DOC[doc.kind]].split(' (')[0])} 받음 체크함`;
@@ -2337,19 +2344,37 @@ body.sfv-open { overflow: hidden; }
     };
     box.innerHTML = `
       <div class="sfv-bar"><button class="btn small" id="svClose">닫기</button><span class="sp"><b>${esc(KINDNAME[doc.kind] || '')}</b> ${esc(doc.c)} ${esc(doc.no)}번 ${esc(doc.name)}</span><button class="btn small main" id="svHwpx">한글로 받기</button><button class="btn small" id="svPrint">바로 인쇄</button><button class="btn small danger" id="svDel">삭제</button></div>
-      <div class="sfv-info"><div>제출 ${esc(whenOf(doc.at))}${doc.up && doc.up !== doc.at ? ` · 고침 ${esc(whenOf(doc.up))}` : ''}${j.lock ? ' · <b>인쇄함(학생은 더 못 고침)</b>' : ''}</div><div id="svCase">${caseLine()}</div><div id="svNote"></div></div>
+      <div class="sfv-info"><div>제출 ${esc(whenOf(doc.at))}${doc.up && doc.up !== doc.at ? ` · 고침 ${esc(whenOf(doc.up))}` : ''}<span id="svLock">${lockLine()}</span></div>${dateRow()}<div id="svCase">${caseLine()}</div><div id="svNote"></div></div>
       <div class="sfv-pages" id="svPages"></div>`;
     document.body.append(box);
     document.body.classList.add('sfv-open');
     // 명단 없는 PC(패널 [받은 서류함])에는 학교 설정이 없다 → 받는 곳에 실어 둔 폰 설정으로(2026-11-02 실제: 학교 이름·결재 칸이 기본값으로 나옴)
     const schoolNow = S.classes.length ? schoolCfg() : (j.sch || schoolCfg());
-    const mnt = SFm.mount($('#svPages', box), v, { school: schoolNow });
+    let mnt = SFm.mount($('#svPages', box), v, { school: schoolNow });
     const onResize = () => mnt.fit();
+    $('#svDateIn', box)?.addEventListener('change', (e) => {
+      if (!SFm.dateOf(e.target.value)) return;
+      v.f.dateFix = e.target.value;
+      $('#svPages', box).innerHTML = '';
+      mnt = SFm.mount($('#svPages', box), v, { school: schoolNow });
+    });
+    box.addEventListener('click', async (e) => {
+      if (e.target.id !== 'svUnlock') return;
+      if (BOX.v && BOX.v < SF_NEW) { toast('받는 곳을 새 판으로 바꿔야 잠금을 풀 수 있어요. [서류함] 맨 위 [새 판으로 바꾸기]를 눌러 주세요.'); return; }
+      if (!confirm('이 서류의 잠금을 풀까요? 학생이 반 링크를 다시 열면 처음 낸 폰에 내용이 돌아가 고쳐서 다시 낼 수 있어요.')) return;
+      if (!sfWake()) return;
+      e.target.disabled = true;
+      try { await sfApi({ a: 'unlock', id }); } catch (err) { e.target.disabled = false; toast(err.message); return; }
+      j.lock = ''; sub.lock = '';
+      $('#svLock', box).innerHTML = lockLine();
+      $('#svNote', box).textContent = '잠금을 풀었어요. 학생이 반 링크를 다시 열면 처음 낸 폰에 서류가 돌아가요. 고쳐서 다시 내면 서류함에 새로 떠요.';
+      if (tab === 'box') renderBox();
+    });
     window.addEventListener('resize', onResize);
     const close = () => { box.remove(); document.body.classList.remove('sfv-open', 'sf-printing'); window.removeEventListener('resize', onResize); if (tab === 'box') renderBox(); };
     $('#svClose', box).addEventListener('click', close);
     const lockForPrint = async () => {
-      try { const r = await sfApi({ a: 'lock', id }); sub.lock = r.lock; return true; } catch (e) { if (confirm(`학생이 더 고치지 못하게 잠그지 못했어요(${e.message}). 그래도 인쇄할까요?`)) return true; toast(`인쇄하지 않았어요: ${e.message}`); return false; }
+      try { const r = await sfApi({ a: 'lock', id }); sub.lock = r.lock; j.lock = r.lock; const ln = $('#svLock', box); if (ln) ln.innerHTML = lockLine(); return true; } catch (e) { if (confirm(`학생이 더 고치지 못하게 잠그지 못했어요(${e.message}). 그래도 인쇄할까요?`)) return true; toast(`인쇄하지 않았어요: ${e.message}`); return false; }
     };
     // 원본 한글 파일에 채워 내려받기(교사 요청 2026-11-02): 표·테두리·글꼴이 원본 그대로. 파일은 이 기기에만 생긴다
     $('#svHwpx', box).addEventListener('click', async () => {

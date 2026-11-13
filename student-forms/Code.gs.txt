@@ -26,7 +26,7 @@
 var FOLDER_NAME = '학생 서류 제출 (출석부)';
 var KINDS = { 'absence': '결석신고서', 'field-apply': '교외체험학습 신청서', 'field-report': '교외체험학습 결과보고서' };
 var REQ_KINDS = { 'absence': 1, 'field-apply': 1, 'field-report': 1 };
-var BRIDGE_V = 4; /* 받는 곳 판: 2 = 창 없는 연결·미리 받기, 3 = 저절로 요청·판 번호(head), 4 = 로그인 없는 교사 연결 */
+var BRIDGE_V = 5; /* 받는 곳 판: 2 = 창 없는 연결·미리 받기, 3 = 저절로 요청·판 번호(head), 4 = 로그인 없는 교사 연결, 5 = 인쇄한 서류 잠금 풀기 */
 var TEACHER_AUTH = '__TEACHER_AUTH__'; /* 만들기 다리가 확인값으로 바꿔 넣는다 */
 var TEACHER_ONLY = false; /* 로그인 없는 교사 연결 배포에서만 true */
 var MAX_BODY = 15 * 1024 * 1024;
@@ -104,6 +104,7 @@ function teacherDo_(x) {
     if (a === 'get') return x.peek ? get_(x) : locked_(function () { return get_(x); }); /* peek: 미리 받기, 읽음으로 안 바꿈 */
     if (a === 'seen') return locked_(function () { return seen_(x); });
     if (a === 'lock') return locked_(function () { return lock_(x); });
+    if (a === 'unlock') return locked_(function () { return unlock_(x); });
     if (a === 'delete') return locked_(function () { return del_(id_(x.id)); });
     if (a === 'deleteAll') return locked_(function () { return deleteAll_(); });
     if (a === 'unbind') return locked_(function () { return unbind_(x); });
@@ -219,8 +220,16 @@ function hello_(b) {
   var s = student_(b);
   var reqs = all_('rq:').filter(function (r) { return r.c === s.c && String(r.no) === s.no && !r.done; })
     .map(function (r) { return { id: r.id, kind: r.kind, att: r.att, from: r.from, to: r.to, at: r.at }; });
+  /* 잠금을 푼 서류(ro)는 그 서류 번호를 가진 폰(have, 처음 낸 폰)에만 내용과 새 고침 열쇠를 돌려준다(교사 결정 2026-11-13) */
+  var have = Array.isArray(b.have) ? b.have.map(String) : [];
   var subs = all_('sm:').filter(function (m) { return m.c === s.c && String(m.no) === s.no; })
-    .map(function (m) { return { id: m.id, kind: m.kind, at: m.at, up: m.up, lock: m.lock || '' }; });
+    .map(function (m) {
+      var o = { id: m.id, kind: m.kind, at: m.at, up: m.up, lock: m.lock || '' };
+      if (m.ro && !m.lock && have.indexOf(m.id) >= 0) {
+        try { o.re = { edit: m.ro, f: JSON.parse(DriveApp.getFileById(m.file).getBlob().getDataAsString('UTF-8')).f }; } catch (err) { /* 파일이 없으면 돌려주지 않음 */ }
+      }
+      return o;
+    });
   return { ok: true, c: s.c, no: s.no, first: s.first, acct: s.acct, sch: s.sch, reqs: reqs, subs: subs };
 }
 function folder_() {
@@ -320,6 +329,16 @@ function lock_(b) {
   if (!m) fail_('gone', '이미 지운 서류예요.');
   if (!m.lock) { m.lock = now_(); setJson_('sm:' + id, m); }
   return { ok: true, lock: m.lock };
+}
+/* 인쇄한 서류 잠금 풀기(교사 결정 2026-11-13): 처음 낸 폰은 인쇄 때 내용과 고침 열쇠를 지웠으므로 새 열쇠를 만들어 두고, 그 폰이 다음에 열 때 내용과 함께 돌려준다 */
+function unlock_(b) {
+  var id = id_(b.id), m = getJson_('sm:' + id);
+  if (!m) fail_('gone', '이미 지운 서류예요.');
+  var key = rand_(32);
+  m.lock = ''; m.ro = key; m.eh = hex_(key); m.reopen = now_();
+  setJson_('sm:' + id, m);
+  props_().setProperty('rev', String(Date.now()));
+  return { ok: true };
 }
 function del_(id) {
   var m = getJson_('sm:' + id);

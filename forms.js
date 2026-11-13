@@ -36,6 +36,16 @@
   const md = (iso) => { const d = dateOf(iso); return d ? `${d.getMonth() + 1}월 ${d.getDate()}일` : ''; };
   const short = (iso) => { const d = dateOf(iso); return d ? `${d.getMonth() + 1}/${d.getDate()}` : ''; };
   const range = (from, to) => (!from ? '' : !to || to === from ? short(from) : `${short(from)}~${short(to)}`);
+  /* 결석신고서·결과보고서 날짜 = 끝난 다음 등교일(토·일 건너뜀), 학생이 학교에 온 날(교사 결정 2026-11-13). 학생은 못 바꾸고,
+     공휴일·재량휴업일은 모르니 선생님이 인쇄 전에 바꾼다(f.dateFix, 선생님 화면 메모리만). 이미 낸 서류도 인쇄할 때 이 날짜 */
+  function schoolDate(kind, f) {
+    f = f || {};
+    if (kind === 'absence') { const end = (f.att || '결석') === '결석' ? f.to : f.from; return dateOf(end) ? nextSchoolDay(end) : ''; }
+    if (kind === 'field-report') { const end = f.unit === 'half' ? f.halfDate : f.to; return dateOf(end) ? nextSchoolDay(end) : ''; }
+    return f.date || '';
+  }
+  const printDate = (kind, f) => (dateOf(f.dateFix) ? f.dateFix : schoolDate(kind, f) || f.date || '');
+  function fixDate(kind, f) { if ((kind === 'absence' || kind === 'field-report') && f) { const d = schoolDate(kind, f); if (d) f.date = d; } return f; }
   /* 결석신고서 제출 날짜: 결석이 끝난 다음 날 이후, 학교 나온 날(주말 아님) */
   function submitDateProblem(to, date) {
     if (!dateOf(date)) return '제출 날짜를 골라 주세요.';
@@ -129,8 +139,6 @@
       if (proofGroup(f) && !(f.proofs || []).length) out.push({ k: 'proofs', msg: '낼 증빙서류를 골라 주세요.' });
       if ((f.proofs || []).includes('기타') && blank(f.proofEtc)) out.push({ k: 'proofEtc', msg: '기타 증빙서류 이름을 적어 주세요.' });
       if (needsGuardianNote(f) && String(f.guardianNote || '').trim().length < 10) out.push({ k: 'guardianNote', msg: '보호자 확인서를 보호자가 구체적으로(10자 이상) 써 주세요.' });
-      const sd = submitDateProblem((f.att || '결석') === '결석' ? f.to : f.from, f.date);
-      if (sd) out.push({ k: 'date', msg: sd });
       if (!dateOf(f.cDate) || !/^\d{1,2}:\d{2}$/.test(f.cTime || '')) out.push({ k: 'cDate', msg: '보호자 연락 날짜·시각을 적어 주세요.' });
       need('parentName', '보호자 이름을 적어 주세요.');
       sig('stu', '학생'); sig('par', '보호자');
@@ -169,9 +177,6 @@
         if (!imgOk(e.photo)) out.push({ k: `photo.${d}`, msg: `${md(d)} 사진을 한 장 올려 주세요.` });
       }
       if (String(f.feel || '').trim().length < 10) out.push({ k: 'feel', msg: '소감을 10자 이상 써 주세요.' });
-      const end = f.unit === 'half' ? f.halfDate : f.to;
-      if (!dateOf(f.date)) out.push({ k: 'date', msg: '제출 날짜를 골라 주세요.' });
-      else if (dateOf(end) && f.date <= end) out.push({ k: 'date', msg: '제출 날짜는 체험학습이 끝난 다음이어야 해요.' });
       sig('stu', '학생'); sig('par', '보호자');
     }
     return out;
@@ -397,7 +402,7 @@
         O[p] = lab === '기타' ? { html: `${ON} 기타( ${V(f.proofEtc || '')} )` } : { html: `${ON}${esc(t.slice(1))}` };
       }
     }
-    O.p3 = dateLine(f.date, orig(K, 'p3'));
+    O.p3 = dateLine(printDate(K, f), orig(K, 'p3'));
     O.p4 = signLine('학생  성명:', doc.name, '(서명 또는 인)', (f.sig || {}).stu, orig(K, 'p4'));
     O.p5 = signLine('보호자(법정대리인) 성명:', f.parentName, '(서명 또는 인)', (f.sig || {}).par, orig(K, 'p5'));
     if (!blank(f.guardianNote)) O['t8.r0c0.t5.r0c0.p0'] = left(f.guardianNote);
@@ -490,7 +495,7 @@
       dropBlanks(O, K, 't4.r0c1', 1, Math.min(8, flow.dayLines));
     }
     if (!blank(flow.feel)) { O['t4.r1c1.p0'] = { html: V(flow.feel) + (flow.feelCont ? CONT : ''), align: 'left', size: 10 }; dropBlanks(O, K, 't4.r1c1', 1, Math.min(4, flow.feelLines)); }
-    O.p8 = dateLine(f.date, orig(K, 'p8'));
+    O.p8 = dateLine(printDate(K, f), orig(K, 'p8'));
     O.p9 = signLine('학  생', doc.name, '(인)', (f.sig || {}).stu, orig('field-report', 'p9'));
     O.p10 = signLine('보호자', f.gName, '(인)', (f.sig || {}).par, orig('field-report', 'p10'));
     return O;
@@ -965,7 +970,7 @@
 
   root.StudentForms = {
     KIND, ATT, AKIND, ASUB, LEARN, FACE,
-    dateOf, isoOf, today, addDays, isWeekend, weekdays, nextSchoolDay, dayName, md, range, submitDateProblem,
+    dateOf, isoOf, today, addDays, isWeekend, weekdays, nextSchoolDay, dayName, md, range, submitDateProblem, schoolDate, printDate, fixDate,
     normName, classParts, hakbunOf, parseHakbun, stuHash, telOk, imgOk,
     proofGroup, proofsFor, needsGuardianNote, problems, meta, summary,
     paths, fill, fillMore, reportFlow, wrapAt, pagesHtml, mount, ensureStyle, sigPad, thickSig, shrinkPhoto, esc, school, APPR,
