@@ -198,6 +198,19 @@ table.list .c { text-align: center; }
 .sheet-foot { flex: none; display: flex; gap: 8px; padding: 10px 16px calc(10px + var(--safe-b)); background: var(--panel); border-top: 1px solid var(--line); }
 .sheet-foot .btn { flex: 1 1 0; min-height: 48px; }
 .sheet-foot .btn.main { flex-grow: 2; }
+.sms-bar { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; }
+.sms-bar .hint { margin: 0; }
+.sms-list { margin: 12px 0 0; padding: 0; list-style: none; border-top: 1px solid var(--line-2); }
+.sms-list li { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 6px 0; border-bottom: 1px solid var(--line-2); }
+.sms-list li.on .sms-name { font-weight: 700; }
+.sms-name { flex: 0 0 auto; min-width: 84px; font-size: 14px; }
+.sms-to { display: flex; flex-wrap: wrap; gap: 6px; }
+.sms-to .chip { min-width: 0; min-height: 36px; padding: 0 10px; font-size: 13px; }
+.sms-tpls { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 4px 0 0; }
+.sms-tpl { display: inline-flex; gap: 4px; }
+.sms-now { margin: 12px 0 8px; font-size: 16px; }
+.sms-preview { white-space: pre-wrap; padding: 10px 12px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); font-size: 14px; overflow-wrap: anywhere; }
+.sms-go { display: flex; align-items: center; justify-content: center; min-height: 52px; margin-top: 12px; text-decoration: none; }
 @media (min-width: 620px) { .sheet { left: calc(50% - 290px); right: calc(50% - 290px); border: 1px solid var(--line); border-bottom: 0; } }
 @keyframes up { from { transform: translateY(30px); opacity: .5; } }
 .sheet h3 { margin: 0 0 2px; font-size: 18px; letter-spacing: -0.02em; }
@@ -551,7 +564,7 @@ body.sfv-open { overflow: hidden; }
     const n = (t) => recs.filter(([, x]) => x && x.type === t).length;
     const miss = recs.filter(([, x]) => x && docState(x).miss.length).length;
     $('#main').innerHTML = `
-      ${pcLine()}${tipHtml()}${classChips(c)}
+      ${pcLine()}${tipHtml()}${classChips(c)}${smsBar(c)}
       <div class="card">
         <div class="day-head"><b>${esc(c.name)} 일일출결</b><span>${c.students.length}명</span></div>
         <div class="tally">${tallyCell('출석', recs.filter(([, x]) => !x).length, 'all')}${tallyCell('결석', n('결석'), 'abs')}${tallyCell('지각', n('지각'), 'late')}${tallyCell('조퇴', n('조퇴'), 'late')}${tallyCell('결과', n('결과'), 'late')}</div>
@@ -716,7 +729,7 @@ body.sfv-open { overflow: hidden; }
     const rec = S.marks[key()] || {};
     const pirs = [1, 2, 3, 4, 5, 6, 7, 8];
     main.innerHTML = `
-      ${pcLine()}${tipHtml()}
+      ${pcLine()}${tipHtml()}${smsBar(c)}
       <div class="card">
         <div class="sub" style="margin-top:0">교시</div>
         <div class="pir" id="pirChips">${pirs.map((p) => `<button class="chip ${p === S.ui.pir ? 'on' : ''}" data-pir="${p}">${p}</button>`).join('')}</div>
@@ -855,6 +868,110 @@ body.sfv-open { overflow: hidden; }
     if (!list.length) { toast('연락처가 없어요'); return; }
     saveVcf(vcards(c, list), no ? `${c.name}_${no}번.vcf` : `${c.name}_연락처.vcf`);
   });
+
+  // ── 문자 보내기(교사 요청·결정 2026-11-17 '몇몇 학부모님 대상으로 선택'): 학생을 고르고 학생마다 보낼 번호(보호자·학생)를 고르면,
+  // 한 명씩 차례로 폰 문자 앱을 연다(학부모끼리 번호가 안 보이게). [보내기]는 선생님이 문자 앱에서 누른다 — 이 앱은 아무 데도 보내지 않음.
+  // 자주 쓰는 문장만 이 폰 설정(S.cfg.smsTpl)에 '{이름}' 자리로 저장(학생 이름은 저장 안 함). 고른 학생·보낸 표시는 화면 메모리만
+  const IS_IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+  const smsHref = (tel, body) => `sms:${tel}${body ? `${IS_IOS ? '&' : '?'}body=${encodeURIComponent(body)}` : ''}`;
+  const SMS_MAX_TPL = 10;
+  function smsTargets(s) {
+    const gs = guardians(s);
+    const out = gs.map((g, i) => ({ k: `g${i}`, label: `${g.rel || '보호자'}${g.main && gs.length > 1 ? '(주)' : ''}`, tel: telOf(g.tel), main: !!g.main })).filter((x) => x.tel);
+    if (telOf(s.phone)) out.push({ k: 'stu', label: '학생', tel: telOf(s.phone), main: false });
+    return out;
+  }
+  const smsBar = (c) => `<div class="sms-bar"><button class="btn small" id="smsOpen">문자 보내기</button>${c.students.some((s) => smsTargets(s).length) ? '' : '<span class="hint">연락처를 넣으면 쓸 수 있어요</span>'}</div>`;
+  function openSms() {
+    const c = cls();
+    if (!c) return;
+    if (!c.students.some((s) => smsTargets(s).length)) { toast('연락처가 없어요. [설정 → 명단 · 연락처 불러오기]에서 넣어 주세요.'); return; }
+    const st = { pick: new Map(), text: '', queue: null, i: 0 };
+    const bg = document.createElement('div'); bg.className = 'sheet-bg';
+    const sh = document.createElement('div'); sh.className = 'sheet split sms-sheet';
+    const close = () => { bg.remove(); sh.remove(); };
+    const tpls = () => (Array.isArray(S.cfg.smsTpl) ? S.cfg.smsTpl : []);
+    const count = () => [...st.pick.values()].reduce((n, set) => n + set.size, 0);
+    const fill = (t, s) => String(t || '').split('{이름}').join(s.name);
+    function pickHtml() {
+      const n = count();
+      return `<div class="sheet-body">
+        <h3>문자 보내기</h3>
+        <div class="sheet-sub">${esc(c.name)} · 한 명씩 차례로 문자 앱이 열려요. [보내기]는 문자 앱에서 직접 눌러요.</div>
+        <div class="row" style="margin-top:10px"><button class="btn small" id="smsAll">주 보호자 모두</button><button class="btn small" id="smsNone">모두 풀기</button></div>
+        <ul class="sms-list">${c.students.map((s) => {
+          const ts = smsTargets(s);
+          const set = st.pick.get(s.no);
+          return `<li class="${set && set.size ? 'on' : ''}"><span class="sms-name">${esc(s.no)} ${esc(s.name)}</span>${ts.length
+            ? `<span class="sms-to">${ts.map((t) => `<button class="chip small ${set && set.has(t.k) ? 'on' : ''}" data-sms="${esc(s.no)}|${t.k}" aria-pressed="${!!(set && set.has(t.k))}">${esc(t.label)}</button>`).join('')}</span>`
+            : '<span class="hint">연락처 없음</span>'}</li>`;
+        }).join('')}</ul>
+        <label class="field"><span>보낼 글</span><textarea id="smsText" rows="4" maxlength="1000" placeholder="{이름} 학부모님, 안녕하세요. ○○고 담임입니다.">${esc(st.text)}</textarea></label>
+        <p class="hint">{이름}은 받는 학생 이름으로 바뀌어요.</p>
+        <div class="sms-tpls">${tpls().map((t, i) => `<span class="sms-tpl"><button class="textbtn" data-tpl="${i}">${esc(t.length > 24 ? `${t.slice(0, 24)}…` : t)}</button><button class="textbtn dim" data-tpl-del="${i}" aria-label="이 문장 지우기">지우기</button></span>`).join('')}<button class="textbtn" id="smsTplSave">이 문장 저장</button></div>
+      </div>
+      <div class="sheet-foot"><button class="btn" id="smsClose">닫기</button><button class="btn main" id="smsStart" ${n ? '' : 'disabled'}>${n ? `${n}명에게 차례로 보내기` : '받는 사람을 골라요'}</button></div>`;
+    }
+    function sendHtml() {
+      const q = st.queue, it = q[st.i];
+      if (!it) {
+        const opened = q.filter((x) => x.opened).length;
+        return `<div class="sheet-body"><h3>문자 보내기</h3><p class="ok" style="margin-top:10px">${opened}명에게 문자 앱을 열었어요${q.length - opened ? ` · 건너뜀 ${q.length - opened}명` : ''}. 문자 앱에서 [보내기]를 누르셨는지 확인해 주세요.</p></div>
+          <div class="sheet-foot"><button class="btn" id="smsBack">처음으로</button><button class="btn main" id="smsClose">닫기</button></div>`;
+      }
+      return `<div class="sheet-body">
+        <h3>문자 보내기 <span class="dim">${st.i + 1}/${q.length}</span></h3>
+        <div class="sms-now"><b>${esc(it.name)}</b> ${esc(it.label)} <span class="dim">${esc(showTel(it.tel))}</span></div>
+        <div class="sms-preview">${esc(it.body) || '<span class="dim">(빈 글)</span>'}</div>
+        <a class="btn main sms-go" id="smsGo" href="${esc(smsHref(it.tel, it.body))}" target="_top">문자 앱 열기</a>
+        <p class="hint">${it.opened ? '문자 앱에서 보냈으면 [다음]을 눌러요.' : '누르면 이 분 번호와 글이 들어간 문자 앱이 열려요.'}</p>
+      </div>
+      <div class="sheet-foot"><button class="btn" id="smsStop">그만</button><button class="btn" id="smsSkip">건너뛰기</button><button class="btn ${it.opened ? 'main' : ''}" id="smsNext">다음</button></div>`;
+    }
+    const paint = () => { const y = sh.querySelector('.sheet-body')?.scrollTop || 0; sh.innerHTML = st.queue ? sendHtml() : pickHtml(); const b = sh.querySelector('.sheet-body'); if (b && !st.queue) b.scrollTop = y; };
+    paint();
+    document.body.append(bg, sh);
+    bg.addEventListener('click', close);
+    sh.addEventListener('input', (e) => { if (e.target.id === 'smsText') st.text = e.target.value; });
+    sh.addEventListener('click', (e) => {
+      const t = e.target.closest('button, a');
+      if (!t) return;
+      if (t.dataset.sms) {
+        const [no, k] = t.dataset.sms.split('|');
+        const set = st.pick.get(no) || new Set();
+        if (set.has(k)) set.delete(k); else set.add(k);
+        if (set.size) st.pick.set(no, set); else st.pick.delete(no);
+        paint(); return;
+      }
+      if (t.id === 'smsAll') { for (const s of c.students) { const m = smsTargets(s).find((x) => x.main) || smsTargets(s)[0]; if (m && m.k !== 'stu') st.pick.set(s.no, new Set([m.k])); } paint(); return; }
+      if (t.id === 'smsNone') { st.pick.clear(); paint(); return; }
+      if (t.dataset.tpl != null) { st.text = tpls()[+t.dataset.tpl] || ''; paint(); return; }
+      if (t.dataset.tplDel != null) { S.cfg.smsTpl = tpls().filter((_, i) => i !== +t.dataset.tplDel); save(); paint(); return; }
+      if (t.id === 'smsTplSave') {
+        const v = st.text.trim();
+        if (!v) { toast('저장할 글을 먼저 써 주세요'); return; }
+        // 학생 이름이 들어 있으면 저장하지 않는다(이름 대신 {이름})
+        if (c.students.some((s) => s.name && v.includes(s.name))) { toast('학생 이름 대신 {이름}을 넣어 저장해 주세요'); return; }
+        S.cfg.smsTpl = [v, ...tpls().filter((x) => x !== v)].slice(0, SMS_MAX_TPL); save(); paint(); toast('이 폰에 저장했어요'); return;
+      }
+      if (t.id === 'smsClose') { close(); return; }
+      if (t.id === 'smsStart') {
+        if (!st.text.trim() && !confirm('보낼 글이 비어 있어요. 그래도 문자 앱만 열까요?')) return;
+        st.queue = [];
+        for (const s of c.students) {
+          const set = st.pick.get(s.no);
+          if (!set) continue;
+          for (const tg of smsTargets(s)) if (set.has(tg.k)) st.queue.push({ name: `${s.no} ${s.name}`, label: tg.label, tel: tg.tel, body: fill(st.text, s), opened: false });
+        }
+        st.i = 0; paint(); return;
+      }
+      if (t.id === 'smsGo') { st.queue[st.i].opened = true; setTimeout(paint, 300); return; }
+      if (t.id === 'smsNext' || t.id === 'smsSkip') { st.i++; paint(); return; }
+      if (t.id === 'smsStop') { st.i = st.queue.length; paint(); return; }
+      if (t.id === 'smsBack') { st.queue = null; st.i = 0; paint(); }
+    });
+  }
+  document.addEventListener('click', (e) => { if (e.target.closest('#smsOpen')) openSms(); });
 
   function openSheet(no) {
     const s = cls().students.find((x) => x.no === no);
