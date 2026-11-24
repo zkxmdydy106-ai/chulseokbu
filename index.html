@@ -2290,7 +2290,7 @@ body.sfv-open { overflow: hidden; }
       <div class="card">
         <h2 class="sec">학생이 낸 서류</h2>
         ${BOX.err ? `<div class="warnbox" style="margin:0 0 8px">${esc(BOX.err)}</div>` : ''}
-        ${subs.length ? `<ul class="docs bx">${subs.map((s) => `<li><span><b>${esc(KINDNAME[s.kind] || s.kind)}</b> · ${esc(s.c)} ${esc(s.no)}번 ${esc(s.name)}<br><small class="dim">${esc(rangeIso(s.from, s.to))}${s.kind === 'absence' && s.att ? ` ${esc(s.att)}` : ''}${s.proxy ? ' · 대리 인솔 위임장' : ''}${s.n ? ` · 사진 ${s.n}장` : ''} · ${esc(whenOf(s.up))} 제출</small></span>${isNewSub(s) ? `<span class="badge late">${s.seen ? '고침' : '새 서류'}</span>` : s.lock ? '<span class="badge ok">인쇄함</span>' : ''}<button class="btn small" data-sub="${esc(s.id)}">보기</button></li>`).join('')}</ul>`
+        ${subs.length ? `<ul class="docs bx">${subs.map((s) => `<li><span><b>${esc(KINDNAME[s.kind] || s.kind)}</b> · ${esc(s.c)} ${esc(s.no)}번 ${esc(s.name)}<br><small class="dim">${esc(rangeIso(s.from, s.to))}${s.kind === 'absence' && s.att ? ` ${esc(s.att)}` : ''}${s.proxy ? ' · 대리 인솔 위임장' : ''}${s.n ? ` · 사진 ${s.n}장` : ''} · ${esc(whenOf(s.up))} 제출</small></span>${isNewSub(s) ? `<span class="badge late">${s.seen ? '고침' : '새 서류'}</span>` : s.lock ? `<span class="badge ok">인쇄함</span><button class="textbtn" data-unlock="${esc(s.id)}">잠금 풀기</button>` : ''}<button class="btn small" data-sub="${esc(s.id)}">보기</button></li>`).join('')}</ul>`
           : `<p class="empty" style="padding:16px">${BOX.busy ? '받는 중…' : BOX.at ? '아직 낸 서류가 없어요.' : '[새로 받기]를 눌러 주세요.'}</p>`}
         <div class="row"><button class="btn small" id="bxRefresh" ${BOX.busy ? 'disabled' : ''}>${BOX.busy ? '받는 중…' : '새로 받기'}</button></div>
         <p class="hint dim">${BOX.at ? `${esc(BOX.at)}에 받음. ` : ''}${boxLive() ? '새로 낸 서류를 저절로 받아요(15초쯤).' : BR.frameFailed ? "이 브라우저에서는 저절로 받지 못해요. [새로 받기]를 누르면 작은 '서류함 연결 창'이 열렸다가 끝나면 저절로 닫혀요." : "[새로 받기]를 누르면 작은 '서류함 연결 창'이 열렸다가 끝나면 저절로 닫혀요(선생님 구글 계정)."} 인쇄한 서류는 [보기 → 삭제]로 지워 주세요(구글 드라이브 파일까지 지워져요).</p>
@@ -2449,7 +2449,9 @@ body.sfv-open { overflow: hidden; }
     const box = document.createElement('div');
     box.className = 'sfv';
     // 인쇄한 서류 잠금 풀기(교사 결정 2026-11-13): 풀면 처음 낸 폰에 내용이 돌아가 학생이 고쳐 다시 낸다
-    const lockLine = () => (j.lock ? ' · <b>인쇄함(학생은 더 못 고침)</b> <button class="textbtn" id="svUnlock">잠금 풀기</button>' : '');
+    // 잠금은 선생님이 '인쇄했다'고 할 때만(교사 결정 2026-11-24: [한글로 받기]·인쇄 창 취소만으로 '인쇄함'이 되던 것 고침)
+    const lockLine = () => (j.lock ? ' · <b>인쇄함(학생은 더 못 고침)</b> <button class="textbtn" id="svUnlock">잠금 풀기</button>'
+      : ' · 학생이 아직 고칠 수 있음 <button class="textbtn" id="svLockBtn">인쇄했어요 — 잠그기</button>');
     // 결석신고서·결과보고서 날짜 = 끝난 다음 등교일(교사 결정 2026-11-13). 공휴일·재량휴업일이면 여기서 바꿔 인쇄(저장 안 함)
     const dateRow = () => (doc.kind === 'absence' || doc.kind === 'field-report'
       ? `<div class="sfv-date"><label>서류 날짜 <input type="date" id="svDateIn" value="${esc(SFm.printDate(doc.kind, v.f))}"></label> <span class="hint">끝난 다음 등교일이에요. 휴일이면 바꿔서 인쇄해 주세요.</span></div>` : '');
@@ -2476,6 +2478,7 @@ body.sfv-open { overflow: hidden; }
       mnt = SFm.mount($('#svPages', box), v, { school: schoolNow });
     });
     box.addEventListener('click', async (e) => {
+      if (e.target.id === 'svLockBtn') { e.target.disabled = true; if (!(await markPrinted())) e.target.disabled = false; return; }
       if (e.target.id !== 'svUnlock') return;
       if (BOX.v && BOX.v < SF_NEW) { toast('받는 곳을 새 판으로 바꿔야 잠금을 풀 수 있어요. [서류함] 맨 위 [새 판으로 바꾸기]를 눌러 주세요.'); return; }
       if (!confirm('이 서류의 잠금을 풀까요? 학생이 반 링크를 다시 열면 처음 낸 폰에 내용이 돌아가 고쳐서 다시 낼 수 있어요.')) return;
@@ -2490,8 +2493,14 @@ body.sfv-open { overflow: hidden; }
     window.addEventListener('resize', onResize);
     const close = () => { box.remove(); document.body.classList.remove('sfv-open', 'sf-printing'); window.removeEventListener('resize', onResize); if (tab === 'box') renderBox(); };
     $('#svClose', box).addEventListener('click', close);
-    const lockForPrint = async () => {
-      try { const r = await sfApi({ a: 'lock', id }); sub.lock = r.lock; j.lock = r.lock; const ln = $('#svLock', box); if (ln) ln.innerHTML = lockLine(); return true; } catch (e) { if (confirm(`학생이 더 고치지 못하게 잠그지 못했어요(${e.message}). 그래도 인쇄할까요?`)) return true; toast(`인쇄하지 않았어요: ${e.message}`); return false; }
+    // 인쇄했다고 하면 잠근다: 학생 폰에서도 내용이 지워지고 더 못 고침([잠금 풀기]로 되돌림)
+    const markPrinted = async () => {
+      if (j.lock) return true;
+      try { const r = await sfApi({ a: 'lock', id }); sub.lock = r.lock; j.lock = r.lock; }
+      catch (e) { toast(`인쇄함으로 표시하지 못했어요: ${e.message}`); return false; }
+      const ln = $('#svLock', box); if (ln) ln.innerHTML = lockLine();
+      $('#svNote', box).textContent = '인쇄함으로 표시했어요. 학생은 이제 이 서류를 고칠 수 없어요. 다 쓴 서류는 [삭제]로 지워 주세요.';
+      return true;
     };
     // 원본 한글 파일에 채워 내려받기(교사 요청 2026-11-02): 표·테두리·글꼴이 원본 그대로. 파일은 이 기기에만 생긴다
     $('#svHwpx', box).addEventListener('click', async () => {
@@ -2501,23 +2510,26 @@ body.sfv-open { overflow: hidden; }
       try {
         const HF = await loadHwpx();
         const made = await HF.build(v, { school: schoolNow });
-        if (!(await lockForPrint())) return;
         const url = URL.createObjectURL(made.blob);
         const a = document.createElement('a');
         a.href = url; a.download = made.name;
         document.body.append(a); a.click(); a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 60000);
-        $('#svNote', box).textContent = `'${made.name}'을 내려받았어요. 한글에서 열어 인쇄한 뒤, 내려받기 폴더의 파일과 이 서류를 [삭제]로 지워 주세요. 학생은 이제 이 서류를 고칠 수 없어요.`;
+        if (!j.lock) $('#svNote', box).textContent = `'${made.name}'을 내려받았어요. 한글에서 인쇄한 뒤 [인쇄했어요 — 잠그기]를 눌러 주세요(누르기 전까지 학생이 고칠 수 있어요). 다 쓰면 내려받기 폴더의 파일과 이 서류를 [삭제]로 지워 주세요.`;
+        else $('#svNote', box).textContent = `'${made.name}'을 내려받았어요. 다 쓰면 내려받기 폴더의 파일과 이 서류를 [삭제]로 지워 주세요.`;
       } catch (e) { toast(`한글 파일을 만들지 못했어요: ${e.message}`); } finally { btn.disabled = false; }
     });
     $('#svPrint', box).addEventListener('click', async () => {
       if (!sfWake()) return;
-      if (!(await lockForPrint())) return;
-      const done =() => { document.body.classList.remove('sf-printing'); window.removeEventListener('afterprint', done); };
+      // 인쇄 창이 닫히면 '인쇄했나요?'를 묻고 [확인]일 때만 잠근다(취소해도 [인쇄했어요 — 잠그기]가 남음)
+      const done = () => {
+        document.body.classList.remove('sf-printing'); window.removeEventListener('afterprint', done);
+        setTimeout(() => { if (!j.lock && document.body.contains(box) && confirm('인쇄했나요?\n[확인]을 누르면 인쇄함으로 표시하고, 학생은 더 고칠 수 없어요.')) markPrinted(); }, 300);
+      };
       window.addEventListener('afterprint', done);
       document.body.classList.add('sf-printing');
       window.print();
-      $('#svNote', box).textContent = '인쇄했으면 [삭제]로 지워 주세요. 학생은 이제 이 서류를 고칠 수 없어요.';
+      if (!j.lock) $('#svNote', box).textContent = '인쇄했으면 [인쇄했어요 — 잠그기]를 눌러 주세요(누르기 전까지 학생이 고칠 수 있어요).';
     });
     $('#svDel', box).addEventListener('click', async () => {
       if (!confirm('이 서류를 지울까요? 선생님 구글 드라이브의 파일까지 지워지고 되돌릴 수 없어요.')) return;
@@ -2574,7 +2586,22 @@ body.sfv-open { overflow: hidden; }
     // 아래 버튼들은 서류함 연결이 필요하다 → 누른 순간에 작은 창을 연다(팝업 차단 피함, 창 없이 연결돼 있으면 안 뜸). 받아 둔 서류를 볼 때는 필요 없다
     const sb = e.target.closest('[data-sub]');
     const cached = sb && DOCS.has(docKey(BOX.subs.find((x) => x.id === sb.dataset.sub) || { id: sb.dataset.sub }));
-    const needs = ['bxRefresh', 'bxWipe'].includes(id) || (sb && !cached) || e.target.closest('[data-unreq], [data-scopy], [data-sqr], [data-snew], [data-unbind]');
+    const needs = ['bxRefresh', 'bxWipe'].includes(id) || (sb && !cached) || e.target.closest('[data-unreq], [data-scopy], [data-sqr], [data-snew], [data-unbind], [data-unlock]');
+    // 목록에서 바로 잠금 풀기(교사 요청 2026-11-24: 인쇄 안 한 서류가 '인쇄함'으로 잠긴 것을 하나씩 열지 않고 풂)
+    const ul = e.target.closest('[data-unlock]');
+    if (ul) {
+      if (BOX.v && BOX.v < SF_NEW) { toast('받는 곳을 새 판으로 바꿔야 잠금을 풀 수 있어요. [서류함] 맨 위 [새 판으로 바꾸기]를 눌러 주세요.'); return; }
+      if (!sure(ul, '정말 풀기', '학생이 반 링크를 다시 열면 처음 낸 폰에 내용이 돌아가 고쳐서 다시 낼 수 있어요. 풀려면 한 번 더 눌러 주세요.')) return;
+      if (!sfWake()) return;
+      ul.disabled = true;
+      try { await sfApi({ a: 'unlock', id: ul.dataset.unlock }); } catch (err) { ul.disabled = false; toast(err.message); return; }
+      const s = BOX.subs.find((x) => x.id === ul.dataset.unlock);
+      if (s) s.lock = '';
+      DOCS.delete(docKey(s || { id: ul.dataset.unlock }));
+      renderBox();
+      toast('잠금을 풀었어요. 학생이 반 링크를 다시 열면 고칠 수 있어요.');
+      return;
+    }
     if (needs && !sfWake()) return;
     if (id === 'bxRefresh') { refreshBox(false); return; }
     if (id === 'bxDev') { BOX.dev = !BOX.dev; renderBox(); return; }
