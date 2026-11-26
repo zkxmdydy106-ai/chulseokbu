@@ -295,6 +295,13 @@ table.list .c { text-align: center; }
 .sfv-date input { margin-left: 4px; font: inherit; }
 .sfv-pages { flex: 1; overflow: auto; padding: 0 6px; }
 body.sfv-open { overflow: hidden; }
+/* 모아 인쇄(교사 요청 2026-11-26): 목록 위 고르기 줄, 모아 보기의 서류 머리줄(인쇄 안 됨) */
+.bx-pick { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.bx-pick .n { flex: 1; min-width: 5em; font-size: 13px; color: var(--text-2); }
+.sfb-head { display: flex; align-items: center; gap: 6px 10px; flex-wrap: wrap; margin: 12px 2px 4px; padding: 6px 10px; background: var(--panel); border: 1px solid var(--line); font-size: 13px; color: var(--text-2); }
+.sfb-head b { color: var(--text); }
+.sfb-head input { margin-left: 4px; font: inherit; }
+.sfb-head .lk:empty { display: none; }
 
 /* 넓은 화면(PC에서 열 때) */
 @media (min-width: 768px) {
@@ -313,6 +320,8 @@ body.sfv-open { overflow: hidden; }
   body.sf-printing .sfv { position: static; display: block; background: #fff; }
   body.sf-printing .sfv-bar, body.sf-printing .sfv-info, body.sf-printing .sfv-date { display: none !important; }
   body.sf-printing .sfv-pages { overflow: visible; padding: 0; }
+  body.sf-printing .sfb-head { display: none !important; }
+  body.sf-printing .sfb-doc + .sfb-doc { break-before: page; page-break-before: always; } /* 모아 인쇄: 서류마다 새 쪽 */
 }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
 </style>
@@ -1841,7 +1850,7 @@ body.sfv-open { overflow: hidden; }
   const SUB_DOC = { absence: 'singo', 'field-apply': 'tripApp', 'field-report': 'tripRep' };
   const SF_V = 3; // 받는 곳 판(gas/student-forms BRIDGE_V): 3부터 저절로 요청·판 번호
   const SF_NEW = 5; // 지금 받는 곳 판: 5 = 인쇄한 서류 잠금 풀기(2026-11-13). 이보다 낮으면 [서류함] 맨 위에 [새 판으로 바꾸기]
-  const BOX = { rev: '', subs: [], reqs: [], blocked: [], binds: [], at: '', err: '', busy: false, qr: '', dev: false, making: false, v: 0, gen: 0, seenQ: new Set() };
+  const BOX = { rev: '', subs: [], reqs: [], blocked: [], binds: [], at: '', err: '', busy: false, qr: '', dev: false, making: false, v: 0, gen: 0, seenQ: new Set(), pick: new Set(), pickSeen: new Map() };
   let formsLib = null;
   function loadForms() {
     if (window.StudentForms) return Promise.resolve(window.StudentForms);
@@ -2285,15 +2294,17 @@ body.sfv-open { overflow: hidden; }
     const subs = BOX.subs;
     const open = BOX.reqs.filter((r) => !r.done);
     const qcs = qrClasses();
+    syncPick();
     $('#main').innerHTML = `
       <div id="bxNote">${bridgeNote()}</div>
       <div class="card">
         <h2 class="sec">학생이 낸 서류</h2>
         ${BOX.err ? `<div class="warnbox" style="margin:0 0 8px">${esc(BOX.err)}</div>` : ''}
-        ${subs.length ? `<ul class="docs bx">${subs.map((s) => `<li><span><b>${esc(KINDNAME[s.kind] || s.kind)}</b> · ${esc(s.c)} ${esc(s.no)}번 ${esc(s.name)}<br><small class="dim">${esc(rangeIso(s.from, s.to))}${s.kind === 'absence' && s.att ? ` ${esc(s.att)}` : ''}${s.proxy ? ' · 대리 인솔 위임장' : ''}${s.n ? ` · 사진 ${s.n}장` : ''} · ${esc(whenOf(s.up))} 제출</small></span>${isNewSub(s) ? `<span class="badge late">${s.seen ? '고침' : '새 서류'}</span>` : s.lock ? `<span class="badge ok">인쇄함</span><button class="textbtn" data-unlock="${esc(s.id)}">잠금 풀기</button>` : ''}<button class="btn small" data-sub="${esc(s.id)}">보기</button></li>`).join('')}</ul>`
+        ${subs.length ? `<div class="bx-pick"><button class="btn small" id="bxPickOpen">인쇄 안 한 것</button><button class="btn small" id="bxPickAll">모두</button><button class="btn small" id="bxPickNone">해제</button><span class="n" id="bxPickN"></span><button class="btn small main" id="bxBatch"></button></div>` : ''}
+        ${subs.length ? `<ul class="docs bx">${subs.map((s) => `<li><input type="checkbox" data-pick="${esc(s.id)}" ${BOX.pick.has(s.id) ? 'checked' : ''} aria-label="모아 인쇄할 서류로 고르기"><span><b>${esc(KINDNAME[s.kind] || s.kind)}</b> · ${esc(s.c)} ${esc(s.no)}번 ${esc(s.name)}<br><small class="dim">${esc(rangeIso(s.from, s.to))}${s.kind === 'absence' && s.att ? ` ${esc(s.att)}` : ''}${s.proxy ? ' · 대리 인솔 위임장' : ''}${s.n ? ` · 사진 ${s.n}장` : ''} · ${esc(whenOf(s.up))} 제출</small></span>${isNewSub(s) ? `<span class="badge late">${s.seen ? '고침' : '새 서류'}</span>` : s.lock ? `<span class="badge ok">인쇄함</span><button class="textbtn" data-unlock="${esc(s.id)}">잠금 풀기</button>` : ''}<button class="btn small" data-sub="${esc(s.id)}">보기</button></li>`).join('')}</ul>`
           : `<p class="empty" style="padding:16px">${BOX.busy ? '받는 중…' : BOX.at ? '아직 낸 서류가 없어요.' : '[새로 받기]를 눌러 주세요.'}</p>`}
         <div class="row"><button class="btn small" id="bxRefresh" ${BOX.busy ? 'disabled' : ''}>${BOX.busy ? '받는 중…' : '새로 받기'}</button></div>
-        <p class="hint dim">${BOX.at ? `${esc(BOX.at)}에 받음. ` : ''}${boxLive() ? '새로 낸 서류를 저절로 받아요(15초쯤).' : BR.frameFailed ? "이 브라우저에서는 저절로 받지 못해요. [새로 받기]를 누르면 작은 '서류함 연결 창'이 열렸다가 끝나면 저절로 닫혀요." : "[새로 받기]를 누르면 작은 '서류함 연결 창'이 열렸다가 끝나면 저절로 닫혀요(선생님 구글 계정)."} 인쇄한 서류는 [보기 → 삭제]로 지워 주세요(구글 드라이브 파일까지 지워져요).</p>
+        <p class="hint dim">${BOX.at ? `${esc(BOX.at)}에 받음. ` : ''}${boxLive() ? '새로 낸 서류를 저절로 받아요(15초쯤).' : BR.frameFailed ? "이 브라우저에서는 저절로 받지 못해요. [새로 받기]를 누르면 작은 '서류함 연결 창'이 열렸다가 끝나면 저절로 닫혀요." : "[새로 받기]를 누르면 작은 '서류함 연결 창'이 열렸다가 끝나면 저절로 닫혀요(선생님 구글 계정)."} 여러 건은 체크한 뒤 [고른 N건 인쇄] — 번호·날짜순으로 인쇄 창 한 번에 나와요. 인쇄한 서류는 [보기 → 삭제]나 모아 보기 [고른 N건 삭제]로 지워 주세요(구글 드라이브 파일까지 지워져요).</p>
       </div>
       <div class="card">
         <h2 class="sec">학생에게 보낸 요청</h2>
@@ -2315,8 +2326,160 @@ body.sfv-open { overflow: hidden; }
         <div class="row"><button class="btn small danger" id="bxWipe">구글 쪽 서류·요청 모두 지우기</button></div>
         <p class="hint dim">학년도가 끝나면 모두 지워 주세요. '학생 서류 제출 (출석부)' 폴더는 다른 사람과 공유하지 마세요.</p>
       </div>`;
+    paintPick();
     if (BOX.qr) paintStudentQr(BOX.qr);
     if (BOX.dev) paintDevQr();
+  }
+  // ── 모아 인쇄(교사 요청 2026-11-26 '번호,날짜순으로 모아서 한번에 인쇄 + 원하는 서류만 선택') ──
+  // 고른 것은 화면 메모리에만. 인쇄 안 한 서류는 저절로 체크(교사 결정 2026-11-26) — 처음 볼 때와 인쇄함·잠금 풀기로 바뀔 때만, 그 사이 손으로 고른 것은 그대로
+  function syncPick() {
+    const ids = new Set(BOX.subs.map((s) => s.id));
+    for (const id of [...BOX.pick]) if (!ids.has(id)) BOX.pick.delete(id);
+    for (const s of BOX.subs) {
+      const was = BOX.pickSeen.get(s.id), now = !!s.lock;
+      if (was === now) continue;
+      BOX.pickSeen.set(s.id, now);
+      if (now) BOX.pick.delete(s.id); else BOX.pick.add(s.id);
+    }
+  }
+  function paintPick() {
+    const n = BOX.subs.filter((s) => BOX.pick.has(s.id)).length;
+    const t = $('#bxPickN'), b = $('#bxBatch');
+    if (t) t.textContent = `${n}건 고름`;
+    if (b) { b.textContent = n ? `고른 ${n}건 인쇄` : '고른 서류 인쇄'; b.disabled = !n; }
+    document.querySelectorAll('[data-pick]').forEach((c) => { c.checked = BOX.pick.has(c.dataset.pick); });
+  }
+  // 번호 → 날짜 → 서류 종류(신청서 → 결석신고서 → 결과보고서) 순. 반이 여럿이면 반부터
+  const KIND_ORD = { 'field-apply': 0, absence: 1, 'field-report': 2 };
+  const clsKey = (c) => String(c || '').split('-').map((x) => String(+x || 0).padStart(3, '0')).join('-');
+  const batchOrder = (list) => [...list].sort((a, b) => clsKey(a.c).localeCompare(clsKey(b.c)) || (+a.no || 0) - (+b.no || 0)
+    || String(a.from || '').localeCompare(String(b.from || '')) || (KIND_ORD[a.kind] ?? 9) - (KIND_ORD[b.kind] ?? 9) || String(a.at || '').localeCompare(String(b.at || '')));
+  async function openBatch(ids) {
+    let SFm;
+    try { SFm = await loadForms(); } catch (e) { toast(e.message); return; }
+    const list = batchOrder(ids.map((id) => BOX.subs.find((s) => s.id === id)).filter(Boolean));
+    if (!list.length) return;
+    const box = document.createElement('div');
+    box.className = 'sfv sfb';
+    box.innerHTML = `
+      <div class="sfv-bar"><button class="btn small" id="sbClose">닫기</button><span class="sp"><b>모아 인쇄</b> <span id="sbCount">${list.length}건</span> · 번호·날짜순</span><button class="btn small main" id="sbPrint" disabled>바로 인쇄</button><button class="btn small danger" id="sbDel" disabled>삭제</button></div>
+      <div class="sfv-info"><div id="sbLock"></div><div id="sbNote">서류를 받는 중… 0/${list.length}</div></div>
+      <div class="sfv-pages" id="sbPages"></div>`;
+    document.body.append(box);
+    document.body.classList.add('sfv-open');
+    const note = (t) => { const n = $('#sbNote', box); if (n) n.textContent = t; };
+    const mounts = [];
+    const onResize = () => mounts.forEach((m) => m.fit());
+    window.addEventListener('resize', onResize);
+    const close = () => { box.remove(); document.body.classList.remove('sfv-open', 'sf-printing'); window.removeEventListener('resize', onResize); if (tab === 'box') renderBox(); };
+    $('#sbClose', box).addEventListener('click', close);
+    // 받아 둔 것은 그대로, 나머지는 셋씩 받는다
+    const got = new Array(list.length);
+    let i = 0, done = 0, gone = 0, failed = 0;
+    const worker = async () => {
+      while (i < list.length) {
+        const k = i++;
+        try { got[k] = await docOf(list[k]); } catch (e) { got[k] = null; if (e.code === 'gone') gone++; else failed++; }
+        done++;
+        if (done < list.length) note(`서류를 받는 중… ${done}/${list.length}`);
+      }
+    };
+    await Promise.all([worker(), worker(), worker()]);
+    if (!box.isConnected) return;
+    const items = list.map((sub, k) => ({ sub, j: got[k] })).filter((x) => x.j && x.j.doc);
+    if (gone || failed) refreshBox(true);
+    const left = [gone ? `이미 지운 서류 ${gone}건은 뺐어요.` : '', failed ? `받지 못한 서류 ${failed}건은 뺐어요. [새로 받기] 뒤 다시 해 주세요.` : ''].filter(Boolean).join(' ');
+    $('#sbCount', box).textContent = `${items.length}건`;
+    if (!items.length) { note(left || '인쇄할 서류가 없어요.'); return; }
+    const pages = $('#sbPages', box);
+    items.forEach((x, k) => {
+      const doc = x.j.doc;
+      x.v = { kind: doc.kind, cls: doc.c, no: doc.no, name: doc.name, f: { ...(doc.f || {}) } };
+      x.school = S.classes.length ? schoolCfg() : (x.j.sch || schoolCfg());
+      markSeen(x.sub);
+      const sec = document.createElement('section');
+      sec.className = 'sfb-doc';
+      const dated = doc.kind === 'absence' || doc.kind === 'field-report';
+      sec.innerHTML = `<div class="sfb-head"><span>${k + 1}. <b>${esc(KINDNAME[doc.kind] || '')}</b> · ${esc(doc.c)} ${esc(doc.no)}번 ${esc(doc.name)} · ${esc(SFm.summary(x.v))}</span><span class="badge ok lk">${x.j.lock ? '인쇄함' : ''}</span>${dated ? `<label>서류 날짜<input type="date" data-sbdate="${k}" value="${esc(SFm.printDate(doc.kind, x.v.f))}"></label>` : ''}</div><div class="sfb-pages"></div>`;
+      pages.append(sec);
+      x.sec = sec;
+      x.host = $('.sfb-pages', sec);
+      mounts[k] = SFm.mount(x.host, x.v, { school: x.school });
+    });
+    // 결석신고서·결과보고서 날짜 = 끝난 다음 등교일(2026-11-13 결정). 휴일이면 여기서 바꿔 인쇄(저장 안 함)
+    pages.addEventListener('change', (e) => {
+      const k = e.target.dataset.sbdate;
+      if (k == null || !SFm.dateOf(e.target.value)) return;
+      const x = items[+k];
+      x.v.f.dateFix = e.target.value;
+      x.host.innerHTML = '';
+      mounts[+k] = SFm.mount(x.host, x.v, { school: x.school });
+    });
+    const openN = () => items.filter((x) => !x.j.lock).length;
+    const paintLock = () => {
+      const n = openN(), ln = $('#sbLock', box);
+      ln.innerHTML = n ? `학생이 아직 고칠 수 있는 서류 ${n}건 <button class="textbtn" id="sbLockBtn">인쇄했어요 — ${n}건 잠그기</button>` : '<b>모두 인쇄함(학생은 더 못 고침)</b>';
+      items.forEach((x) => { $('.lk', x.sec).textContent = x.j.lock ? '인쇄함' : ''; });
+    };
+    paintLock();
+    note(`${left ? `${left} ` : ''}[바로 인쇄]를 한 번 누르면 ${items.length}건이 인쇄 창 하나에 차례로 들어가요(서류마다 새 쪽).`);
+    const delBtn = $('#sbDel', box);
+    delBtn.textContent = `고른 ${items.length}건 삭제`;
+    delBtn.disabled = false;
+    $('#sbPrint', box).disabled = false;
+    // 인쇄했다고 하면 고른 서류를 모두 잠근다(교사 결정 2026-11-26: 인쇄 창이 닫힌 뒤 한 번 묻기 — 하나씩 인쇄와 같은 규칙)
+    const lockAll = async () => {
+      const todo = items.filter((x) => !x.j.lock);
+      let ok = 0, bad = 0;
+      for (const x of todo) {
+        try { const r = await sfApi({ a: 'lock', id: x.sub.id }); x.j.lock = r.lock; x.sub.lock = r.lock; ok++; } catch { bad++; }
+      }
+      for (const x of items) if (x.j.lock) BOX.pick.delete(x.sub.id); // 인쇄한 서류는 목록에서 체크를 푼다(전에 인쇄함이던 것도)
+      if (!box.isConnected) return;
+      paintLock();
+      note(bad ? `인쇄함으로 ${ok}건 표시했어요. ${bad}건은 못 했어요 — [인쇄했어요 — 잠그기]를 다시 눌러 주세요.` : `인쇄함으로 ${ok}건 표시했어요. 학생은 이제 이 서류를 고칠 수 없어요. 다 쓴 서류는 [고른 ${items.length}건 삭제]로 지워 주세요.`);
+    };
+    box.addEventListener('click', async (e) => {
+      if (e.target.id !== 'sbLockBtn') return;
+      if (!sfWake()) return;
+      e.target.disabled = true;
+      await lockAll();
+    });
+    $('#sbPrint', box).addEventListener('click', () => {
+      if (!sfWake()) return;
+      const after = () => {
+        document.body.classList.remove('sf-printing'); window.removeEventListener('afterprint', after);
+        setTimeout(() => { const n = openN(); if (n && box.isConnected && confirm(`인쇄했나요?\n[확인]을 누르면 고른 서류 ${n}건을 인쇄함으로 표시하고, 학생은 더 고칠 수 없어요.`)) lockAll(); }, 300);
+      };
+      window.addEventListener('afterprint', after);
+      document.body.classList.add('sf-printing');
+      window.print();
+      if (openN()) note(`인쇄했으면 [인쇄했어요 — ${openN()}건 잠그기]를 눌러 주세요(누르기 전까지 학생이 고칠 수 있어요).`);
+    });
+    // 한 번에 지우기(교사 결정 2026-11-26): 같은 버튼을 한 번 더 눌러야 지움(되돌릴 수 없음)
+    delBtn.addEventListener('click', async () => {
+      if (!delBtn.dataset.sure) {
+        delBtn.dataset.sure = '1'; delBtn.textContent = `정말 ${items.length}건 삭제`;
+        toast(`고른 ${items.length}건을 구글 드라이브 파일까지 지워요. 되돌릴 수 없어요. 지우려면 한 번 더 눌러 주세요.`);
+        setTimeout(() => { if (delBtn.isConnected && !delBtn.disabled) { delete delBtn.dataset.sure; delBtn.textContent = `고른 ${items.length}건 삭제`; } }, 8000);
+        return;
+      }
+      if (!sfWake()) return;
+      delBtn.disabled = true;
+      let ok = 0, bad = 0;
+      for (const x of items) {
+        try {
+          await sfApi({ a: 'delete', id: x.sub.id });
+          BOX.subs = BOX.subs.filter((s) => s.id !== x.sub.id);
+          DOCS.delete(docKey(x.sub));
+          BOX.pick.delete(x.sub.id);
+          ok++;
+        } catch { bad++; }
+      }
+      paintBadge();
+      close();
+      toast(bad ? `${ok}건을 지웠어요. ${bad}건은 못 지웠어요.` : `${ok}건을 지웠어요(구글 드라이브 파일까지)`);
+    });
   }
   async function qrImg(text, alt, px = 220) {
     const qrcode = await loadQr();
@@ -2578,6 +2741,22 @@ body.sfv-open { overflow: hidden; }
       setTimeout(() => { if (btn.isConnected) { delete btn.dataset.sure; btn.textContent = old; } }, 8000);
       return false;
     };
+    // 모아 인쇄 고르기(교사 요청 2026-11-26): 다시 그리지 않고 체크·숫자만 바꾼다
+    const pk = e.target.closest('[data-pick]');
+    if (pk) { if (pk.checked) BOX.pick.add(pk.dataset.pick); else BOX.pick.delete(pk.dataset.pick); paintPick(); return; }
+    if (id === 'bxPickOpen' || id === 'bxPickAll' || id === 'bxPickNone') {
+      BOX.pick = new Set(id === 'bxPickNone' ? [] : BOX.subs.filter((s) => id === 'bxPickAll' || !s.lock).map((s) => s.id));
+      paintPick();
+      return;
+    }
+    if (id === 'bxBatch') {
+      const ids = BOX.subs.filter((s) => BOX.pick.has(s.id)).map((s) => s.id);
+      if (!ids.length) return;
+      // 아직 안 받은 서류가 있으면 누른 순간 작은 창을 연다(팝업 차단 피함)
+      if (BOX.subs.some((s) => BOX.pick.has(s.id) && !DOCS.has(docKey(s))) && !sfWake()) return;
+      openBatch(ids);
+      return;
+    }
     const ub = e.target.closest('[data-unbind]');
     if (ub && !sure(ub, '정말 풀기', '한 번 더 누르면 풀려요. 학생이 다음에 처음 여는 계정·기기로 다시 묶여요.')) return;
     if (id === 'bxWipe' && !sure(e.target, '정말 모두 지우기', '구글 드라이브의 학생 서류와 요청을 모두 지워요. 되돌릴 수 없어요. 지우려면 한 번 더 눌러 주세요.')) return;
